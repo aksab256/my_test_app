@@ -2,39 +2,44 @@ name: my_test_app
 description: A new Flutter project.
 publish_to: 'none'
 version: 1.0.0+1
-                                
+
 environment:
   sdk: '>=3.2.0 <4.0.0'
-                                                
-dependencies:
+
+dependencies:                                   
   flutter:
     sdk: flutter
-  # Core packages                                 
-  http: ^1.2.2
-  firebase_core: ^4.2.1
+  
+  # Core packages
+  http: ^1.2.2                                  
+  firebase_core: ^4.2.1                         
   firebase_auth: ^6.1.2
-  cloud_firestore: ^6.1.0
+  cloud_firestore: ^6.1.0                       
   firebase_messaging: ^16.0.4
-                                                  
-  # Tables & UI                                   
+                                                
+  # Tables & UI
   data_table_2: ^2.5.9
   font_awesome_flutter: ^10.7.0
-  intl: ^0.20.2
+  intl: ^0.20.2                                 
   fl_chart: ^0.68.0
-
+  # 🎯 تم إضافة مكتبة Sizer
+  sizer: ^2.0.15
+                                                
   # مكتبات الطباعة والإيصالات
-  pdf: ^3.11.3
+  pdf: ^3.11.3                                  
   printing: ^5.11.1
-  open_filex: ^4.3.2                            
-  # Export to Excel                               
-  excel: ^4.0.6
+  open_filex: ^4.3.2
+  
+  # Export to Excel
+  excel: ^4.0.6                                 
   path_provider: ^2.1.3
   permission_handler: ^12.0.1
   universal_html: ^2.2.0                        
-  # Extra packages
+
+  # Extra packages                              
   provider: ^6.1.2
   geolocator: ^14.0.2
-  cupertino_icons: ^1.0.8
+  cupertino_icons: ^1.0.8                       
   url_launcher: ^6.3.2
   shared_preferences: ^2.5.3
 
@@ -44,23 +49,27 @@ dependencies:
   # 👇🏻 مكتبات Material 3 Dynamic Design والأيقونات
   dynamic_color: ^1.8.1 # لتطبيق الألوان الديناميكية Material You
   material_design_icons_flutter: ^7.0.7296 # لتوفير آلاف الأيقونات الإضافية
-  # 💡 تم تعديل الإصدار إلى الإصدار المقترح       
   lucide_icons: ^0.257.0                        
+
   # حزم الصور والشبكة
   cached_network_image: ^3.3.1
-                                                  
+  image_picker: ^1.0.7 # 🆕 تمت إضافة حزمة التقاط الصور
+
+  # 💡 مكتبة Geocoding (تحويل الإحداثيات إلى عناوين) - تمت الإضافة 💡
+  geocoding: ^2.2.1
+
   # مكتبات الخرائط (متعددة المنصات)
   flutter_map: ^5.0.0
-  latlong2: ^0.9.1                                
+  latlong2: ^0.9.1
   # الإصدار المستقر الذي يدعم Null Safety لتحليل GeoJSON
-  flutter_map_geojson: ^1.0.3                                                                   
-  
+  flutter_map_geojson: ^1.0.3
+
 dev_dependencies:
   flutter_test:
-    sdk: flutter
+    sdk: flutter                                
   flutter_lints: ^6.0.0
-                                                
-flutter:                                          
+
+flutter:
   uses-material-design: true
   assets:
     - assets/

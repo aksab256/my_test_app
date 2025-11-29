@@ -60,11 +60,25 @@ class OfferDataSource {
       }
 
       // 3. دمج بيانات المنتج (الاسم والصورة) مع العروض
-      for (var offer in offers) {
+      // نستخدم List<ProductOfferModel> offers مباشرة للتعديل على العناصر
+      for (var i = 0; i < offers.length; i++) {
+        var offer = offers[i];
         final productData = productDetailsMap[offer.productId];
+        
         if (productData != null) {
-          // تحديث اسم المنتج في الموديل
-          offer = ProductOfferModel(
+          
+          // ⭐️ التصحيح: جلب أول رابط صورة بأمان أكبر ⭐️
+          String? fetchedImageUrl;
+          final imageUrls = productData['imageUrls'];
+
+          if (imageUrls is List && imageUrls.isNotEmpty) {
+            // نستخدم .toString() بدلاً من as String لتجنب فشل التحويل القسري (Casting)
+            // إذا كان العنصر الأول هو dynamic أو String
+            fetchedImageUrl = imageUrls[0]?.toString(); 
+          }
+
+          // إعادة بناء الموديل باستخدام البيانات المكتملة
+          offers[i] = ProductOfferModel(
             id: offer.id,
             sellerId: offer.sellerId,
             sellerName: offer.sellerName,
@@ -77,24 +91,20 @@ class OfferDataSource {
             lowStockThreshold: offer.lowStockThreshold,
             status: offer.status,
             createdAt: offer.createdAt,
-            // 💡 جلب رابط الصورة من مصفوفة imageUrls في مستند المنتج
-            imageUrl: (productData['imageUrls'] is List && productData['imageUrls'].isNotEmpty) 
-                      ? productData['imageUrls'][0] as String 
-                      : null, // إذا لم نجد رابطاً، يبقى null
+            // 💡 استخدام الرابط المُستخلَص والمصحح
+            imageUrl: fetchedImageUrl, 
           );
         }
       }
 
       // 4. إرجاع القائمة المحدثة
       return offers;
-      
+
     } catch (e) {
       print('Error loading offers with product details: $e');
       throw Exception('فشل في تحميل العروض أو تفاصيل المنتجات: $e');
     }
   }
-
-  // ... بقية دوال DataSource (updateOffer, deleteOffer) لا تحتاج تعديلاً ...
 
   // دالة تحديث العرض
   Future<void> updateOffer(String offerId, Map<String, dynamic> data) async {
