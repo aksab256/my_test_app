@@ -6,71 +6,66 @@ version: 1.0.0+1
 environment:
   sdk: '>=3.2.0 <4.0.0'
 
-dependencies:                                   
+dependencies:
   flutter:
     sdk: flutter
-  
+
   # Core packages
-  http: ^1.2.2                                  
-  firebase_core: ^4.2.1                         
+  http: ^1.2.2
+  firebase_core: ^4.2.1
   firebase_auth: ^6.1.2
-  cloud_firestore: ^6.1.0                       
+  cloud_firestore: ^6.1.0
   firebase_messaging: ^16.0.4
-                                                
+
   # Tables & UI
   data_table_2: ^2.5.9
   font_awesome_flutter: ^10.7.0
-  intl: ^0.20.2                                 
+  intl: ^0.20.2
   fl_chart: ^0.68.0
-  # 🎯 تم إضافة مكتبة Sizer
   sizer: ^2.0.15
-                                                
-  # مكتبات الطباعة والإيصالات
-  pdf: ^3.11.3                                  
+
+  # Printing & PDF
+  pdf: ^3.11.3
   printing: ^5.11.1
   open_filex: ^4.3.2
-  
+
   # Export to Excel
-  excel: ^4.0.6                                 
+  excel: ^4.0.6
   path_provider: ^2.1.3
   permission_handler: ^12.0.1
-  universal_html: ^2.2.0                        
+  universal_html: ^2.2.0
 
-  # Extra packages                              
+  # State management & utilities
   provider: ^6.1.2
   geolocator: ^14.0.2
-  cupertino_icons: ^1.0.8                       
+  cupertino_icons: ^1.0.8
   url_launcher: ^6.3.2
   shared_preferences: ^2.5.3
 
-  # 👇🏻 مكتبة Google Fonts لتحسين الخطوط العربية (Cairo, Changa, إلخ)
-  google_fonts: ^6.1.0 # إصدار مستقر
+  # Fonts
+  google_fonts: ^6.1.0
 
-  # 👇🏻 مكتبات Material 3 Dynamic Design والأيقونات
-  dynamic_color: ^1.8.1 # لتطبيق الألوان الديناميكية Material You
-  material_design_icons_flutter: ^7.0.7296 # لتوفير آلاف الأيقونات الإضافية
-  lucide_icons: ^0.257.0                        
+  # Material 3 & icons
+  dynamic_color: ^1.8.1
+  material_design_icons_flutter: ^7.0.7296
+  lucide_icons: ^0.257.0
 
-  # حزم الصور والشبكة
+  # Images & network
   cached_network_image: ^3.3.1
-  image_picker: ^1.0.7 # 🆕 تمت إضافة حزمة التقاط الصور
+  image_picker: ^1.0.7
 
-  # 💡 مكتبة Geocoding (تحويل الإحداثيات إلى عناوين) - تمت الإضافة 💡
+  # Geocoding & maps
   geocoding: ^2.2.1
-
-  # مكتبات الخرائط (متعددة المنصات)
   flutter_map: ^5.0.0
   latlong2: ^0.9.1
-  # الإصدار المستقر الذي يدعم Null Safety لتحليل GeoJSON
   flutter_map_geojson: ^1.0.3
 
 dev_dependencies:
   flutter_test:
-    sdk: flutter                                
+    sdk: flutter
   flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true
   assets:
-    - assets/
-    - assets/OSMB-bc319d822a17aa9ad1089fc05e7d4e752460f877.geojson
+    - assets/  # ✅ يشمل كل ملفات GeoJSON والصور والملفات الأخرى
