@@ -5,10 +5,12 @@ workflows:
     environment:
       flutter: stable
       java: 17
-      android:
-        android_sdk:
-          - ndk;28.2.13676358
     scripts:
+      # === الحل البديل لتثبيت NDK عبر أمر SDK Manager ===
+      - name: Install required NDK
+        script: |
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;28.2.13676358"
+          
       - name: Clear caches
         script: |
           flutter clean
