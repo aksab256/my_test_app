@@ -1,31 +1,17 @@
 workflows:
-  flutter-android-build:
-    name: Flutter Android Release Build
-    max_build_duration: 60
-    environment:
-      flutter: stable
-      java: 17
-    scripts:
-      - name: Clear caches
-        script: |
-          flutter clean
-          rm -rf $CM_BUILD_DIR/build
-          rm -rf $CM_BUILD_DIR/.gradle
-
-      - name: Get Flutter dependencies
-        script: flutter pub get
-
-      - name: Build APK
-        script: flutter build apk --release
-
-      - name: Build AAB
-        script: flutter build appbundle --release
-
-    artifacts:
-      - build/app/outputs/flutter-apk/app-release.apk
-      - build/app/outputs/bundle/release/app-release.aab
-
-    publishing:
-      email:
-        recipients:
-          - "amrshipl09@gmail.com"
+flutter-android-build:
+name: Flutter Android Release Build
+max_build_duration: 60
+environment:
+flutter: stable
+java: 17
+# === التحديث الضروري: إضافة NDK المطلوب لتجنب خطأ InstallFailedException ===
+android_sdk:
+- ndk;28.2.13676358
+# =========================================================================
+scripts:
+- name: Clear caches
+script: |
+flutter clean
+rm -rf $CM_BUILD_DIR/build
+rm -rf $CM_BUILD_DIR/.gradle
