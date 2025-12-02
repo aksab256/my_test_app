@@ -1,7 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.aksabeg500">
 
+    <!-- أذونات INTERNET و الموقع (Geolocator & Geocoding) -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
+    <!-- أذونات الكاميرا والصور (Image Picker) -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <!-- (ملاحظة: WRITE_EXTERNAL_STORAGE قد يتم تجاهله في أندرويد 11+، لكن وجوده لا يضر) -->
 
     <application
         android:label="my_test_app"

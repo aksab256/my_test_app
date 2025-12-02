@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 // ⭐️⭐️ تم إضافة استيراد SharedPreferences ⭐️⭐️
-import 'package:shared_preferences/shared_preferences.dart'; 
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   // بيانات Firebase الثابتة
@@ -41,7 +41,7 @@ class AuthService {
       final String userAddress = userData['address'] is String ? userData['address'] : '';
       final String? userFullName = userData['fullname'] is String ? userData['fullname'] : null;
       final String? merchantName = userData['merchantName'] is String ? userData['merchantName'] : null;
-                                                
+
       final Map<String, double>? location = userData['location'] is Map
           ? Map<String, double>.from(userData['location'] as Map)
           : null;
@@ -72,10 +72,29 @@ class AuthService {
     }
   }
 
+  // 🚨🚨🚨 الدالة المضافة لإصلاح خطأ البناء 🚨🚨🚨
+  /// تسجيل الخروج من Firebase ومسح البيانات المحلية
+  Future<void> signOut() async {
+    try {
+      // 1. تسجيل الخروج من Firebase
+      await _auth.signOut();
+
+      // 2. مسح البيانات المحلية (لتسجيل الخروج الكامل)
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('loggedUser');
+      
+      // يمكنك إضافة مسح أي بيانات أخرى محفوظة محليًا هنا
+
+    } catch (e) {
+      // يجب التعامل مع الأخطاء بدون print في الإنتاج
+      debugPrint("🚨 فشل تسجيل الخروج: $e");
+    }
+  }
+
   /// البحث عن المستخدم بالإيميل في جميع المجموعات (المنطق الذي يعمل)
   Future<Map<String, dynamic>> _getUserDataByEmail(String email) async {
     final collections = ['sellers', 'consumers', 'users'];
-                                                
+
     for (var collectionName in collections) {
       try {
         final snapshot = await _db
@@ -87,13 +106,13 @@ class AuthService {
         if (snapshot.docs.isNotEmpty) {
           final doc = snapshot.docs.first;
           final data = doc.data() as Map<String, dynamic>; // 🛠️ تأكيد النوع
-          
+
           String role = 'buyer';
-          if (collectionName == 'sellers') { 
+          if (collectionName == 'sellers') {
             role = 'seller';
-          } else if (collectionName == 'consumers') { 
+          } else if (collectionName == 'consumers') {
             role = 'consumer';
-          } else if (collectionName == 'users' && data.containsKey('role')) { 
+          } else if (collectionName == 'users' && data.containsKey('role')) {
             role = data['role'] is String ? data['role']! : 'buyer';
           }
           return {...data, 'role': role};
@@ -102,7 +121,7 @@ class AuthService {
         debugPrint("⚠️ فشل قراءة Firestore في $collectionName: $e");
       }
     }
-                                                
+
     return {'role': 'buyer'}; // الافتراضي
   }
 
@@ -118,7 +137,7 @@ class AuthService {
     final userDataToStore = {
       'id': id,
       // 💡 المفتاح ownerId هو نفسه id (لأغراض التاجر)
-      'ownerId': id, 
+      'ownerId': id,
       'role': role,
       'fullname': fullname,
       'address': address,
@@ -126,17 +145,17 @@ class AuthService {
       'location': location,
       // 💡 ملاحظة: المفاتيح المستخدمة هنا هي نفس المفاتيح التي تم تخزينها في HTML/JS: 'id', 'role', 'fullname', إلخ.
     };
-    
+
     // ⭐️⭐️ تطبيق منطق الحفظ الفعلي باستخدام SharedPreferences ⭐️⭐️
     try {
       final prefs = await SharedPreferences.getInstance();
-      
+
       // تحويل الكائن إلى سلسلة JSON (مطابقة لـ JSON.stringify)
       final jsonString = json.encode(userDataToStore);
-      
+
       // تخزين سلسلة JSON تحت المفتاح 'loggedUser' (مطابقة لـ localStorage.setItem)
       await prefs.setString('loggedUser', jsonString);
-      
+
       debugPrint("💾 تم حفظ بيانات المستخدم بنجاح في SharedPreferences: $jsonString");
     } catch (e) {
       debugPrint("🚨 خطأ فادح أثناء حفظ البيانات في SharedPreferences: $e");
@@ -146,7 +165,7 @@ class AuthService {
   // الدوال المتعلقة بـ FCM (بدون إلقاء استثناء عند الفشل)
   Future<String?> _requestFCMToken() async {
     try {
-      if (kIsWeb) { 
+      if (kIsWeb) {
         return null;
       }
       return await FirebaseMessaging.instance.getToken();
@@ -164,13 +183,13 @@ class AuthService {
         'role': userRole,
         'address': userAddress
       };
-      
+
       final response = await http.post(
         Uri.parse(_notificationApiEndpoint),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(apiData),
       );
-      
+
       if (response.statusCode != 200) {
         debugPrint("⚠️ فشل تسجيل FCM Endpoint. Status: ${response.statusCode}");
       }
