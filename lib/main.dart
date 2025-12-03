@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:my_test_app/firebase_options.dart';
 import 'package:sizer/sizer.dart';
-
 // 💡 استيراد شاشات التوجيه 💡
 import 'package:my_test_app/screens/login_screen.dart';
 import 'package:my_test_app/screens/auth/new_client_screen.dart';
@@ -15,7 +14,23 @@ import 'package:my_test_app/screens/seller_screen.dart';
 import 'package:my_test_app/screens/buyer/buyer_category_screen.dart';
 import 'package:my_test_app/screens/buyer/buyer_product_list_screen.dart';
 import 'package:my_test_app/screens/buyer/cart_screen.dart';
+// 🟢🟢 سطر مضاف: استيراد شاشة إتمام الطلب 🟢🟢
+import 'package:my_test_app/screens/checkout/checkout_screen.dart';
 
+// 🎯🎯 استيرادات شاشات الدليفري المخصصة 🎯🎯
+// ✅ 1. إعادة استيراد الشاشة القديمة (الإعدادات الأولية)
+import 'package:my_test_app/screens/delivery_settings_screen.dart'; 
+// ✅ 2. إضافة استيراد شاشة التحديث الجديدة
+import 'package:my_test_app/screens/update_delivery_settings_screen.dart'; 
+import 'package:my_test_app/screens/delivery_merchant_dashboard_screen.dart'; 
+
+// 🆕🆕 استيرادات شاشات التجار الجديدة 🆕🆕
+import 'package:my_test_app/screens/buyer/traders_screen.dart';
+// 🎯 الاستيراد الحقيقي:
+import 'package:my_test_app/screens/buyer/trader_offers_screen.dart';
+// 🆕🆕 نهاية استيرادات شاشات التجار الجديدة 🆕 🆕
+
+// 💡 استيرادات الثيم والمزودات (تم نقلها للأعلى لتجنب الخطأ) 💡
 import 'package:my_test_app/theme/app_theme.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/providers/manufacturers_provider.dart';
@@ -24,6 +39,11 @@ import 'package:my_test_app/models/logged_user.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:my_test_app/controllers/seller_dashboard_controller.dart';
 
+// 🚀 التعديلات الجديدة: استيراد الشاشة والـ Provider الخاص بإضافة المنتج 🚀
+import 'package:my_test_app/screens/delivery/product_offer_screen.dart';
+import 'package:my_test_app/providers/product_offer_provider.dart';
+
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
@@ -31,13 +51,8 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
   } catch (e) {
-    // 🚨 طباعة الخطأ في وضع التطوير (debug)
     debugPrint('🚨 FATAL FIREBASE INIT ERROR: $e');
-    // 💡 لإصدارات (release)، لا يمكننا فعل الكثير سوى السماح للتطبيق بالمحاولة
-    // ولكن طباعة الخطأ في console أمر بالغ الأهمية عند اختبار APK.
   }
-
-  // ⭐️⭐️ تغليف التطبيق بـ MultiProvider ⭐️⭐️
   runApp(
     MultiProvider(
       providers: [
@@ -54,7 +69,7 @@ void main() async {
           create: (context) => SellerDashboardController(),
         ),
       ],
-      child: const MyApp(), // تطبيقنا الآن ابن لـ MultiProvider
+      child: const MyApp(),
     ),
   );
 }
@@ -64,15 +79,12 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ⭐️⭐️ الإضافة 2: تغليف MaterialApp بـ Sizer ⭐️⭐️
     return Sizer(
       builder: (context, orientation, deviceType) {
         return MaterialApp(
           title: 'My Test App',
           debugShowCheckedModeBanner: false,
-          // 3. الثيم الفاتح - استخدام الثوابت الجديدة
           theme: ThemeData(
-            useMaterial3: true,
             primaryColor: AppTheme.primaryGreen,
             colorScheme: ColorScheme.light(
               primary: AppTheme.primaryGreen,
@@ -80,16 +92,13 @@ class MyApp extends StatelessWidget {
             ),
             scaffoldBackgroundColor: AppTheme.scaffoldLight,
             cardColor: Colors.white,
-            // 💡💡 توحيد الخط لـ Noto Sans Arabic في الثيم الفاتح 💡💡
             textTheme: GoogleFonts.notoSansArabicTextTheme(
               const TextTheme(
                 bodyLarge: TextStyle(color: Color(0xff343a40)),
               ),
             ),
           ),
-          // 4. الثيم الداكن - استخدام الثوابت الجديدة
           darkTheme: ThemeData.dark().copyWith(
-            useMaterial3: true,
             primaryColor: AppTheme.primaryGreen,
             colorScheme: ColorScheme.dark(
               primary: AppTheme.primaryGreen,
@@ -100,14 +109,12 @@ class MyApp extends StatelessWidget {
             scaffoldBackgroundColor: const Color(0xff121212),
             cardColor: AppTheme.cardDark,
             drawerTheme: DrawerThemeData(backgroundColor: AppTheme.darkSidebarBg),
-            // 💡💡 توحيد الخط لـ Noto Sans Arabic في الثيم الداكن 💡💡
             textTheme: GoogleFonts.notoSansArabicTextTheme(
               const TextTheme(
                 bodyLarge: TextStyle(color: Color(0xffe0e0e0)),
               ),
             ),
           ),
-          // 🔹 ضبط اتجاه النصوص مركزي لكل التطبيق
           builder: (context, child) {
             return Directionality(
               textDirection: TextDirection.rtl,
@@ -117,20 +124,53 @@ class MyApp extends StatelessWidget {
           // ⭐️⭐️ تعريف المسارات المُسمّاة 'routes' ⭐️⭐️
           initialRoute: '/',
           routes: {
-            '/': (context) => const AuthWrapper(), // 💡 المسار الرئيسي يوجه إلى الـ Wrapper
-            // 💡 تعريف المسارات الأساسية
+            '/': (context) => const AuthWrapper(),
             LoginScreen.routeName: (context) => const LoginScreen(),
             BuyerHomeScreen.routeName: (context) => const BuyerHomeScreen(),
             SellerScreen.routeName: (context) => const SellerScreen(),
             CartScreen.routeName: (context) => const CartScreen(),
+            CheckoutScreen.routeName: (context) => const CheckoutScreen(),
 
-            // 🆕 مسارات التسجيل
+            // ✅ المسار القديم: يحافظ على فتح شاشة الإعدادات الأولية
+            '/deliverySettings': (context) => const DeliverySettingsScreen(),
+
+            // ✅ التعديل المطلوب: المسار '/updatsupermarket' يفتح شاشة التحديث الجديدة
+            '/updatsupermarket': (context) => const UpdateDeliverySettingsScreen(),
+
+            // 🎯🎯 مسار لوحة القيادة: يفتح الشاشة المخصصة (عندما يكون مفعّل)
+            '/deliveryPrices': (context) => const DeliveryMerchantDashboardScreen(),
+
+            TradersScreen.routeName: (context) => const TradersScreen(),
             '/register': (context) => const NewClientScreen(),
-            // 🆕 مسار رسالة ما بعد التسجيل
             '/post_registration_message': (context) => const PostRegistrationMessageScreen(),
           },
-          // 🆕 استخدام onGenerateRoute لفك الـ Map الخاص بـ '/products'
+          // 🆕 استخدام onGenerateRoute لفك الـ Map الخاص بـ '/products' و '/traderOffers'
           onGenerateRoute: (settings) {
+
+            // 🚀 التعديل الجديد 1: إضافة مسار إضافة المنتجات مع الـ Provider 🚀
+            if (settings.name == ProductOfferScreen.routeName) {
+              return MaterialPageRoute(
+                builder: (context) {
+                  return ChangeNotifierProvider(
+                    // توفير الـ Provider الخاص بالشاشة، مع تمرير BuyerDataProvider كـ Dependency
+                    create: (context) => ProductOfferProvider(
+                      Provider.of<BuyerDataProvider>(context, listen: false),
+                    ),
+                    child: const ProductOfferScreen(),
+                  );
+                },
+              );
+            }
+
+            // 2. المسارات القديمة في onGenerateRoute
+            if (settings.name == TraderOffersScreen.routeName) {
+              final sellerId = settings.arguments as String? ?? '';
+              return MaterialPageRoute(
+                builder: (context) {
+                  return TraderOffersScreen(sellerId: sellerId);
+                },
+              );
+            }
             if (settings.name == '/products') {
               final args = settings.arguments as Map<String, String>? ?? {};
               return MaterialPageRoute(
@@ -142,7 +182,6 @@ class MyApp extends StatelessWidget {
                 },
               );
             }
-            // ✅ توحيد معالجة مسار /category هنا
             if (settings.name == '/category') {
               final mainCategoryId = settings.arguments as String? ?? 'default_id';
               return MaterialPageRoute(
@@ -153,7 +192,7 @@ class MyApp extends StatelessWidget {
           },
         );
       },
-    ); // ⭐️⭐️ نهاية Sizer builder ⭐️⭐️
+    );
   }
 }
 
@@ -166,7 +205,6 @@ class AuthWrapper extends StatefulWidget {
 }
 
 class _AuthWrapperState extends State<AuthWrapper> {
-
   Future<LoggedInUser?>? _userFuture;
 
   @override
@@ -182,23 +220,17 @@ class _AuthWrapperState extends State<AuthWrapper> {
     if (userJsonString != null) {
       try {
         final userData = LoggedInUser.fromJson(jsonDecode(userJsonString));
-
-        // ⭐️ استدعاء initializeData لمزود البيانات ⭐️
-        final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
-
-        // نمرر id مرتين لـ currentUserId و currentDealerId (حسب المنطق الأصلي)
-        await buyerProvider.initializeData(userData.id, userData.id, userData.fullname);
+        await Provider.of<BuyerDataProvider>(context, listen: false)
+            .initializeData(userData.id, userData.id, userData.fullname);
 
         return userData;
       } catch (e) {
-        // 🚨 معالجة الأخطاء إذا فشل تحليل JSON أو فشل تهيئة المزود
         debugPrint('🚨 AuthWrapper User Load/Init Error: $e');
-        // إذا فشل أي شيء، نتجاهل المستخدم ونطلب منه تسجيل الدخول مرة أخرى
         await prefs.remove('loggedUser');
-        return null; 
+        return null;
       }
     }
-    return null; // لا يوجد مستخدم مسجل
+    return null;
   }
 
   @override
@@ -207,24 +239,19 @@ class _AuthWrapperState extends State<AuthWrapper> {
       future: _userFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          // عرض شاشة تحميل بسيطة أثناء التحقق من الشيرد بريفرينسز
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // 💡 منطق التوجيه بناءً على حالة تسجيل الدخول والدور 💡
         if (snapshot.hasData && snapshot.data != null) {
           final user = snapshot.data!;
-          // توجيه بناءً على الدور المخزن
           if (user.role == "seller") {
-            return const SellerScreen(); // 🎯 توجه مباشرة لـ SellerScreen
+            return const SellerScreen();
           } else {
-            // "consumer" أو "buyer" أو أي شيء آخر يذهب إلى شاشة المشتري/المتجر
-            return const BuyerHomeScreen(); //  🎯 توجه لـ BuyerHomeScreen
+            return const BuyerHomeScreen();
           }
         } else {
-          // لم يتم تسجيل الدخول: اذهب إلى شاشة الدخول (Login Screen)
           return const LoginScreen();
         }
       },
@@ -238,12 +265,9 @@ class PostRegistrationMessageScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // استقبال Arguments لتحديد ما إذا كان الحساب "seller"
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     final isSeller = args?['isSeller'] ?? false;
-    // ⭐️ التوجيه التلقائي بعد 3 ثوانٍ إلى شاشة تسجيل الدخول ⭐️
     Future.delayed(const Duration(seconds: 3), () {
-      // نستخدم pushReplacementNamed لضمان عدم العودة لهذه الشاشة
       Navigator.of(context).pushReplacementNamed(LoginScreen.routeName);
     });
 
@@ -252,12 +276,10 @@ class PostRegistrationMessageScreen extends StatelessWidget {
     final Color color;
 
     if (isSeller) {
-      // 🚨 رسالة تاجر الجملة (قيد المراجعة) - تم التعديل بناءً على منطق المجموعات 🚨
       message = 'تم تسجيل حساب التاجر بنجاح.\nحسابك قيد المراجعة في انتظار النقل إلى التجار النشطين.';
       icon = Icons.pending_actions;
       color = Colors.orange;
     } else {
-      // رسالة تاجر التجزئة والمستهلك (نجاح)
       message = 'تم تسجيل بياناتك بنجاح.\nسيتم نقلك الآن لتسجيل الدخول والمصادقة.';
       icon = Icons.check_circle_outline;
       color = Colors.green;
