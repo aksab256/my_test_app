@@ -1,4 +1,5 @@
 // lib/main.dart
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:my_test_app/firebase_options.dart';
 import 'package:sizer/sizer.dart';
+// 💡 استيراد جديد لتهيئة بيانات اللغة
+import 'package:intl/date_symbol_data_local.dart'; 
+
 // 💡 استيراد شاشات التوجيه 💡
 import 'package:my_test_app/screens/login_screen.dart';
 import 'package:my_test_app/screens/auth/new_client_screen.dart';
@@ -19,10 +23,13 @@ import 'package:my_test_app/screens/checkout/checkout_screen.dart';
 
 // 🎯🎯 استيرادات شاشات الدليفري المخصصة 🎯🎯
 // ✅ 1. إعادة استيراد الشاشة القديمة (الإعدادات الأولية)
-import 'package:my_test_app/screens/delivery_settings_screen.dart'; 
+import 'package:my_test_app/screens/delivery_settings_screen.dart';
 // ✅ 2. إضافة استيراد شاشة التحديث الجديدة
-import 'package:my_test_app/screens/update_delivery_settings_screen.dart'; 
-import 'package:my_test_app/screens/delivery_merchant_dashboard_screen.dart'; 
+import 'package:my_test_app/screens/update_delivery_settings_screen.dart';
+import 'package:my_test_app/screens/delivery_merchant_dashboard_screen.dart';
+
+// 💡💡 إضافة استيراد شاشة طلبات العملاء الجديدة 💡💡
+import 'package:my_test_app/screens/consumer_orders_screen.dart';
 
 // 🆕🆕 استيرادات شاشات التجار الجديدة 🆕🆕
 import 'package:my_test_app/screens/buyer/traders_screen.dart';
@@ -43,9 +50,22 @@ import 'package:my_test_app/controllers/seller_dashboard_controller.dart';
 import 'package:my_test_app/screens/delivery/product_offer_screen.dart';
 import 'package:my_test_app/providers/product_offer_provider.dart';
 
+// 💡 يجب استيراد الـ Provider الذي سبب المشكلة:
+import 'package:my_test_app/providers/customer_orders_provider.dart';
+// 🚀🚀 إضافة استيراد شاشة إدارة عروض الدليفري الجديدة 🚀🚀
+import 'package:my_test_app/screens/delivery/delivery_offers_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // 🚀🚀 التصحيح الجديد: تهيئة بيانات اللغة العربية لحل خطأ LocaleDataException 🚀🚀
+  try {
+    await initializeDateFormatting('ar', null); 
+  } catch (e) {
+    // يمكن تجاهل الخطأ في حالة عدم توفر البيانات، لكن من الأفضل رؤيته في وضع التطوير
+    debugPrint('🚨 Error initializing Date Formatting for Arabic: $e');
+  }
+  
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -53,9 +73,11 @@ void main() async {
   } catch (e) {
     debugPrint('🚨 FATAL FIREBASE INIT ERROR: $e');
   }
+
   runApp(
     MultiProvider(
       providers: [
+
         ChangeNotifierProvider(
           create: (context) => BuyerDataProvider(),
         ),
@@ -68,6 +90,21 @@ void main() async {
         ChangeNotifierProvider(
           create: (context) => SellerDashboardController(),
         ),
+
+        // 🟢🟢 التصحيح: تم إلغاء تعليق وإضافة CustomerOrdersProvider 🟢🟢
+        ChangeNotifierProxyProvider<BuyerDataProvider, CustomerOrdersProvider>(
+          create: (context) => CustomerOrdersProvider(Provider.of<BuyerDataProvider>(context, listen: false)),
+          update: (context, buyerData, previous) => CustomerOrdersProvider(buyerData),
+        ),
+        
+        // 🚀🚀 التصحيح الجديد: إضافة ProductOfferProvider لحل مشكلة ProviderNotFoundException 🚀🚀
+        ChangeNotifierProxyProvider<BuyerDataProvider, ProductOfferProvider>(
+          // نستخدم BuyerDataProvider لتهيئة المنتج في الـ Provider
+          create: (context) => ProductOfferProvider(Provider.of<BuyerDataProvider>(context, listen: false)),
+          update: (context, buyerData, previous) => ProductOfferProvider(buyerData),
+        ),
+        
+        // -----------------------------------------------------------------
       ],
       child: const MyApp(),
     ),
@@ -81,6 +118,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return Sizer(
       builder: (context, orientation, deviceType) {
+
         return MaterialApp(
           title: 'My Test App',
           debugShowCheckedModeBanner: false,
@@ -121,7 +159,9 @@ class MyApp extends StatelessWidget {
               child: child!,
             );
           },
+
           // ⭐️⭐️ تعريف المسارات المُسمّاة 'routes' ⭐️⭐️
+
           initialRoute: '/',
           routes: {
             '/': (context) => const AuthWrapper(),
@@ -133,35 +173,31 @@ class MyApp extends StatelessWidget {
 
             // ✅ المسار القديم: يحافظ على فتح شاشة الإعدادات الأولية
             '/deliverySettings': (context) => const DeliverySettingsScreen(),
-
             // ✅ التعديل المطلوب: المسار '/updatsupermarket' يفتح شاشة التحديث الجديدة
             '/updatsupermarket': (context) => const UpdateDeliverySettingsScreen(),
-
-            // 🎯🎯 مسار لوحة القيادة: يفتح الشاشة المخصصة (عندما يكون مفعّل)
+            // 🎯🎯 مسار لوحة القيادة (القديم): يفتح الشاشة المخصصة (للمستخدمين الآخرين)
             '/deliveryPrices': (context) => const DeliveryMerchantDashboardScreen(),
-
+            // 🟢🟢 إضافة المسار الجديد: '/con-orders' يفتح شاشة طلبات العملاء 🟢🟢
+            '/con-orders': (context) => const ConsumerOrdersScreen(),
+            // 🚀🚀 إضافة مسار شاشة إدارة عروض الدليفري الجديدة 🚀🚀
+            DeliveryOffersScreen.routeName: (context) => const DeliveryOffersScreen(),
+            
             TradersScreen.routeName: (context) => const TradersScreen(),
             '/register': (context) => const NewClientScreen(),
             '/post_registration_message': (context) => const PostRegistrationMessageScreen(),
           },
           // 🆕 استخدام onGenerateRoute لفك الـ Map الخاص بـ '/products' و '/traderOffers'
           onGenerateRoute: (settings) {
-
             // 🚀 التعديل الجديد 1: إضافة مسار إضافة المنتجات مع الـ Provider 🚀
             if (settings.name == ProductOfferScreen.routeName) {
               return MaterialPageRoute(
                 builder: (context) {
-                  return ChangeNotifierProvider(
-                    // توفير الـ Provider الخاص بالشاشة، مع تمرير BuyerDataProvider كـ Dependency
-                    create: (context) => ProductOfferProvider(
-                      Provider.of<BuyerDataProvider>(context, listen: false),
-                    ),
-                    child: const ProductOfferScreen(),
-                  );
+                  // 💡 يستخدم الـ Provider المتاح عالميًا الآن
+                  return const ProductOfferScreen();
                 },
               );
             }
-
+            
             // 2. المسارات القديمة في onGenerateRoute
             if (settings.name == TraderOffersScreen.routeName) {
               final sellerId = settings.arguments as String? ?? '';
@@ -188,6 +224,7 @@ class MyApp extends StatelessWidget {
                 builder: (context) => BuyerCategoryScreen(mainCategoryId: mainCategoryId),
               );
             }
+
             return null;
           },
         );
@@ -206,7 +243,6 @@ class AuthWrapper extends StatefulWidget {
 
 class _AuthWrapperState extends State<AuthWrapper> {
   Future<LoggedInUser?>? _userFuture;
-
   @override
   void initState() {
     super.initState();
@@ -222,7 +258,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
         final userData = LoggedInUser.fromJson(jsonDecode(userJsonString));
         await Provider.of<BuyerDataProvider>(context, listen: false)
             .initializeData(userData.id, userData.id, userData.fullname);
-
         return userData;
       } catch (e) {
         debugPrint('🚨 AuthWrapper User Load/Init Error: $e');
@@ -230,6 +265,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         return null;
       }
     }
+
     return null;
   }
 
@@ -261,6 +297,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
 // 💡 شاشة رسالة ما بعد التسجيل (لإظهار النجاح أو حالة الانتظار)
 class PostRegistrationMessageScreen extends StatelessWidget {
+  
   const PostRegistrationMessageScreen({super.key});
 
   @override
@@ -270,7 +307,7 @@ class PostRegistrationMessageScreen extends StatelessWidget {
     Future.delayed(const Duration(seconds: 3), () {
       Navigator.of(context).pushReplacementNamed(LoginScreen.routeName);
     });
-
+  
     final String message;
     final IconData icon;
     final Color color;

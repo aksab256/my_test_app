@@ -1,4 +1,5 @@
 // lib/screens/delivery_merchant_dashboard_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
@@ -22,6 +23,9 @@ class DashboardData {
 
 // 2. الشاشة الرئيسية (Stateful)
 class DeliveryMerchantDashboardScreen extends StatefulWidget {
+  // 🎯 التصحيح 1: إضافة routeName لحل الخطأ في شاشة العروض
+  static const routeName = '/deliveryMerchantDashboard'; 
+
   const DeliveryMerchantDashboardScreen({super.key});
 
   @override
@@ -45,12 +49,12 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
 
     // ----------------- 2. إجمالي الطلبات والمعلقة والمبيعات -----------------
     final ordersRef = _firestore.collection("consumerorders");
-
+    
     // إجمالي الطلبات (الكل)
     final allOrdersQuery = ordersRef.where("supermarketId", isEqualTo: userId);
     final allOrdersSnapshot = await allOrdersQuery.count().get();
     final totalOrders = allOrdersSnapshot.count; // نوعها int?
-
+    
     // طلبات معلقة
     final pendingOrdersQuery = ordersRef
         .where("supermarketId", isEqualTo: userId)
@@ -58,7 +62,7 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
 
     final pendingOrdersSnapshot = await pendingOrdersQuery.count().get();
     final pendingOrders = pendingOrdersSnapshot.count; // نوعها int?
-
+    
     // إجمالي المبيعات
     final deliveredOrdersQuery = ordersRef
         .where("supermarketId", isEqualTo: userId)
@@ -90,7 +94,7 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
       
       // 🎯 التصحيح 2: تغيير 'user' إلى 'loggedInUser'
       final userId = buyerData.loggedInUser?.id;
-
+      
       if (userId != null && userId.isNotEmpty) {
         _dashboardDataFuture = _fetchDashboardData(userId);
       } else {
@@ -137,7 +141,7 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
             ),
 
             const SizedBox(height: 30),
-
+            
             // عرض البيانات عبر FutureBuilder
             FutureBuilder<DashboardData>(
               future: _dashboardDataFuture,

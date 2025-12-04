@@ -1,20 +1,19 @@
-// lib/providers/product_offer_provider.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/category_model.dart';
-// import '../models/offer_model.dart'; // لا حاجة لاستيراد غير مستخدم
-// import '../models/logged_user.dart'; // لا حاجة لاستيراد غير مستخدم
+// 📌 يجب التأكد من وجود ProductOffer, UnitOffer, Product هنا
+import 'package:my_test_app/models/product_offer.dart'; 
+import '../models/category_model.dart'; 
 import 'buyer_data_provider.dart';
 
 // -------------------------------------------------------------
-// 💡 نموذج بيانات المنتج (CatalogProductModel) - تم تصحيح التحويل
+// 💡 نموذج بيانات المنتج (CatalogProductModel) - لا تغيير
 // -------------------------------------------------------------
 class CatalogProductModel {
   final String id;
   final String name;
   final String description;
   final List<String> imageUrls;
-  final List<Map<String, dynamic>> units; // الوحدات في الكتالوج
+  final List<Map<String, dynamic>> units;
   final String mainId;
   final String subId;
 
@@ -29,58 +28,60 @@ class CatalogProductModel {
   });
 
   factory CatalogProductModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = doc.data() as Map<String, dynamic>?;
+    if (data == null) throw Exception("Document data is null");
 
-    // 💡 التصحيح النهائي: استخدام حلقة للتأكد من التحويل الآمن للعناصر داخل القائمة
     final unitsList = data['units'];
     List<Map<String, dynamic>> safeUnits = [];
 
     if (unitsList is List) {
-        for (var item in unitsList) {
-            if (item is Map) {
-                // التحويل الآمن باستخدام Map<String, dynamic>.from(item)
-                safeUnits.add(Map<String, dynamic>.from(item));
-            } else {
-                debugPrint('⚠️ Found non-Map item in units: $item'); 
-            }
+      for (var item in unitsList) {
+        if (item is Map) {
+          safeUnits.add(Map<String, dynamic>.from(item as Map));
+        } else {
+          debugPrint('⚠️ Found non-Map item in units: $item');
         }
+      }
     }
-
+    
     return CatalogProductModel(
       id: doc.id,
-      name: data['name'] ?? '',
-      description: data['description'] ?? '',
-      imageUrls: List<String>.from(data['imageUrls'] ?? []),
-      units: safeUnits, // استخدام القائمة المُحولة بأمان
-      mainId: data['mainId'] ?? '',
-      subId: data['subId'] ?? '',
+      name: data['name'] as String? ?? '',
+      description: data['description'] as String? ?? '',
+      imageUrls: List<String>.from(data['imageUrls'] as List? ?? []),
+      units: safeUnits,
+      mainId: data['mainId'] as String? ?? '',
+      subId: data['subId'] as String? ?? '',
     );
   }
 }
 
 // -------------------------------------------------------------
-// Provider
+// Provider: ProductOfferProvider (المزود المدمج)
 // -------------------------------------------------------------
 class ProductOfferProvider with ChangeNotifier {
   final BuyerDataProvider _buyerData;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // 1. حالة حقول الأقسام والبحث
+  // 1. حالة حقول الكتالوج والإضافة (Existing State)
   List<CategoryModel> _mainCategories = [];
   List<CategoryModel> _subCategories = [];
   String? _selectedMainId;
   String? _selectedSubId;
   List<CatalogProductModel> _searchResults = [];
   CatalogProductModel? _selectedProduct;
-
-  // 2. حالة رسالة النظام
+  final Map<String, double> _selectedUnitPrices = {};
+  
+  // 2. حالة رسالة النظام (Existing State)
   String? _message;
   bool _isSuccess = true;
+  
+  // 3. حالة إدارة العروض (NEW State - لحل الأخطاء)
+  List<ProductOffer> _offers = []; // 👈 getter: offers
+  String? _supermarketName; // 👈 getter: supermarketName
+  bool _isLoading = false; // 👈 getter: isLoading
 
-  // 3. حالة الوحدات المختارة (الوحدات التي سيتم إرسالها كعرض)
-  final Map<String, double> _selectedUnitPrices = {}; // Key: unitName, Value: price
-
-  // Getters
+  // Getters (Existing + NEW)
   List<CategoryModel> get mainCategories => _mainCategories;
   List<CategoryModel> get subCategories => _subCategories;
   String? get selectedMainId => _selectedMainId;
@@ -91,6 +92,11 @@ class ProductOfferProvider with ChangeNotifier {
   bool get isSuccess => _isSuccess;
   Map<String, double> get selectedUnitPrices => _selectedUnitPrices;
   String? get ownerId => _buyerData.loggedInUser?.id;
+
+  // 📌 Getters المطلوبة من الشاشة الجديدة
+  List<ProductOffer> get offers => _offers; 
+  String? get supermarketName => _supermarketName;
+  bool get isLoading => _isLoading;
 
   ProductOfferProvider(this._buyerData) {
     fetchMainCategories();
@@ -104,11 +110,12 @@ class ProductOfferProvider with ChangeNotifier {
     _isSuccess = success;
     notifyListeners();
   }
+
   void clearNotification() {
     _message = null;
     notifyListeners();
   }
-
+  
   void setSelectedMainCategory(String? id) {
     _selectedMainId = id;
     _selectedSubId = null;
@@ -129,12 +136,11 @@ class ProductOfferProvider with ChangeNotifier {
     _selectedUnitPrices.clear();
     notifyListeners();
     if (id != null) {
-      searchProducts(''); // عرض كل المنتجات في القسم الفرعي المختار
+      searchProducts('');
     }
   }
 
   void setSelectedUnitPrice(String unitName, double? price) {
-    // 💡 نستخدم 0.0 كقيمة مبدئية لتفعيل الوحدة وتمكين حقل الإدخال في الـ Screen
     if (price != null && price >= 0) {
       _selectedUnitPrices[unitName] = price;
     } else {
@@ -144,9 +150,10 @@ class ProductOfferProvider with ChangeNotifier {
   }
 
   // ------------------------------------
-  // وظائف جلب البيانات والبحث
+  // وظائف جلب الكتالوج والبحث (Existing)
   // ------------------------------------
   Future<void> fetchMainCategories() async {
+    // ... (Your existing implementation for fetching main categories) ...
     try {
       final qSnapshot = await _firestore.collection('mainCategory').where('status', isEqualTo: 'active').get();
       _mainCategories = qSnapshot.docs.map((doc) => CategoryModel.fromFirestore(doc)).toList();
@@ -157,6 +164,7 @@ class ProductOfferProvider with ChangeNotifier {
   }
 
   Future<void> fetchSubCategories(String mainId) async {
+    // ... (Your existing implementation for fetching sub categories) ...
     try {
       final qSnapshot = await _firestore.collection('subCategory').where('mainId', isEqualTo: mainId).where('status', isEqualTo: 'active').get();
       _subCategories = qSnapshot.docs.map((doc) => CategoryModel.fromFirestore(doc)).toList();
@@ -167,6 +175,7 @@ class ProductOfferProvider with ChangeNotifier {
   }
 
   Future<void> searchProducts(String searchTerm) async {
+    // ... (Your existing implementation for searching products) ...
     if (_selectedSubId == null) return;
     clearNotification();
     _searchResults.clear();
@@ -181,39 +190,179 @@ class ProductOfferProvider with ChangeNotifier {
     try {
       Query q = _firestore.collection('products')
           .where('subId', isEqualTo: _selectedSubId);
-
+      
       if (searchTerm.isNotEmpty) {
-          q = q.where('name', isGreaterThanOrEqualTo: searchTerm)
-             .where('name', isLessThanOrEqualTo: searchTerm + '\uf8ff')
-             .limit(10);
+        q = q.where('name', isGreaterThanOrEqualTo: searchTerm)
+            .where('name', isLessThanOrEqualTo: searchTerm + '\uf8ff')
+            .limit(10);
       } else {
         q = q.limit(20);
       }
 
       final qSnapshot = await q.get();
       _searchResults = qSnapshot.docs.map((doc) => CatalogProductModel.fromFirestore(doc)).toList();
+      
       notifyListeners();
 
       if (searchTerm.isNotEmpty && _searchResults.isEmpty) {
-          showNotification('لا توجد نتائج مطابقة في هذا القسم.', false);
+        showNotification('لا توجد نتائج مطابقة في هذا القسم.', false);
       }
     } catch (e) {
       showNotification('خطأ في البحث عن المنتجات: $e', false);
     }
   }
 
-  // 💡 تم تعديل: يقبل null لإلغاء اختيار المنتج
   void selectProduct(CatalogProductModel? product) {
+    // ... (Your existing implementation for selecting product) ...
     _selectedProduct = product;
-    _searchResults = []; // إخفاء نتائج البحث
-    _selectedUnitPrices.clear(); // مسح الوحدات المختارة
+    _searchResults = [];
+    _selectedUnitPrices.clear();
     notifyListeners();
   }
 
   // ------------------------------------
-  // وظائف الإرسال
+  // وظائف إدارة وعرض العروض (NEW & Refactored)
   // ------------------------------------
 
+  // دالة مساعدة خاصة لجلب اسم السوبر ماركت من Firestore
+  Future<String?> _fetchSupermarketNameFromFirestore() async {
+    if (ownerId == null) return null;
+    try {
+      final q = await _firestore.collection('deliverySupermarkets')
+          .where('ownerId', isEqualTo: ownerId)
+          .limit(1)
+          .get();
+
+      if (q.docs.isNotEmpty) {
+        return q.docs.first.data()['supermarketName'] as String?;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error fetching supermarket name: $e');
+      return null;
+    }
+  }
+
+  // 📌 NEW: دالة initializeData (مطلوبة من شاشة العرض)
+  Future<void> initializeData(String ownerId) async {
+    _isLoading = true;
+    notifyListeners();
+
+    // جلب وتخزين اسم السوبر ماركت لرسالة الترحيب
+    _supermarketName = await _fetchSupermarketNameFromFirestore();
+    
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  // 📌 NEW: دالة fetchOffers (مطلوبة من شاشة العرض)
+  Future<void> fetchOffers(String ownerId) async {
+    _isLoading = true;
+    notifyListeners();
+    _offers = []; 
+
+    try {
+      final offersQuery = await _firestore
+          .collection('marketOffer')
+          .where('ownerId', isEqualTo: ownerId)
+          .get();
+
+      List<ProductOffer> fetchedOffers = [];
+      for (var offerDoc in offersQuery.docs) {
+        final data = offerDoc.data();
+        final productId = data['productId'] as String?;
+
+        if (productId != null) {
+          final productDoc = await _firestore.collection('products').doc(productId).get();
+
+          Product productDetails;
+          if (productDoc.exists) {
+            productDetails = Product.fromJson(productDoc.id, productDoc.data()!);
+          } else {
+            productDetails = Product(id: productId, name: 'منتج محذوف/غير معروف', imageUrls: []);
+          }
+
+          fetchedOffers.add(ProductOffer.fromFirestore(
+            doc: offerDoc,
+            productDetails: productDetails,
+          ));
+        }
+      }
+      _offers = fetchedOffers;
+    } catch (e) {
+      debugPrint('ERROR fetching offers: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+  
+  // 📌 NEW: دالة deleteOffer (مطلوبة من شاشة العرض)
+  Future<void> deleteOffer(String offerId) async {
+    try {
+      await _firestore.collection('marketOffer').doc(offerId).delete();
+      // التحديث المحلي
+      _offers.removeWhere((offer) => offer.id == offerId);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('ERROR deleting offer $offerId: $e');
+      rethrow; 
+    }
+  }
+  
+  // 📌 NEW: دالة updateUnitPrice (مطلوبة من شاشة العرض)
+  Future<void> updateUnitPrice({
+    required String offerId,
+    required int unitIndex,
+    required double newPrice,
+  }) async {
+    try {
+      final offerToUpdate = _offers.firstWhere((offer) => offer.id == offerId);
+      final offerRef = _firestore.collection('marketOffer').doc(offerId);
+
+      // تحديث قائمة الوحدات للـ Firestore (يجب أن تكون Map)
+      final updatedUnits = [...offerToUpdate.units.map((u) => u.toMap())];
+
+      if (unitIndex >= 0 && unitIndex < updatedUnits.length) {
+        updatedUnits[unitIndex]['price'] = newPrice;
+
+        // تحديث Firestore
+        await offerRef.update({'units': updatedUnits});
+
+        // تحديث القائمة المحلية (للتحديث الفوري للواجهة)
+        _offers = _offers.map((offer) {
+          if (offer.id == offerId) {
+            final List<UnitOffer> newUnitOffers = updatedUnits
+                .map((json) => UnitOffer.fromJson(json))
+                .toList();
+            
+            return ProductOffer(
+              id: offer.id,
+              ownerId: offer.ownerId,
+              productId: offer.productId,
+              supermarketName: offer.supermarketName,
+              createdAt: offer.createdAt,
+              units: newUnitOffers, 
+              productDetails: offer.productDetails,
+            );
+          }
+          return offer;
+        }).toList();
+
+        notifyListeners();
+      } else {
+        throw Exception('Unit index is out of bounds.');
+      }
+    } catch (e) {
+      debugPrint('ERROR updating unit price for $offerId: $e');
+      rethrow;
+    }
+  }
+
+  // ------------------------------------
+  // وظائف الإرسال (Existing - تم تحديثها لاستخدام الدالة الجديدة)
+  // ------------------------------------
+  
   Future<void> submitOffer() async {
     if (_selectedProduct == null || ownerId == null) {
       showNotification('الرجاء اختيار منتج وتسجيل الدخول كتاجر أولاً.', false);
@@ -225,20 +374,20 @@ class ProductOfferProvider with ChangeNotifier {
       return;
     }
 
-    // جلب اسم السوبر ماركت (باستخدام البيانات المخزنة مسبقاً)
-    final supermarketName = await getSupermarketName();
+    // 📌 Refactored: استخدام الدالة الخاصة لجلب اسم السوبر ماركت
+    final supermarketName = await _fetchSupermarketNameFromFirestore(); 
 
     if (supermarketName == null) {
       showNotification('فشل جلب اسم السوبر ماركت. يرجى التأكد من تفعيل حسابك كتاجر.', false);
       return;
     }
+    
     final List<Map<String, dynamic>> unitsForOffer = _selectedUnitPrices.entries.map((entry) => {
       'unitName': entry.key,
       'price': entry.value,
     }).toList();
 
     try {
-      // 📝 ملاحظة: تم تذكر اسم المجموعة deliverySupermarkets من المعلومات المخزنة
       final newOffer = {
         'createdAt': FieldValue.serverTimestamp(),
         'productId': _selectedProduct!.id,
@@ -256,24 +405,6 @@ class ProductOfferProvider with ChangeNotifier {
     }
   }
 
-  Future<String?> getSupermarketName() async {
-      // 📝 ملاحظة: تم تذكر اسم المجموعة deliverySupermarkets والحقول ownerId و supermarketName
-      try {
-        final q = await _firestore.collection('deliverySupermarkets')
-            .where('ownerId', isEqualTo: ownerId)
-            .limit(1)
-            .get();
-
-        if (q.docs.isNotEmpty) {
-          return q.docs.first.data()['supermarketName'];
-        }
-        return null;
-      } catch (e) {
-        debugPrint('Error fetching supermarket name: $e');
-        return null;
-      }
-  }
-
   void resetForm() {
     _selectedMainId = null;
     _selectedSubId = null;
@@ -281,7 +412,6 @@ class ProductOfferProvider with ChangeNotifier {
     _subCategories = [];
     _searchResults = [];
     _selectedUnitPrices.clear();
-    // نعيد تحميل الأقسام الرئيسية
     fetchMainCategories();
     notifyListeners();
   }
