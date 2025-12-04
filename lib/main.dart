@@ -8,7 +8,7 @@ import 'dart:convert';
 import 'package:my_test_app/firebase_options.dart';
 import 'package:sizer/sizer.dart';
 // 💡 استيراد جديد لتهيئة بيانات اللغة
-import 'package:intl/date_symbol_data_local.dart'; 
+import 'package:intl/date_symbol_data_local.dart';
 
 // 💡 استيراد شاشات التوجيه 💡
 import 'package:my_test_app/screens/login_screen.dart';
@@ -57,15 +57,28 @@ import 'package:my_test_app/screens/delivery/delivery_offers_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // 🚀🚀 التصحيح الجديد: تهيئة بيانات اللغة العربية لحل خطأ LocaleDataException 🚀🚀
+
+  // 🚨🚨 إضافة كود تسجيل أخطاء Flutter في SharedPreferences 🚨🚨
+  FlutterError.onError = (FlutterErrorDetails details) async {
+    FlutterError.presentError(details);
+
+    // تخزين الخطأ في SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    // نستخدم details.toString() أو details.exception.toString() لتسجيل النص الكامل للخطأ
+    prefs.setString('last_error', details.toString());
+    // يمكن أيضاً طباعة الخطأ في وضع التطوير
+    debugPrint('🚨 FATAL FLUTTER ERROR LOGGED: ${details.exceptionAsString()}');
+  };
+  // -----------------------------------------------------------
+
+  // 🚀🚀 التصحيح السابق: تهيئة بيانات اللغة العربية لحل خطأ LocaleDataException 🚀🚀
   try {
-    await initializeDateFormatting('ar', null); 
+    await initializeDateFormatting('ar', null);
   } catch (e) {
     // يمكن تجاهل الخطأ في حالة عدم توفر البيانات، لكن من الأفضل رؤيته في وضع التطوير
     debugPrint('🚨 Error initializing Date Formatting for Arabic: $e');
   }
-  
+
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -96,14 +109,14 @@ void main() async {
           create: (context) => CustomerOrdersProvider(Provider.of<BuyerDataProvider>(context, listen: false)),
           update: (context, buyerData, previous) => CustomerOrdersProvider(buyerData),
         ),
-        
-        // 🚀🚀 التصحيح الجديد: إضافة ProductOfferProvider لحل مشكلة ProviderNotFoundException 🚀🚀
+
+        // 🚀🚀 التصحيح السابق: إضافة ProductOfferProvider لحل مشكلة ProviderNotFoundException  🚀🚀
         ChangeNotifierProxyProvider<BuyerDataProvider, ProductOfferProvider>(
           // نستخدم BuyerDataProvider لتهيئة المنتج في الـ Provider
           create: (context) => ProductOfferProvider(Provider.of<BuyerDataProvider>(context, listen: false)),
           update: (context, buyerData, previous) => ProductOfferProvider(buyerData),
         ),
-        
+
         // -----------------------------------------------------------------
       ],
       child: const MyApp(),
@@ -181,7 +194,7 @@ class MyApp extends StatelessWidget {
             '/con-orders': (context) => const ConsumerOrdersScreen(),
             // 🚀🚀 إضافة مسار شاشة إدارة عروض الدليفري الجديدة 🚀🚀
             DeliveryOffersScreen.routeName: (context) => const DeliveryOffersScreen(),
-            
+
             TradersScreen.routeName: (context) => const TradersScreen(),
             '/register': (context) => const NewClientScreen(),
             '/post_registration_message': (context) => const PostRegistrationMessageScreen(),
@@ -197,7 +210,7 @@ class MyApp extends StatelessWidget {
                 },
               );
             }
-            
+
             // 2. المسارات القديمة في onGenerateRoute
             if (settings.name == TraderOffersScreen.routeName) {
               final sellerId = settings.arguments as String? ?? '';
@@ -297,7 +310,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
 // 💡 شاشة رسالة ما بعد التسجيل (لإظهار النجاح أو حالة الانتظار)
 class PostRegistrationMessageScreen extends StatelessWidget {
-  
+
   const PostRegistrationMessageScreen({super.key});
 
   @override
@@ -307,7 +320,7 @@ class PostRegistrationMessageScreen extends StatelessWidget {
     Future.delayed(const Duration(seconds: 3), () {
       Navigator.of(context).pushReplacementNamed(LoginScreen.routeName);
     });
-  
+
     final String message;
     final IconData icon;
     final Color color;
