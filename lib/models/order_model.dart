@@ -6,10 +6,10 @@ import 'package:my_test_app/models/order_item_model.dart';
 class OrderModel {
   final String id;
   // ⭐️ حقول البائع والوقت ⭐️
-  final String sellerId; 
+  final String sellerId;
   final DateTime orderDate;
   final String status;
-  
+
   // ⭐️ حقول التفاصيل ⭐️
   final BuyerDetailsModel buyerDetails;
   final List<OrderItemModel> items;
@@ -33,14 +33,32 @@ class OrderModel {
 
   factory OrderModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-
-    // 1. جلب التواريخ
-    final Timestamp timestamp = data['orderDate'] is Timestamp ? data['orderDate'] : Timestamp.fromDate(DateTime.now());
     
+    // 1. جلب التواريخ (تم تحسين التحقق)
+    DateTime finalOrderDate;
+    final orderDateData = data['orderDate'];
+
+    if (orderDateData is Timestamp) {
+      // الحالة 1: تم استلامها كـ Timestamp (الطريقة المفضلة من FireStore SDK)
+      finalOrderDate = orderDateData.toDate();
+    } else if (orderDateData is String) {
+      // الحالة 2: تم استلامها كسلسلة نصية (إذا تم إرسالها كـ JSON عادي)
+      try {
+        finalOrderDate = DateTime.parse(orderDateData);
+      } catch (e) {
+        // إذا فشل تحليل السلسلة النصية، نستخدم التاريخ الحالي
+        print('Error parsing orderDate string: $e');
+        finalOrderDate = DateTime.now();
+      }
+    } else {
+      // الحالة 3: لا يوجد تاريخ صالح، نستخدم التاريخ الحالي
+      finalOrderDate = DateTime.now();
+    }
+
     // 2. جلب التفاصيل
     final buyerMap = data['buyer'] as Map<String, dynamic>? ?? {};
     final itemsList = (data['items'] as List<dynamic>?) ?? [];
-    
+
     // 3. جلب المبالغ المالية وتوحيدها
     // Gross Total (الإجمالي قبل الخصم)
     final grossTotal = (data['total'] as num?)?.toDouble() ?? 0.0;
@@ -53,12 +71,12 @@ class OrderModel {
     return OrderModel(
       id: doc.id,
       sellerId: data['sellerId'] ?? '', // ⭐️ حقل sellerId ⭐️
-      orderDate: timestamp.toDate(),
+      orderDate: finalOrderDate,
       status: data['status'] ?? 'غير محدد',
-      
+
       buyerDetails: BuyerDetailsModel.fromMap(buyerMap),
       items: itemsList.map((item) => OrderItemModel.fromMap(item as Map<String, dynamic>)).toList(),
-      
+
       grossTotal: grossTotal,
       cashbackApplied: cashbackApplied,
       totalAmount: netTotal,

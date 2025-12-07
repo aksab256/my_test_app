@@ -1,3 +1,5 @@
+// المسار: lib/widgets/trader_offer_card.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:my_test_app/theme/app_theme.dart';
@@ -19,8 +21,8 @@ class TraderOfferCard extends StatelessWidget {
   // 💡 استخلاص رابط الصورة مرة واحدة هنا لضمان الاتساق
   String get _imageUrl {
     // يبحث عن حقل imageUrls كقائمة، ويأخذ العنصر الأول، وإلا يعرض Placeholder
-    return (offerData['imageUrls'] as List<dynamic>?)?.firstOrNull?.toString() ?? 
-           'https://via.placeholder.com/140x90/E0E0E0/757575?text=لا+توجد+صورة';
+    return (offerData['imageUrls'] as List<dynamic>?)?.firstOrNull?.toString() ??
+        'https://via.placeholder.com/140x90/E0E0E0/757575?text=لا+توجد+صورة';
   }
 
   Widget _buildUnitItem(BuildContext context, Map<String, dynamic> unit, int unitIndex) {
@@ -31,13 +33,14 @@ class TraderOfferCard extends StatelessWidget {
     final unitName = unit['unitName']?.toString() ?? 'الكمية الأساسية';
     final price = (unit['price'] as num?)?.toDouble() ?? (offerData['price'] as num?)?.toDouble() ?? 0.0;
     final availableStock = unit['availableStock'] as num? ?? offerData['availableQuantity'] as num? ?? 0;
-
     final isDisabled = availableStock <= 0;
     final buttonText = isDisabled ? 'نفذت الكمية' : 'أضف للسلة';
 
     // ⭐️ تجميع بيانات العنصر لإرسالها لـ Provider ⭐️
     final itemData = {
       'offerId': offerDocId, // معرّف العرض
+      // 🔥 إضافة productId (سنعتبره نفس معرّف العرض مؤقتاً)
+      'productId': offerDocId, 
       'sellerId': offerData['sellerId']?.toString() ?? '',
       'sellerName': offerData['sellerName']?.toString() ?? '',
       'title': offerData['productName']?.toString() ?? 'منتج غير معروف', // name في دالة Provider
@@ -73,25 +76,26 @@ class TraderOfferCard extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: AppTheme.primaryDarkGreen, 
+                  color: AppTheme.primaryDarkGreen,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 5),
           ElevatedButton.icon(
-            // 🎯 استدعاء 'addItemToCart' وتمرير الـ 9 معطيات
+            // 🎯 استدعاء 'addItemToCart' الآن بـ 10 معطيات
             onPressed: isDisabled ? null : () async {
               await cartProvider.addItemToCart(
                 itemData['offerId'] as String,             // 1. offerId
-                itemData['sellerId'] as String,            // 2. sellerId
-                itemData['sellerName'] as String,          // 3. sellerName
-                itemData['title'] as String,               // 4. name (product name)
-                itemData['price'] as double,               // 5. price
-                itemData['unit'] as String,                // 6. unit
-                itemData['unitIndex'] as int,              // 7. unitIndex
-                itemData['quantity'] as int,               // 8. quantityToAdd (1)
-                itemData['image'] as String,               // 9. imageUrl 
+                itemData['productId'] as String,           // 🔥 2. productId (تمت إضافته)
+                itemData['sellerId'] as String,            // 3. sellerId
+                itemData['sellerName'] as String,          // 4. sellerName
+                itemData['title'] as String,               // 5. name (product name)
+                itemData['price'] as double,               // 6. price
+                itemData['unit'] as String,                // 7. unit
+                itemData['unitIndex'] as int,              // 8. unitIndex
+                itemData['quantity'] as int,               // 9. quantityToAdd (1)
+                itemData['image'] as String,               // 10. imageUrl
               );
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('✅ تم إضافة المنتج إلى السلة'), duration: Duration(seconds: 1)),
@@ -136,11 +140,11 @@ class TraderOfferCard extends StatelessWidget {
                   _imageUrl, // ✅ استخدام المتغير المستخلص
                   height: 90,
                   fit: BoxFit.cover,
-                  
+
                   // 🎯 التصحيح: استخدام CircularProgressIndicator بدون قيمة 'value' في حالة Flutter Web
                   loadingBuilder: (context, child, loadingProgress) {
                     if (loadingProgress == null) return child;
-                    
+
                     return SizedBox(
                       height: 90,
                       child: Center(
@@ -152,15 +156,15 @@ class TraderOfferCard extends StatelessWidget {
                       ),
                     );
                   },
-                  
+
                   // 🎯 منطق عرض الخطأ
                   errorBuilder: (context, error, stackTrace) =>
                       Container(
-                        height: 90, 
-                        color: const Color(0xFFE0E0E0), 
+                        height: 90,
+                        color: const Color(0xFFE0E0E0),
                         child: const Center(
                           child: Icon(Icons.image_not_supported_rounded, color: Color(0xFF757575), size: 40)
-                        )
+                            )
                       ),
                 ),
               ),
@@ -179,7 +183,7 @@ class TraderOfferCard extends StatelessWidget {
               const SizedBox(height: 8),
 
               // 3. قسم الوحدات
-              const Text('الوحدات المتاحة:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textDark)), 
+              const Text('الوحدات المتاحة:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textDark)),
               const SizedBox(height: 4),
 
               if (units != null && units.isNotEmpty)
