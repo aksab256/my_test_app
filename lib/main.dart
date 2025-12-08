@@ -10,12 +10,15 @@ import 'package:sizer/sizer.dart';
 import 'package:intl/date_symbol_data_local.dart';
 // 🟢🟢 [الاستيراد الجديد]: شاشة مشترياتي 🟢🟢
 import 'package:my_test_app/screens/buyer/my_orders_screen.dart'; // ⬅️ تم إضافة هذا السطر
-
 // 💡 استيراد شاشات التوجيه 💡
 import 'package:my_test_app/screens/login_screen.dart';
 import 'package:my_test_app/screens/auth/new_client_screen.dart';
-import 'package:my_test_app/screens/buyer/buyer_home_screen.dart';
+import 'package:my_test_app/screens/buyer/buyer_home_screen.dart'; // مسار المشتري القديم
 import 'package:my_test_app/screens/seller_screen.dart';
+// 🆕🆕 [إضافة شاشة المستهلك الجديدة] 🆕🆕
+import 'package:my_test_app/screens/consumer/consumer_home_screen.dart'; // ⬅️ **الاستيراد المطلوب**
+// 🎯🎯 [إضافة شاشة بحث المستهلك الجديدة] 🎯🎯
+import 'package:my_test_app/screens/consumer/consumer_store_search_screen.dart'; // ⬅️ **الاستيراد الذي أضفناه الآن**
 import 'package:my_test_app/screens/buyer/buyer_category_screen.dart';
 import 'package:my_test_app/screens/buyer/buyer_product_list_screen.dart';
 import 'package:my_test_app/screens/buyer/cart_screen.dart';
@@ -25,7 +28,6 @@ import 'package:my_test_app/screens/my_details_screen.dart'; // ⬅️ **الا�
 import 'package:my_test_app/screens/about_screen.dart'; // ⬅️ **الاستيراد الجديد**
 // 🟢🟢 سطر مضاف: استيراد شاشة إتمام الطلب 🟢🟢
 import 'package:my_test_app/screens/checkout/checkout_screen.dart';
-
 // 🎯🎯 استيرادات شاشات الدليفري المخصصة 🎯🎯
 // ✅ 1. إعادة استيراد الشاشة القديمة (الإعدادات الأولية)
 import 'package:my_test_app/screens/delivery_settings_screen.dart';
@@ -34,12 +36,10 @@ import 'package:my_test_app/screens/update_delivery_settings_screen.dart';
 import 'package:my_test_app/screens/delivery_merchant_dashboard_screen.dart';
 // 💡💡 إضافة استيراد شاشة طلبات العملاء الجديدة 💡💡
 import 'package:my_test_app/screens/consumer_orders_screen.dart';
-
 // 🆕🆕 استيرادات شاشات التجار الجديدة 🆕🆕
 import 'package:my_test_app/screens/buyer/traders_screen.dart';
 import 'package:my_test_app/screens/buyer/trader_offers_screen.dart';
 // 🆕🆕 نهاية استيرادات شاشات التجار الجديدة 🆕 🆕
-
 // 🟢🟢 سطر جديد: استيراد شاشة تفاصيل المنتج 🟢🟢
 import 'package:my_test_app/screens/product_details_screen.dart';
 
@@ -69,10 +69,8 @@ import 'package:my_test_app/providers/cashback_provider.dart';
 import 'package:my_test_app/screens/search/search_screen.dart'; // المسار الصحيح
 import 'package:my_test_app/models/user_role.dart'; // ⬅️ افترض أن UserRole موجود هنا
 
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   // 🚨🚨 إضافة كود تسجيل أخطاء Flutter في SharedPreferences 🚨🚨
   FlutterError.onError = (FlutterErrorDetails details) async {
     FlutterError.presentError(details);
@@ -187,19 +185,24 @@ class MyApp extends StatelessWidget {
           },
 
           // ⭐️⭐️ تعريف المسارات المُسمّاة 'routes' ⭐️ ⭐️
-
           initialRoute: '/',
           routes: {
             '/': (context) => const AuthWrapper(),
             LoginScreen.routeName: (context) => const LoginScreen(),
-            BuyerHomeScreen.routeName: (context) => const BuyerHomeScreen(),
+            BuyerHomeScreen.routeName: (context) => const BuyerHomeScreen(), // مسار المشتري القديم
+
+            // 🆕🆕 [تسجيل مسار المستهلك الجديد] 🆕🆕
+            ConsumerHomeScreen.routeName: (context) => ConsumerHomeScreen(), // المسار الجديد
+
+            // 🎯🎯 [تسجيل مسار بحث المستهلك الجديد] 🎯🎯
+            ConsumerStoreSearchScreen.routeName: (context) => const ConsumerStoreSearchScreen(), // ⬅️ **تم التسجيل هنا**
+            
             SellerScreen.routeName: (context) => const SellerScreen(),
             CartScreen.routeName: (context) => const CartScreen(),
             CheckoutScreen.routeName: (context) => const CheckoutScreen(),
 
             // 🟢🟢 [الإضافة الجديدة]: مسار شاشة مشترياتي 🟢🟢
             MyOrdersScreen.routeName: (context) => const MyOrdersScreen(), // ⬅️ تم إضافة المسار
-
             // ✅ المسار القديم: يحافظ على فتح شاشة الإعدادات الأولية
             '/deliverySettings': (context) => const DeliverySettingsScreen(),
             // ✅ التعديل المطلوب: المسار '/updatsupermarket' يفتح شاشة التحديث الجديدة
@@ -213,21 +216,18 @@ class MyApp extends StatelessWidget {
 
             // 🟢🟢 [إضـافة المسار الجديد]: مسار شاشة "حسابي" 🟢🟢
             '/myDetails': (context) => const MyDetailsScreen(), // ⬅️ **تم الربط هنا**
-            
             // 🟢🟢 [إضـافة المسار الجديد]: مسار شاشة "من نحن" 🟢🟢
             '/about': (context) => const AboutScreen(), // ⬅️ **تم الربط هنا**
 
             TradersScreen.routeName: (context) => const TradersScreen(),
             '/register': (context) => const NewClientScreen(),
             '/post_registration_message': (context) => const PostRegistrationMessageScreen(),
-
             // 🟢🟢 [إضــافــة]: مسار المحفظة (مُصحح الآن في buyer_header_widget) 🟢🟢
             '/wallet': (context) => const WalletScreen(),
 
             // 🟢 [إضافة لحل مشكلة البحث]: تسجيل مسار البحث وتمرير الـ Role 🟢
             SearchScreen.routeName: (context) {
               final buyerData = Provider.of<BuyerDataProvider>(context, listen: false);
-
               // تحويل الـ Classification إلى UserRole Enum
               final role = buyerData.userClassification == 'seller'
                   ? UserRole.buyer // يفترض أن التاجر (seller) يبحث كـ Buyer
@@ -242,7 +242,6 @@ class MyApp extends StatelessWidget {
             if (settings.name == '/productDetails') {
               String? productId;
               String? offerId;
-
               // حالة الضغط على بانر (targetId هو productId)
               if (settings.arguments is String) {
                 productId = settings.arguments as String;
@@ -320,6 +319,7 @@ class AuthWrapper extends StatefulWidget {
 class _AuthWrapperState extends State<AuthWrapper> {
   // ... (الكود لا يتغير)
   Future<LoggedInUser?>? _userFuture;
+
   @override
   void initState() {
     super.initState();
@@ -346,6 +346,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
     return null;
   }
 
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<LoggedInUser?>(
@@ -361,7 +362,11 @@ class _AuthWrapperState extends State<AuthWrapper> {
           final user = snapshot.data!;
           if (user.role == "seller") {
             return const SellerScreen();
+          } else if (user.role == "consumer") { // المسار الثاني: للمستهلكين
+            // 🟢 تم حذف 'const' هنا! 🟢
+            return ConsumerHomeScreen();
           } else {
+            // المسار الثالث: للمشترين الآخرين أو الإعداد الافتراضي
             return const BuyerHomeScreen();
           }
         } else {
@@ -371,9 +376,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
     );
   }
 }
+
 // 💡 شاشة رسالة ما بعد التسجيل (لإظهار النجاح أو حالة الانتظار)
 class PostRegistrationMessageScreen extends StatelessWidget {
-
   const PostRegistrationMessageScreen({super.key});
   @override
   Widget build(BuildContext context) {

@@ -42,9 +42,26 @@ class AuthService {
       final String? userFullName = userData['fullname'] is String ? userData['fullname'] : null;
       final String? merchantName = userData['merchantName'] is String ? userData['merchantName'] : null;
 
-      final Map<String, double>? location = userData['location'] is Map
-          ? Map<String, double>.from(userData['location'] as Map)
-          : null;
+      // ⭐️ [التعديل البرمجي الأصح]: توحيد صيغة الموقع قبل التخزين
+      Map<String, double>? location;
+      
+      // أ. محاولة جلبها من حقل 'location' (سواء كان Map أو GeoPoint)
+      if (userData['location'] is GeoPoint) {
+         final geoPoint = userData['location'] as GeoPoint;
+         location = {'lat': geoPoint.latitude, 'lng': geoPoint.longitude};
+      } else if (userData['location'] is Map) {
+          // التعامل مع Map العادية
+         location = Map<String, double>.from(userData['location'] as Map);
+      }
+      
+      // ب. إذا لم نجدها في 'location'، نبحث عن 'lat' و 'lng' منفصلين
+      if (location == null && userData['lat'] is num && userData['lng'] is num) {
+          location = {
+            'lat': (userData['lat'] as num).toDouble(),
+            'lng': (userData['lng'] as num).toDouble(),
+          };
+      }
+      // 💡 الآن، 'location' إما null أو Map<String, double> موحدة.
 
       // ⭐️ 3. حفظ البيانات محلياً بشكل فعلي باستخدام SharedPreferences ⭐️
       await _saveUserToLocalStorage(
@@ -53,7 +70,7 @@ class AuthService {
         fullname: userFullName,
         address: userAddress,
         merchantName: merchantName,
-        location: location,
+        location: location, // يتم تمرير القيمة الموحدة
       );
 
       // 4. FCM (يتم تجاهل الفشل مؤقتاً)
@@ -82,9 +99,8 @@ class AuthService {
       // 2. مسح البيانات المحلية (لتسجيل الخروج الكامل)
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('loggedUser');
-      
-      // يمكنك إضافة مسح أي بيانات أخرى محفوظة محليًا هنا
 
+      // يمكنك إضافة مسح أي بيانات أخرى محفوظة محليًا هنا
     } catch (e) {
       // يجب التعامل مع الأخطاء بدون print في الإنتاج
       debugPrint("🚨 فشل تسجيل الخروج: $e");
