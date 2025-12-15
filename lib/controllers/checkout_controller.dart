@@ -1,4 +1,3 @@
-// المسار: lib/controllers/checkout_controller.dart
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -38,6 +37,7 @@ Map<String, dynamic> removeNullValues(Map<String, dynamic> obj) {
 // ===================================================================
 
 class CheckoutController {
+
     // (دالة fetchCashback باقية كما هي)
     static Future<double> fetchCashback(String userId, String userRole) async {
         if (userId.isEmpty) return 0.0;
@@ -59,6 +59,7 @@ class CheckoutController {
         return 0.0;
     }
 
+
     // ----------------------------------------------------
     // 🎯 دالة تنفيذ تأكيد الطلب
     // ----------------------------------------------------
@@ -72,19 +73,18 @@ class CheckoutController {
         required bool useCashback,
         required dynamic selectedPaymentMethod,
         }) async {
-        
-        // 🛑 التحقق من المدخلات الأساسية
+
         if (checkoutOrders.isEmpty || loggedUser['id'] == null) {
             ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('DIAGNOSTIC: Failed. Order list is empty or UserID is missing.'), backgroundColor: kErrorColor)
             );
             return false;
         }
-
+        
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
+        
         final String paymentMethodString = selectedPaymentMethod.toString();
-
+        
         // 🎯 الخطوة 1: تنظيف كائن المستخدم بشكل صارم لضمان Map<String, dynamic> 🎯
         final Map<String, dynamic> safeLoggedUser = Map<String, dynamic>.from(loggedUser);
 
@@ -94,7 +94,7 @@ class CheckoutController {
         final String? rawPhone = safeLoggedUser['phone']?.toString();
         final String? rawEmail = safeLoggedUser['email']?.toString();
         final String? rawFullname = safeLoggedUser['fullname']?.toString();
-
+        
         final String? address = (rawAddress == null || rawAddress.isEmpty || rawAddress == 'null') ? null : rawAddress;
         final String? repCode = (rawRepCode == null || rawRepCode.isEmpty || rawRepCode == 'null') ? null : rawRepCode;
         final String? repName = (rawRepName == null || rawRepName.isEmpty || rawRepName == 'null') ? null : rawRepName;
@@ -106,38 +106,37 @@ class CheckoutController {
         // تنظيف حقل الموقع (buyerLocation)
         final dynamic rawLocation = safeLoggedUser['location'];
         Map<String, dynamic>? buyerLocation;
-
+        
         if (rawLocation is Map) {
             try {
                 final Map<String, dynamic> locationMap = Map<String, dynamic>.from(rawLocation);
-
+                
                 final lat = (locationMap['lat'] as num?)?.toDouble();
                 final lng = (locationMap['lng'] as num?)?.toDouble();
-
+                
                 if (lat != null && lng != null) {
                     buyerLocation = {
-                        'lat': lat,
-                        'lng': lng,
+                        'lat': lat, 
+                        'lng': lng, 
                     };
                 }
             } catch (e) {
                  ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('DIAGNOSTIC: Location map conversion failed: $e'), backgroundColor: kErrorColor)
-                     );
+                );
             }
         }
         // --------------------------------------------------------------
-
+        
         if (address == null || address.isEmpty) {
             ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('الرجاء إكمال بيانات العنوان قبل تأكيد الطلب.'), backgroundColor: kErrorColor)
-                 );
+            );
             return false;
         }
-
+        
         // 🎯 الخطوة 2: تنظيف قائمة الطلبات بشكل صارم 🎯
-        // هذه القائمة هي القائمة المفلطحة (Flattened List) من جميع العناصر المجمعة
-        final List<Map<String, dynamic>> safeCheckoutOrders =
+        final List<Map<String, dynamic>> safeCheckoutOrders = 
             checkoutOrders.map((order) => Map<String, dynamic>.from(order)).toList();
 
         final bool isConsumer = (safeLoggedUser['role'] == 'consumer');
@@ -145,66 +144,37 @@ class CheckoutController {
         final String usersCollectionName = isConsumer ? "consumers" : "users";
         final String cashbackFieldName = isConsumer ? "cashbackBalance" : "cashback";
 
-        // استخدام القائمة النظيفة لتجميعها حسب البائع
-        final List<Map<String, dynamic>> groupedOrdersList = safeCheckoutOrders;
-
-        // إعادة التجميع لإنشاء ordersToProceed
-        final Map<String, Map<String, dynamic>> groupedItems = {};
-        for (var item in groupedOrdersList) {
-            final sellerId = item['sellerId'] as String;
-            if (!groupedItems.containsKey(sellerId)) {
-                groupedItems[sellerId] = {
-                    'sellerId': sellerId,
-                    'items': [],
-                    'sellerName': item['sellerName'] ?? 'N/A' // نحتاج اسم البائع للمسار المباشر
-                };
-            }
-            (groupedItems[sellerId]!['items'] as List).add(item);
-        }
-
+        // استخدام القائمة النظيفة
+        final List<Map<String, dynamic>> groupedOrdersList = safeCheckoutOrders; 
+        final Map<String, Map<String, dynamic>> groupedItems = {
+            for (var order in groupedOrdersList) order['sellerId'] as String: order
+        };
+        
         final double discountUsed = useCashback
             ? min(originalOrderTotal, currentCashback)
             : 0.0;
 
-        // 🟢 التصحيح: التحقق من الهدايا (يتم الآن البحث عن القيمة الرقمية 1)
-        dynamic firstGiftStatusRead = 'N/A'; // متغير تشخيصي
-
-        final bool isGiftEligible = safeCheckoutOrders.any((item) {
-            final dynamic giftStatus = item['isGift'];
-
-            // تسجيل قيمة الـ isGift الفعلية في الذاكرة
-            if (firstGiftStatusRead == 'N/A') {
-                firstGiftStatusRead = giftStatus;
-            }
-
-            // 🛑 التحقق الآن يبحث عن القيمة البوليانية `true` أو الرقمية `1`
-            return (giftStatus is bool && giftStatus) || (giftStatus is num && giftStatus == 1); // 🛑 تم تعديل الشرط ليشمل البوليان والرقم 1
-        });
-
+        // 🟢 الإصلاح 1: استخدام safeCheckoutOrders
+        final bool isGiftEligible = safeCheckoutOrders.any((item) => (item['isGift'] ?? false) == true);
 
         final bool needsSecureProcessing = !isConsumer && (discountUsed > 0 || isGiftEligible);
 
-        // 💡 رسالة تشخيص مُحسنة: توضح ما تم قراءته بالضبط لحقل isGift
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text('DIAGNOSTIC: Secure Needed: $needsSecureProcessing. Cashback: $discountUsed. Gift Eligible: $isGiftEligible. First isGift Read: $firstGiftStatusRead (Type: ${firstGiftStatusRead.runtimeType})'),
-                backgroundColor: kDebugColor,
-                duration: const Duration(seconds: 8),
-            )
+            SnackBar(content: Text('DIAGNOSTIC: Secure Processing Needed: $needsSecureProcessing. Cashback to use: $discountUsed'), backgroundColor: kDebugColor)
         );
+
 
         try {
             List<String> successfulOrderIds = [];
             final uniqueSellerIds = groupedItems.keys.toList();
 
-            // ⭐️ جلب نسب العمولات الحقيقية من FireStore (مجموعة sellers)
+            // ⭐️ جلب نسب العمولات الحقيقية من FireStore (مجموعة sellers) - تم إرجاع هذا الجزء
             final Map<String, double> commissionRatesCache = {};
             if (!isConsumer) {
                 for (final sellerId in uniqueSellerIds) {
                     double commissionRate = 0.0;
                     try {
                         final sellerSnap = await FirebaseFirestore.instance.collection("sellers").doc(sellerId).get();
-
                         if (sellerSnap.exists) {
                             final fetchedCommissionRate = sellerSnap.data()?['commissionRate'] as num?;
                             if (fetchedCommissionRate != null) {
@@ -223,40 +193,26 @@ class CheckoutController {
             // 🔥🔥 المسار الآمن: Buyer ويحتاج كاش باك أو هدية (API Gateway)
             // ===================================================================================
             if (needsSecureProcessing) {
-                // 
+                
                 final List<Map<String, dynamic>> allOrdersData = [];
 
                 for (final sellerId in groupedItems.keys) {
                     final sellerOrder = groupedItems[sellerId]!;
-
+                    
                     // ضمان أن قائمة الأصناف داخل الطلب هي Map<String, dynamic>
-                    final List<Map<String, dynamic>> safeItems =
+                    final List<Map<String, dynamic>> safeItems = 
                         (sellerOrder['items'] as List?)?.cast<Map>()
                         .map((item) => Map<String, dynamic>.from(item))
                         .toList() ?? [];
 
                     double deliveryFee = 0.0;
-                    // يتم استثناء رسوم التوصيل والهدايا من حساب subtotalPrice
-                    final regularItems = safeItems.where((item) {
-                        final isGiftField = item['isGift'];
-                        // التحقق من isGift هنا يجب أن يكون شاملاً للقيمة المخزنة (bool أو num=1)
-                        final isItemGift = (isGiftField is bool && isGiftField) || (isGiftField is num && isGiftField == 1);
-                        
-                        return !(item['productId'] == 'DELIVERY_FEE') && !isItemGift;
-                    }).toList();
-
-
-                    // تحديد رسوم التوصيل
-                    final sellerDeliveryItem = safeItems.firstWhere(
-                        (item) => item['productId'] == 'DELIVERY_FEE',
-                        orElse: () => {}
-                         );
+                    final regularItems = safeItems.where((item) => !(item['isDeliveryFee'] ?? false) && !(item['isGift'] ?? false)).toList();
+                    final sellerDeliveryItem = safeItems.firstWhere((item) => (item['productId'] == 'DELIVERY_FEE') || (item['isDeliveryFee'] == true), orElse: () => {});
 
                     if (sellerDeliveryItem.isNotEmpty) {
                         deliveryFee = (sellerDeliveryItem['price'] as num?)?.toDouble() ?? 0.0;
                     }
 
-                    // حساب الإجمالي للمنتجات غير الهدايا (دون رسوم التوصيل)
                     final double subtotalPrice = regularItems.fold(
                             0.0, (sum, item) => sum + ((item['price'] as num?)?.toDouble() ?? 0.0) * ((item['quantity'] as num?)?.toDouble() ?? 0.0)
                     );
@@ -267,43 +223,41 @@ class CheckoutController {
                         discountPortion = (orderSubtotalWithDelivery / originalOrderTotal) * discountUsed;
                     }
 
-                    // قائمة العناصر للـ Payload (تشمل الهدايا ورسوم التوصيل والمنتجات العادية)
-                    final List<Map<String, dynamic>> payloadItems = safeItems.map((item) => Map<String, dynamic>.from(item)).toList();
-
+                    final List<Map<String, dynamic>> payloadItems = [...regularItems];
+                    if (sellerDeliveryItem.isNotEmpty) {
+                        payloadItems.add(sellerDeliveryItem);
+                    }
+                    
                     final orderData = {
                         'sellerId': sellerId,
-                        // إرسال جميع العناصر (بما في ذلك isGift: true) إلى الـ API
-                        'items': payloadItems,
+                        'items': payloadItems.map((item) => Map<String, dynamic>.from(item)).toList(), 
                         'total': orderSubtotalWithDelivery,
-
                         'paymentMethod': paymentMethodString,
-
                         'status': 'new-order',
-                        'orderDate': DateTime.now().toUtc().toIso8601String(),
+                        'orderDate': DateTime.now().toUtc().toIso8601String(), 
 
                         // 🟢 الإصلاح 2: استخدام commissionRatesCache
-                        'commissionRateSnapshot': commissionRatesCache[sellerId] ?? 0.0,
+                        'commissionRateSnapshot': commissionRatesCache[sellerId] ?? 0.0, 
                         'cashbackApplied': discountPortion,
                         'isCashbackUsed': discountUsed > 0,
-
                         'profitCalculationStatus': "PENDING",
                         'cashbackProcessedPerOrder': false,
                         'cashbackProcessedCumulative': false,
-                        'commissionRate': commissionRatesCache[sellerId] ?? 0.0, // لتوافق الحقول
-
-                        'buyer': {
+                        'commissionRate': commissionRatesCache[sellerId] ?? 0.0, // لتوافق الحقول 
+                        
+                        'buyer': { 
                             'id': safeLoggedUser['id'],
                             'name': customerFullname,
-                            'phone': customerPhone,
-                            'email': customerEmail,
+                            'phone': customerPhone, 
+                            'email': customerEmail, 
                             'address': address,
                             'location': buyerLocation,
                             'repCode': repCode,
                             'repName': repName
                         },
                     };
-
-                    allOrdersData.add(removeNullValues(orderData));
+                    
+                    allOrdersData.add(removeNullValues(orderData)); 
                 }
 
                 // ... (منطق إرسال API)
@@ -315,7 +269,7 @@ class CheckoutController {
                 };
 
                 final finalPayload = removeNullValues(payload);
-
+                
                 ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                         content: Text('DIAGNOSTIC: Attempting API POST. Payload Size: ${json.encode(finalPayload).length} bytes.'),
@@ -323,45 +277,45 @@ class CheckoutController {
                         duration: const Duration(seconds: 5),
                     )
                 );
-
+                
                 try {
                     final response = await http.post(
                         Uri.parse(CASHBACK_API_ENDPOINT),
                         headers: { 'Content-Type': 'application/json' },
                         body: json.encode(finalPayload),
-                        );
+                    );
 
                     final result = json.decode(response.body);
-
+                    
                     if (response.statusCode >= 200 && response.statusCode < 300) {
                         ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('DIAGNOSTIC: API Success (200 OK) received. Getting Order IDs...'), backgroundColor: kPrimaryColor)
                         );
-
+                        
                         final List<String> fetchedIds = [];
                         if (result['orderIds'] is List) {
                             fetchedIds.addAll(List<String>.from(result['orderIds']));
                         } else if (result['orderId'] != null) {
                             fetchedIds.add(result['orderId'].toString());
                         }
-
+                        
                         successfulOrderIds = fetchedIds;
 
                     } else {
                         String errorMessage = (result is Map && result.containsKey('message')) ? result['message'].toString() : 'فشل تأكيد الطلب عبر المسار الآمن.';
-
+                        
                         ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(content: Text('DIAGNOSTIC: API Failed (Status ${response.statusCode}): $errorMessage'), backgroundColor: kErrorColor)
                         );
-
+                        
                         throw Exception(errorMessage);
                     }
                 } catch (e) {
                     String errorDescription = (e is Exception) ? e.toString().replaceFirst("Exception: ", "") : e.toString();
-
+                    
                     ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                            content: Text('DIAGNOSTIC: Network/Unhandled Error: ${errorDescription.substring(0, min(errorDescription.length, 100))}'),
+                            content: Text('DIAGNOSTIC: Network/Unhandled Error: ${errorDescription.substring(0, min(errorDescription.length, 100))}'), 
                             backgroundColor: kErrorColor,
                             duration: const Duration(seconds: 8),
                         )
@@ -372,50 +326,41 @@ class CheckoutController {
                 // ===================================================================================
                 // 💾 المسار المباشر: Direct Firestore Write
                 // ===================================================================================
-                // 
+
                 for (final sellerId in groupedItems.keys) {
                     final sellerOrder = groupedItems[sellerId]!;
 
-                    final List<Map<String, dynamic>> allPaidItems = (sellerOrder['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+                    final List<Map<String, dynamic>> allPaidItems = (sellerOrder['items'] as List?)?.cast<Map<String, dynamic>>() ?? []; 
 
                     double calculatedSubtotalPrice = 0.0;
                     double calculatedDeliveryFee = 0.0;
-
+                    
                     for (var item in allPaidItems) {
                         final price = (item['price'] as num?)?.toDouble() ?? 0.0;
                         final quantity = (item['quantity'] as num?)?.toDouble() ?? 0.0;
                         final itemTotal = price * quantity;
 
-                        if (item['productId'] == 'DELIVERY_FEE') {
+                        if (item['productId'] == 'DELIVERY_FEE') { 
                             calculatedDeliveryFee += itemTotal;
                         } else {
-                            final isGiftField = item['isGift'];
-                            final isItemGift = (isGiftField is bool && isGiftField) || (isGiftField is num && isGiftField == 1);
-                            
-                            if (!isItemGift) { // استثناء الهدايا
+                            if (!(item['isGift'] ?? false)) {
                                 calculatedSubtotalPrice += itemTotal;
                             }
                         }
                     }
 
                     final double subtotalPrice = calculatedSubtotalPrice;
-                    final double deliveryFee = calculatedDeliveryFee;
+                    final double deliveryFee = calculatedDeliveryFee;       
 
                     final double orderSubtotalWithDelivery = subtotalPrice + deliveryFee;
                     double discountPortion = 0.0;
-                    // لن يتم تطبيق خصم في هذا المسار لأن needsSecureProcessing = false
-
+                    if (originalOrderTotal > 0 && discountUsed > 0) {
+                        discountPortion = (orderSubtotalWithDelivery / originalOrderTotal) * discountUsed;
+                    }
                     final double finalAmountForOrder = orderSubtotalWithDelivery - discountPortion;
 
                     final String sellerName = sellerOrder['sellerName'] ?? 'بائع غير معروف';
-
-                    // محاولة جلب رقم هاتف البائع
-                    final String? sellerPhone = allPaidItems.isNotEmpty
-                        ? allPaidItems.firstWhere(
-                            (item) => item.containsKey('sellerPhone') && item['sellerPhone'] != null,
-                            orElse: () => {}
-                          )['sellerPhone'] as String?
-                        : null;
+                    final String? sellerPhone = allPaidItems.isNotEmpty ? allPaidItems.firstWhere((item) => item['sellerPhone'] != null, orElse: () => {})['sellerPhone'] as String? : null;
 
                     Map<String, dynamic> orderData;
                     if (isConsumer) {
@@ -427,13 +372,12 @@ class CheckoutController {
                             'customerAddress': address,
                             'deliveryLocation': buyerLocation,
 
-                            // استخدام حقولك المحفوظة [cite: 2025-10-03]
                             'supermarketId': sellerId,
                             'supermarketName': sellerName,
                             'supermarketPhone': sellerPhone,
 
                             'items': allPaidItems,
-
+                            
                             'deliveryFee': deliveryFee,
                             'subtotalPrice': subtotalPrice,
                             'finalAmount': finalAmountForOrder,
@@ -467,7 +411,7 @@ class CheckoutController {
                             'orderDate': DateTime.now().toUtc().toIso8601String(),
 
                             // 🟢 الإصلاح 3: استخدام commissionRatesCache
-                            'commissionRate': commissionRatesCache[sellerId] ?? 0.0,
+                            'commissionRate': commissionRatesCache[sellerId] ?? 0.0, 
                             'isCommissionProcessed': false,
                             'unrealizedCommissionAmount': 0,
                             'isFinancialSettled': false,
@@ -488,12 +432,13 @@ class CheckoutController {
                         final String orderId = docRef.id;
                         successfulOrderIds.add(orderId);
                         await FirebaseFirestore.instance.collection(ordersCollectionName).doc(orderId).set({ 'orderId': orderId }, SetOptions(merge: true));
+
                     } catch (e) {
                         print('  ❌ General Error processing order for seller $sellerId: $e');
                     }
                 }
 
-                 if (discountUsed > 0 && successfulOrderIds.isNotEmpty) {
+                if (discountUsed > 0 && successfulOrderIds.isNotEmpty) {
                     try {
                         final newCashbackBalance = currentCashback - discountUsed;
                         await FirebaseFirestore.instance.collection(usersCollectionName).doc(safeLoggedUser['id']).set({
@@ -503,10 +448,10 @@ class CheckoutController {
                         print("❌ Failed to deduct cashback in Firestore (Immediate deduction): $error");
                     }
                 }
-
+                
                  ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('DIAGNOSTIC: Processed via Direct Firestore Write.'), backgroundColor: kDebugColor)
-                     );
+                );
             }
 
             // 8. إنهاء العملية
@@ -521,7 +466,7 @@ class CheckoutController {
             } else {
                  ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('DIAGNOSTIC: Failed. No Order IDs were created.'), backgroundColor: kErrorColor)
-                      );
+                );
                 return false;
             }
 
@@ -529,8 +474,9 @@ class CheckoutController {
             String errorMsg = (e is Exception) ? e.toString().replaceFirst("Exception: ", "") : 'خطأ غير معروف';
             ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('❌ خطأ غير متوقع أثناء إتمام الطلب: ${errorMsg}'), backgroundColor: kErrorColor)
-                );
+            );
             return false;
         }
     }
 }
+
