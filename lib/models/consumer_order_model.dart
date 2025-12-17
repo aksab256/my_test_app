@@ -3,28 +3,27 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../constants/constants.dart';
 
 // نموذج المنتج داخل الطلب
-// 💡 تم الإبقاء على OrderItem كما هي (عادة لا تسبب تضاربًا في الاسم)
 class OrderItem {
   final String? name;
   final num? quantity;
   final String? imageUrl;
-  // أضف أي حقول أخرى للمنتج إذا كانت موجودة في Firestore
 
   OrderItem({this.name, this.quantity, this.imageUrl});
 
   factory OrderItem.fromMap(Map<String, dynamic> data) {
     return OrderItem(
-      name: data['name'] as String?,
+      // 🟢 دعم المسميات المختلفة الموجودة في Firebase
+      name: (data['name'] ?? data['productName']) as String?, 
       quantity: data['quantity'] as num?,
-      imageUrl: data['imageUrl'] as String?,
+      imageUrl: (data['imageUrl'] ?? data['productImage']) as String?,
     );
   }
 }
 
-// نموذج الطلب الرئيسي (💡 تم تغيير اسم الكلاس)
+// نموذج الطلب الرئيسي
 class ConsumerOrderModel {
-  final String id; // Document ID (used for Firestore operations)
-  final String orderId; // Internal order ID (optional, used for display)
+  final String id;
+  final String orderId;
   final String customerName;
   final String customerAddress;
   final String customerPhone;
@@ -33,7 +32,7 @@ class ConsumerOrderModel {
   final String supermarketPhone;
   final double finalAmount;
   final String status;
-  final Timestamp? orderDate;
+  final DateTime? orderDate; // 🟢 تم التغيير من Timestamp إلى DateTime
   final String paymentMethod;
   final double deliveryFee;
   final int pointsUsed;
@@ -57,23 +56,27 @@ class ConsumerOrderModel {
     required this.items,
   });
 
-  // دالة تحويل من Firestore DocumentSnapshot
   factory ConsumerOrderModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>?;
 
-    // استخدام التحقق الآمن مع توفير قيم افتراضية مطابقة لمنطق الـ JS
-    // هذا يضمن عدم الانهيار حتى لو كانت الحقول مفقودة (null)
+    // 🟢 معالجة المنتجات
     final itemsList = (data?['items'] as List<dynamic>?)
-        ?.map((item) => OrderItem.fromMap(item as Map<String, dynamic>))
-        .toList() ?? <OrderItem>[];
-    
-    // التعامل الآمن مع الأرقام (num to double)
+            ?.map((item) => OrderItem.fromMap(item as Map<String, dynamic>))
+            .toList() ?? <OrderItem>[];
+
+    // 🟢 معالجة الأرقام
     final finalAmount = (data?['finalAmount'] as num?)?.toDouble() ?? 0.0;
     final deliveryFee = (data?['deliveryFee'] as num?)?.toDouble() ?? 0.0;
     final pointsUsed = (data?['pointsUsed'] as num?)?.toInt() ?? 0;
-    
-    // التعامل مع التاريخ
-    final orderDate = data?['orderDate'] as Timestamp?;
+
+    // 🟢 معالجة التاريخ المرنة (الحل الجذري للمشكلة)
+    DateTime? parsedDate;
+    var rawDate = data?['orderDate'];
+    if (rawDate is Timestamp) {
+      parsedDate = rawDate.toDate();
+    } else if (rawDate is String) {
+      parsedDate = DateTime.tryParse(rawDate);
+    }
 
     return ConsumerOrderModel(
       id: doc.id,
@@ -86,7 +89,7 @@ class ConsumerOrderModel {
       supermarketPhone: data?['supermarketPhone'] ?? 'غير متوفر',
       finalAmount: finalAmount,
       status: data?['status'] ?? OrderStatuses.NEW_ORDER,
-      orderDate: orderDate,
+      orderDate: parsedDate, // 🟢 تمرير التاريخ المعالج
       paymentMethod: data?['paymentMethod'] ?? 'غير متوفر',
       deliveryFee: deliveryFee,
       pointsUsed: pointsUsed,
@@ -94,4 +97,3 @@ class ConsumerOrderModel {
     );
   }
 }
-

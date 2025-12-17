@@ -1,18 +1,15 @@
-// lib/screens/seller_screen.dart (النسخة النهائية والمُصححة بالكامل)
+// lib/screens/seller_screen.dart (النسخة النهائية المطورة بصرياً)
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'package:my_test_app/controllers/seller_dashboard_controller.dart';
 import 'package:my_test_app/widgets/seller/seller_sidebar.dart';
-import 'package:my_test_app/models/seller_dashboard_data.dart'; 
-
-// 🟢🟢 استيراد شاشة الكارتات الجديدة (SellerOverviewScreen) 🟢🟢
+import 'package:my_test_app/models/seller_dashboard_data.dart';
 import 'package:my_test_app/screens/seller/seller_overview_screen.dart';
-
+import 'package:sizer/sizer.dart'; // تأكد من استيراد Sizer للتحكم في الأحجام
 
 class SellerScreen extends StatefulWidget {
-  // 🟢 routeName لحل خطأ main.dart
   static const String routeName = '/sellerhome';
 
   const SellerScreen({super.key});
@@ -22,12 +19,9 @@ class SellerScreen extends StatefulWidget {
 }
 
 class _SellerScreenState extends State<SellerScreen> {
-  // 1. تعريف القائمة والمسار النشط
   String _activeRoute = 'نظرة عامة';
-  // 🟢 تعيين شاشة الكارتات الجديدة كشاشة افتراضية (بدلاً من الشاشة الوهمية) 🟢
   Widget _activeScreen = const SellerOverviewScreen();
 
-  // 2. معالج التبديل بين شاشات القائمة الجانبية
   void _selectMenuItem(String route, Widget screen) {
     setState(() {
       _activeRoute = route;
@@ -35,18 +29,13 @@ class _SellerScreenState extends State<SellerScreen> {
     });
   }
 
-  // 3. دالة تسجيل الخروج المُعدلة
   void _handleLogout() async {
     final prefs = await SharedPreferences.getInstance();
-
-    // 🛑 الأهم: حذف المفتاح الذي يستخدمه AuthWrapper في main.dart 🛑
-    await prefs.remove('loggedUser'); 
-    
-    // حذف المفاتيح الأخرى للاحتياط
+    // حذف المفاتيح لضمان الخروج الآمن [cite: 16-12-2025]
+    await prefs.remove('loggedUser');
     await prefs.remove('userToken');
-    await prefs.remove('userRole'); 
+    await prefs.remove('userRole');
 
-    // التوجيه إلى المسار الرئيسي
     if (mounted) {
       Navigator.of(context).pushReplacementNamed('/');
     }
@@ -55,46 +44,73 @@ class _SellerScreenState extends State<SellerScreen> {
   @override
   void initState() {
     super.initState();
-    // 🟢🟢 الكود المعدل لتشغيل دالة جلب البيانات فوراً 🟢🟢
-    // هذا يضمن أن البيانات تبدأ بالتحميل بمجرد فتح الشاشة
+    // استدعاء البيانات فوراً لكسر حالة التحميل اللانهائية [cite: 16-12-2025]
     Future.microtask(() {
+        if (!mounted) return;
         final controller = Provider.of<SellerDashboardController>(context, listen: false);
-        // التحقق لضمان عدم إعادة تشغيل الجلب إذا كان قيد التشغيل بالفعل
-        if (!controller.isLoading) {
-            controller.loadDashboardData(controller.sellerId);
-        }
+        controller.loadDashboardData(controller.sellerId);
     });
   }
 
-
   @override
   Widget build(BuildContext context) {
-    // قراءة الكنترولر للحصول على البيانات اللازمة للشريط الجانبي
     final controller = Provider.of<SellerDashboardController>(context);
 
     return Scaffold(
+      // --- تطوير الـ AppBar ليكون أضخم وأفخم ---
       appBar: AppBar(
-        title: Text(_activeRoute),
+        elevation: 2, // إضافة ظل خفيف للعمق
+        centerTitle: true,
+        toolbarHeight: 8.h, // زيادة ارتفاع الشريط العلوي قليلاً
+        title: Text(
+          _activeRoute,
+          style: TextStyle(
+            fontSize: 16.sp, 
+            fontWeight: FontWeight.w900, // خط عريض جداً
+            letterSpacing: 0.5,
+          ),
+        ),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
+        actions: [
+          // إضافة أيقونة تنبيهات سريعة تعطي مظهراً احترافياً
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_none_rounded, size: 28),
+                onPressed: () {
+                  // يمكن ربطها لاحقاً بصفحة التنبيهات
+                },
+              ),
+              if (controller.data.newOrdersCount > 0)
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: const BoxDecoration(
+                      color: Colors.redAccent,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                )
+            ],
+          ),
+          const SizedBox(width: 10),
+        ],
       ),
 
-      // 5. محتوى الشاشة (الـ Widget النشط)
+      // محتوى الشاشة النشط
       body: _activeScreen,
 
-      // 6. الشريط الجانبي (Drawer)
+      // الشريط الجانبي المطور
       drawer: SellerSidebar(
-        // 🟢 تمرير بيانات البائع (الاسم)
         userData: SellerUserData(fullname: controller.data.sellerName),
-
-        // 🟢 تمرير الدالة للتحكم بالمسار النشط
         onMenuSelected: _selectMenuItem,
         activeRoute: _activeRoute,
-
-        // 🟢 تمرير دالة الخروج (onLogout)
         onLogout: _handleLogout,
-
-        // تمرير الإحصائيات والمعلومات
         newOrdersCount: controller.data.newOrdersCount,
         sellerId: controller.sellerId,
         hasWriteAccess: true,
@@ -102,4 +118,3 @@ class _SellerScreenState extends State<SellerScreen> {
     );
   }
 }
-

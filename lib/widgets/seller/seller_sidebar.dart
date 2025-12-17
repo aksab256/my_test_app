@@ -1,6 +1,5 @@
-// lib/widgets/seller/seller_sidebar.dart (النسخة النهائية والمصححة بدون تبديل الدور)
-
 import 'package:flutter/material.dart';
+import 'package:sizer/sizer.dart';
 import 'package:my_test_app/screens/dummy_screen.dart';
 import 'package:my_test_app/screens/seller/add_offer_screen.dart';
 import 'package:my_test_app/screens/seller/offers_screen.dart';
@@ -11,19 +10,16 @@ import 'package:my_test_app/screens/seller/seller_settings_screen.dart';
 import 'package:my_test_app/screens/delivery_area_screen.dart';
 import 'package:my_test_app/screens/platform_balance_screen.dart';
 
-
-// لتمثيل بيانات البائع المخزنة محلياً
 class SellerUserData {
   final String? fullname;
   SellerUserData({this.fullname});
 }
 
-// ⭐️ عنصر القائمة الواحد ⭐️
 class _SidebarItem extends StatelessWidget {
   final IconData icon;
   final String title;
   final Widget targetScreen;
-  final bool isActive;                          
+  final bool isActive;
   final int notificationCount;
   final Function(Widget screen) onNavigate;
 
@@ -31,99 +27,80 @@ class _SidebarItem extends StatelessWidget {
     super.key,
     required this.icon,
     required this.title,
-    required this.targetScreen,                 
+    required this.targetScreen,
     required this.isActive,
-    required this.onNavigate,                   
+    required this.onNavigate,
     this.notificationCount = 0,
   });
-                                                
+
   @override
   Widget build(BuildContext context) {
-    // ⭐️ الألوان الأساسية كما في CSS ⭐️
     const darkSidebarBg = Color(0xff212529);
     const sidebarTextColor = Color(0xffdee2e6);
     const primaryColor = Color(0xff28a745);
 
-    final bool hasNewOrders = notificationCount > 0 && title == 'الطلبات';
-    final Color itemColor = hasNewOrders ? Colors.white : sidebarTextColor;                     
-    final Color iconColor = hasNewOrders ? Colors.amber : itemColor;
-    final Color bgColor = hasNewOrders ? Colors.red.shade700 : (isActive ? const Color(0xff1e7e34) : Colors.transparent);
-    final Color activeTextColor = isActive ? Colors.white : itemColor;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 0.5.h),
       child: Material(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(8),
+        color: isActive ? primaryColor.withOpacity(0.15) : Colors.transparent,
+        borderRadius: BorderRadius.circular(15),
         child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: () {                           
-            Navigator.of(context).pop(); // إغلاق الـ Drawer قبل التوجيه                        
-            onNavigate(targetScreen);
-          },
+          borderRadius: BorderRadius.circular(15),
+          onTap: () => onNavigate(targetScreen),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-            child: Row(                         
+            padding: EdgeInsets.symmetric(horizontal: 15, vertical: 1.8.h),
+            decoration: BoxDecoration(
+              border: isActive ? const Border(right: BorderSide(color: primaryColor, width: 5)) : null,
+            ),
+            child: Row(
               children: [
-                Icon(icon, size: 20, color: iconColor),
-                const SizedBox(width: 10),
-                Expanded(                       
+                Icon(icon, size: 24.sp, color: isActive ? primaryColor : sidebarTextColor),
+                SizedBox(width: 15),
+                Expanded(
                   child: Text(
                     title,
                     style: TextStyle(
-                      color: activeTextColor,
-                      fontSize: 14,
-                      fontWeight: hasNewOrders ? FontWeight.bold : FontWeight.w400,
+                      color: isActive ? Colors.white : sidebarTextColor,
+                      fontSize: 14.sp, // تكبير الخط بناءً على طلبك
+                      fontWeight: isActive ? FontWeight.w900 : FontWeight.w600,
                     ),
-                  ),                            
+                  ),
                 ),
-                if (notificationCount > 0)      
+                if (notificationCount > 0)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: hasNewOrders ? Colors.white : Colors.red.shade700,                 
-                      borderRadius: BorderRadius.circular(10),                                  
-                    ),
+                    padding: const EdgeInsets.all(8),
+                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                     child: Text(
                       notificationCount.toString(),
-                      style: TextStyle(         
-                        color: hasNewOrders ? Colors.red.shade700 : Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                     ),
                   ),
               ],
             ),
-          ),                                    
+          ),
         ),
       ),
     );
   }
 }
 
-// ⭐️ الكلاس الأساسي للشريط الجانبي ⭐️
 class SellerSidebar extends StatefulWidget {
   final SellerUserData userData;
   final int newOrdersCount;
-  final String activeRoute;                     
-  final Function(String route, Widget screen) onMenuSelected;                                   
+  final String activeRoute;
+  final Function(String route, Widget screen) onMenuSelected;
   final String sellerId;
   final bool hasWriteAccess;
-
-  // 🟢🟢 المعامل المطلوب الوحيد الآن 🟢🟢
   final Function() onLogout;
-  // ❌ تم حذف onSwitchToBuyer
 
-  const SellerSidebar({                         
+  const SellerSidebar({
     super.key,
-    required this.userData,                     
+    required this.userData,
     required this.newOrdersCount,
     required this.activeRoute,
     required this.onMenuSelected,
     required this.sellerId,
-    // 🟢 إضافة المتطلب الوحيد
     required this.onLogout,
-    // ❌ تم حذف required this.onSwitchToBuyer
     this.hasWriteAccess = true,
   });
 
@@ -132,142 +109,89 @@ class SellerSidebar extends StatefulWidget {
 }
 
 class _SellerSidebarState extends State<SellerSidebar> {
-  late final List<Map<String, dynamic>> _menuItems;
+  late List<Map<String, dynamic>> _menuItems;
 
-  @override                                     
+  @override
+  void didUpdateWidget(covariant SellerSidebar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _initializeMenu();
+  }
+
+  @override
   void initState() {
     super.initState();
+    _initializeMenu();
+  }
 
+  void _initializeMenu() {
     final currentSellerId = widget.sellerId;
-
     _menuItems = [
-      {'title': 'نظرة عامة', 'icon': Icons.dashboard_outlined, 'screen': const SellerDummyScreen(title: 'نظرة عامة'), 'route': 'نظرة عامة'},
-      {'title': 'إضافة عرض', 'icon': Icons.add_circle_outline, 'screen': const AddOfferScreen(), 'route': 'إضافة عرض'},
-      {'title': 'العروض المتاحة', 'icon': Icons.local_offer_outlined, 'screen': const OffersScreen(), 'route': 'العروض المتاحة'},
-                                                
-      // الطلبات
-      {'title': 'الطلبات',
-       'icon': Icons.list_alt,                  
-       'screen': OrdersScreen(userId: currentSellerId, userRole: 'seller'),
-       'route': 'الطلبات'},
-
-      // التقارير
-      {'title': 'التقارير',
-       'icon': Icons.bar_chart_outlined,        
-       'screen': ReportsScreen(sellerId: currentSellerId),                                      
-       'route': 'التقارير'},
-                                                
-      // الهدايا الترويجية                      
-      {'title': 'الهدايا الترويجية',
-       'icon': Icons.card_giftcard,             
-       'screen': CreateGiftPromoScreen(currentSellerId: currentSellerId),
-       'route': 'الهدايا الترويجية'},
-
-      // حسابي (الإعدادات)
-      {'title': 'حسابي',
-       'icon': Icons.person_outline,
-       'screen': SellerSettingsScreen(currentSellerId: currentSellerId),                        
-       'route': 'حسابي'},
-
-      // تحديد مناطق التوصيل
-      {'title': 'تحديد مناطق التوصيل',
-       'icon': Icons.pin_drop_outlined,
-       'screen': DeliveryAreaScreen(
-         currentSellerId: currentSellerId,
-         hasWriteAccess: widget.hasWriteAccess,
-       ),
-       'route': 'تحديد مناطق التوصيل'},
-
-      // حساب المنصة
-      {'title': 'حساب المنصة',
-       'icon': Icons.business_outlined,         
-       'screen': const PlatformBalanceScreen(),
-       'route': 'حساب المنصة'},
-
-      {'title': 'الخصوصية', 'icon': Icons.security_outlined, 'screen': const SellerDummyScreen(title: 'الخصوصية'), 'route': 'الخصوصية'},
+      {'title': 'نظرة عامة', 'icon': Icons.dashboard_rounded, 'screen': const SellerDummyScreen(title: 'نظرة عامة'), 'route': 'نظرة عامة'},
+      {'title': 'إضافة عرض', 'icon': Icons.add_box_rounded, 'screen': const AddOfferScreen(), 'route': 'إضافة عرض'},
+      {'title': 'العروض المتاحة', 'icon': Icons.local_offer_rounded, 'screen': const OffersScreen(), 'route': 'العروض المتاحة'},
+      {'title': 'الطلبات', 'icon': Icons.assignment_rounded, 'screen': OrdersScreen(userId: currentSellerId, userRole: 'seller'), 'route': 'الطلبات'},
+      {'title': 'التقارير', 'icon': Icons.pie_chart_rounded, 'screen': ReportsScreen(sellerId: currentSellerId), 'route': 'التقارير'},
+      {'title': 'الهدايا الترويجية', 'icon': Icons.card_giftcard_rounded, 'screen': CreateGiftPromoScreen(currentSellerId: currentSellerId), 'route': 'الهدايا الترويجية'},
+      {'title': 'تحديد مناطق التوصيل', 'icon': Icons.map_rounded, 'screen': DeliveryAreaScreen(currentSellerId: currentSellerId, hasWriteAccess: widget.hasWriteAccess), 'route': 'تحديد مناطق التوصيل'},
+      {'title': 'حساب المنصة', 'icon': Icons.account_balance_rounded, 'screen': const PlatformBalanceScreen(), 'route': 'حساب المنصة'},
+      {'title': 'حسابي', 'icon': Icons.manage_accounts_rounded, 'screen': SellerSettingsScreen(currentSellerId: currentSellerId), 'route': 'حسابي'},
     ];
   }
-                                                
-  // 🟢 دالة الخروج التي تنفذ الـ Callback 🟢
-  void _logout() {
-    Navigator.of(context).pop(); // إغلاق الـ Drawer
-    widget.onLogout(); 
-  }
 
-                                                
   @override
-  Widget build(BuildContext context) {          
-    // ⭐️ الألوان الأساسية كما في CSS ⭐️
-    const darkSidebarBg = Color(0xff212529);
-    const sidebarTextColor = Color(0xffdee2e6);
+  Widget build(BuildContext context) {
+    const darkSidebarBg = Color(0xff1a1d21);
     const primaryColor = Color(0xff28a745);
 
     return Drawer(
-      backgroundColor: darkSidebarBg,           
+      backgroundColor: darkSidebarBg,
       child: Column(
         children: [
-          // 1. الشعار (Logo) - Drawer Header
-          DrawerHeader(                         
-            margin: EdgeInsets.zero,
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 15),
-            child: Row(                         
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: const [                 
-                Icon(Icons.widgets_outlined, size: 36, color: primaryColor),
-                SizedBox(width: 10),
-                Text(
-                  'أكسب',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
-                    color: primaryColor,
-                  ),
-                ),
-              ],
-            ),                                  
+          UserAccountsDrawerHeader(
+            decoration: const BoxDecoration(color: Color(0xff212529)),
+            currentAccountPicture: CircleAvatar(
+              backgroundColor: primaryColor,
+              child: Text(
+                widget.userData.fullname?.substring(0, 1).toUpperCase() ?? "S",
+                style: TextStyle(fontSize: 22.sp, color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+            accountName: Text(
+              widget.userData.fullname ?? "مورد أكساب",
+              style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w900, color: Colors.white),
+            ),
+            accountEmail: const Text("لوحة التحكم الإدارية", style: TextStyle(color: Colors.white70)),
           ),
-
-          // 2. قائمة التصفح (Nav)
-          Expanded(                             
+          Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+              padding: EdgeInsets.zero,
               children: _menuItems.map((item) {
                 return _SidebarItem(
                   icon: item['icon'] as IconData,
                   title: item['title'] as String,
                   targetScreen: item['screen'] as Widget,
-                  onNavigate: (screen) => widget.onMenuSelected(item['route'] as String, screen),
-                  isActive: widget.activeRoute == item['route'],                                
+                  onNavigate: (screen) {
+                    Navigator.pop(context);
+                    widget.onMenuSelected(item['route'] as String, screen);
+                  },
+                  isActive: widget.activeRoute == item['route'],
                   notificationCount: item['route'] == 'الطلبات' ? widget.newOrdersCount : 0,
-                );                              
+                );
               }).toList(),
             ),
           ),
-
-          // ❌ تم حذف زر التبديل لوضع التسوق بالكامل
-
-          // 3. تسجيل الخروج (Logout)
-          Container(                            
-            padding: const EdgeInsets.all(15),
-            decoration: const BoxDecoration(    
-              border: Border(top: BorderSide(color: Color(0x1affffff))),                        
+          const Divider(color: Colors.white10),
+          Padding(
+            padding: EdgeInsets.all(2.h),
+            child: TextButton.icon(
+              onPressed: widget.onLogout,
+              icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+              label: Text('تسجيل الخروج', style: TextStyle(color: Colors.redAccent, fontSize: 14.sp, fontWeight: FontWeight.bold)),
+              style: TextButton.styleFrom(minimumSize: Size(double.infinity, 6.h), alignment: Alignment.centerRight),
             ),
-            child: TextButton.icon(             
-              onPressed: _logout, // ربط دالة الخروج
-              icon: const Icon(Icons.logout, size: 20, color: sidebarTextColor),
-              label: const Text(
-                'تسجيل الخروج',                 
-                style: TextStyle(color: sidebarTextColor, fontSize: 16),                        
-              ),
-              style: TextButton.styleFrom(
-                minimumSize: const Size(double.infinity, 40),
-                alignment: Alignment.centerRight,                                               
-              ),
-            ),                                  
           ),
-        ],                                      
+        ],
       ),
     );
   }
 }
-

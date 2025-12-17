@@ -1,19 +1,19 @@
-// lib/services/excel_exporter.dart 
 import 'dart:io';
 import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:my_test_app/models/order_model.dart'; 
-                                                     
+import 'package:my_test_app/models/order_model.dart';
+import 'package:share_plus/share_plus.dart'; // ضرورية جداً للأندرويد
+import 'package:flutter/foundation.dart' show kIsWeb; // للتحقق من الويب بأمان
+
 class ExcelExporter {
-  // ⭐️ دالة التصدير الرئيسية ⭐️
   static Future<String> exportOrders(List<OrderModel> orders, String userRole) async {
-    // 1. طلب صلاحية التخزين
-    if (Platform.isAndroid || Platform.isIOS) {
-      if (await Permission.storage.request().isDenied) {
-        throw Exception('صلاحية التخزين مرفوضة. لا يمكن حفظ الملف.');
-      }
+    
+    // 1. طلب الصلاحيات (فقط للأندرويد وغير الويب)
+    if (!kIsWeb && Platform.isAndroid) {
+      // في أندرويد 11 وما فوق، يفضل استخدام share_plus لتجنب تعقيدات الوصول للذاكرة
+      await Permission.storage.request();
     }
 
     // 2. إنشاء كائن Excel
@@ -23,10 +23,9 @@ class ExcelExporter {
     // 3. تعريف الأعمدة
     final headerRow = [
       'رقم الطلب', 'الحالة', 'تاريخ الطلب', 'الإجمالي',
-      'اسم الصنف', 'الكمية', 'سعر الوحدة', 'إجمالي الصنف', 'رابط الصورة'
+      'اسم الصنف', 'الكمية', 'سعر الوحدة', 'إجمالي الصنف'
     ];
-
-    // تحويل رؤوس الأعمدة إلى TextCellValue
+    
     final List<CellValue> headerCells = headerRow.map((h) => TextCellValue(h)).toList();
     sheet.insertRowIterables(headerCells, 0);
 
@@ -35,65 +34,46 @@ class ExcelExporter {
     final formatter = DateFormat('yyyy-MM-dd HH:mm:ss', 'en_US');
 
     for (var order in orders) {
-      // بما أن الطلب قد يحتوي على أكثر من صنف، نكرر بيانات الطلب الرئيسية لكل صنف
       for (var item in order.items) {
+        final itemTotal = (item.quantity * item.unitPrice).toDouble();
         
-        // 4.1. حساب إجمالي الصنف وتصحيح مشكلة unitPrice ونوع البيانات
-        // ⭐️ التصحيح 1: item.unitPrice الآن موجود بعد تعديل OrderItemModel ⭐️
-        // ⭐️ التصحيح 2: تحويل نتيجة الضرب إلى double بشكل صريح لتجنب خطأ 'num' ⭐️
-        final itemTotal = (item.quantity * item.unitPrice).toDouble(); 
-                                                         
-        // 4.2. صف البيانات
         final List<CellValue> rowData = [
-          TextCellValue(order.id),
+          TextCellValue(order.id.substring(0, 8)), // تبسيط الرقم للمورد
           TextCellValue(order.statusText),
           TextCellValue(formatter.format(order.orderDate)),
-          DoubleCellValue(order.totalAmount), // الإجمالي الكلي يُكرر لكل صنف
+          DoubleCellValue(order.totalAmount),
           TextCellValue(item.name),
           IntCellValue(item.quantity),
-          
-          // ⭐️ التصحيح 3: استخدام DoubleCellValue مع item.unitPrice ⭐️
           DoubleCellValue(item.unitPrice),
-          DoubleCellValue(itemTotal), 
-          
-          TextCellValue(item.imageUrl),
+          DoubleCellValue(itemTotal),
         ];
-                                         
-        // 4.3. إضافة الصف إلى الشيت
         sheet.insertRowIterables(rowData, rowIndex);
         rowIndex++;
       }
     }
 
-    // 5. حفظ الملف
-    final timeStamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-    final fileName = 'Orders_Export_${timeStamp}.xlsx';
-                                                                                                            
-    // 5.1. تحديد مسار الحفظ 
-    Directory? appDocumentsDirectory;                    
-    if (Platform.isAndroid || Platform.isIOS) {
-        appDocumentsDirectory = await getApplicationDocumentsDirectory();                                     
-    } else {
-        // لـ Windows/Linux/Web (إذا تم دعمها)
-        appDocumentsDirectory = await getApplicationSupportDirectory();
-    }
-
-    if (appDocumentsDirectory == null) {
-      throw Exception('تعذر العثور على مسار حفظ صالح.');
-    }
-                                                                                                         
-    final filePath = '${appDocumentsDirectory.path}/$fileName';
-                                                                                                    
-    // 5.2. حفظ البيانات الفعلية للملف
+    // 5. حفظ وتصدير الملف (منطق الأندرويد القوي)
     final fileBytes = excel.encode();
+    if (fileBytes == null) throw Exception('فشل في إنشاء محتوى ملف Excel');
 
-    if (fileBytes != null) {
+    if (kIsWeb) {
+      // إذا كنت تجرب على الويب حالياً (تجنب الانهيار)
+      return "التصدير مدعوم بالكامل على نسخة الأندرويد فقط";
+    } else {
+      // ⭐️ شغل الأندرويد الأساسي ⭐️
+      final timeStamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final fileName = 'Orders_$timeStamp.xlsx';
+      
+      // حفظ في مجلد مؤقت آمن
+      final directory = await getTemporaryDirectory();
+      final filePath = '${directory.path}/$fileName';
       final file = File(filePath);
       await file.writeAsBytes(fileBytes, flush: true);
-                                                          
-      return filePath; // إرجاع مسار الملف المحفوظ
-    } else {
-      throw Exception('فشل في إنشاء محتوى ملف Excel.');
+
+      // أهم خطوة للأندرويد: فتح قائمة المشاركة لسهولة الوصول
+      await Share.shareXFiles([XFile(filePath)], text: 'تقرير طلبات $userRole');
+      
+      return filePath;
     }
   }
 }
