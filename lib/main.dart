@@ -8,7 +8,7 @@ import 'package:my_test_app/firebase_options.dart';
 import 'package:sizer/sizer.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
-// استيراد شاشات المشتري والمستهلك
+// استيراد الشاشات
 import 'package:my_test_app/screens/buyer/my_orders_screen.dart';
 import 'package:my_test_app/screens/login_screen.dart';
 import 'package:my_test_app/screens/auth/new_client_screen.dart';
@@ -32,12 +32,10 @@ import 'package:my_test_app/screens/product_details_screen.dart';
 import 'package:my_test_app/screens/consumer/consumer_sub_category_screen.dart';
 import 'package:my_test_app/screens/consumer/ConsumerProductListScreen.dart';
 import 'package:my_test_app/screens/consumer/MarketplaceHomeScreen.dart';
-
-// 🆕 استيراد شاشة النقاط وشاشة مشتريات المستهلك الجديدة
 import 'package:my_test_app/screens/consumer/points_loyalty_screen.dart';
 import 'package:my_test_app/screens/consumer/consumer_purchase_history_screen.dart';
 
-// استيراد الثيم والمزودات
+// استيراد المزودات والثيم
 import 'package:my_test_app/theme/app_theme.dart';
 import 'package:my_test_app/providers/theme_notifier.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
@@ -56,35 +54,31 @@ import 'package:my_test_app/screens/search/search_screen.dart';
 import 'package:my_test_app/models/user_role.dart';
 
 void main() async {
+  // 1. ضمان استقرار المحرك قبل أي عملية
   WidgetsFlutterBinding.ensureInitialized();
 
-  FlutterError.onError = (FlutterErrorDetails details) async {
+  // 2. معالجة أخطاء فلاتر العالمية
+  FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
-    final prefs = await SharedPreferences.getInstance();
-    prefs.setString('last_error', details.toString());
-    debugPrint('🚨 FATAL FLUTTER ERROR LOGGED: ${details.exceptionAsString()}');
+    debugPrint('🚨 FATAL ERROR: ${details.exception}');
   };
 
   try {
+    // 3. تهيئة اللغات والفايربيس بترتيب صحيح
     await initializeDateFormatting('ar', null);
-  } catch (e) {
-    debugPrint('🚨 Error initializing Date Formatting for Arabic: $e');
-  }
-
-  try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   } catch (e) {
-    debugPrint('🚨 FATAL FIREBASE INIT ERROR: $e');
+    debugPrint('🚨 INIT ERROR: $e');
   }
 
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (context) => ThemeNotifier(ThemeMode.system)),
-        ChangeNotifierProvider(create: (context) => BuyerDataProvider()),
-        ChangeNotifierProvider(create: (context) => ManufacturersProvider()),
-        ChangeNotifierProvider(create: (context) => CartProvider()),
-        ChangeNotifierProvider(create: (context) => SellerDashboardController()),
+        ChangeNotifierProvider(create: (_) => ThemeNotifier(ThemeMode.system)),
+        ChangeNotifierProvider(create: (_) => BuyerDataProvider()),
+        ChangeNotifierProvider(create: (_) => ManufacturersProvider()),
+        ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(create: (_) => SellerDashboardController()),
         ChangeNotifierProxyProvider<BuyerDataProvider, CustomerOrdersProvider>(
           create: (context) => CustomerOrdersProvider(Provider.of<BuyerDataProvider>(context, listen: false)),
           update: (context, buyerData, previous) => CustomerOrdersProvider(buyerData),
@@ -111,7 +105,7 @@ class MyApp extends StatelessWidget {
     return Sizer(
       builder: (context, orientation, deviceType) {
         return MaterialApp(
-          title: 'My Test App',
+          title: 'Delivery Supermarkets',
           debugShowCheckedModeBanner: false,
           theme: ThemeData(
             primaryColor: AppTheme.primaryGreen,
@@ -146,16 +140,9 @@ class MyApp extends StatelessWidget {
             SellerScreen.routeName: (context) => const SellerScreen(),
             CartScreen.routeName: (context) => const CartScreen(),
             CheckoutScreen.routeName: (context) => const CheckoutScreen(),
-            
-            // 1. طلبات الجملة (للمورد)
             MyOrdersScreen.routeName: (context) => const MyOrdersScreen(),
-            
-            // 2. طلبات الدليفري (للسوبر ماركت)
             '/con-orders': (context) => const ConsumerOrdersScreen(),
-            
-            // 3. مشتريات المستهلك الشخصية (جديد)
             ConsumerPurchaseHistoryScreen.routeName: (context) => const ConsumerPurchaseHistoryScreen(),
-
             '/deliverySettings': (context) => const DeliverySettingsScreen(),
             '/updatsupermarket': (context) => const UpdateDeliverySettingsScreen(),
             '/deliveryPrices': (context) => const DeliveryMerchantDashboardScreen(),
@@ -165,10 +152,8 @@ class MyApp extends StatelessWidget {
             TradersScreen.routeName: (context) => const TradersScreen(),
             '/register': (context) => const NewClientScreen(),
             '/post_registration_message': (context) => const PostRegistrationMessageScreen(),
-
             '/wallet': (context) => const WalletScreen(),
             PointsLoyaltyScreen.routeName: (context) => const PointsLoyaltyScreen(),
-
             SearchScreen.routeName: (context) {
               final buyerData = Provider.of<BuyerDataProvider>(context, listen: false);
               final role = buyerData.userClassification == 'seller' ? UserRole.buyer : UserRole.consumer;
@@ -176,7 +161,7 @@ class MyApp extends StatelessWidget {
             },
           },
           onGenerateRoute: (settings) {
-            // ... (باقي منطق onGenerateRoute كما هو بدون تغيير)
+            // منطق المسارات الديناميكية (بدون تغيير)
             if (settings.name == '/productDetails') {
               String? productId;
               String? offerId;
@@ -190,7 +175,6 @@ class MyApp extends StatelessWidget {
               if (productId != null && productId.isNotEmpty) {
                 return MaterialPageRoute(builder: (context) => ProductDetailsScreen(productId: productId!, offerId: offerId));
               }
-              return null;
             }
             if (settings.name == MarketplaceHomeScreen.routeName) {
               final args = settings.arguments as Map<String, dynamic>?;
@@ -199,10 +183,6 @@ class MyApp extends StatelessWidget {
               if (storeId != null && storeName != null) {
                 return MaterialPageRoute(builder: (context) => MarketplaceHomeScreen(currentStoreId: storeId, currentStoreName: storeName));
               }
-              return null;
-            }
-            if (settings.name == ProductOfferScreen.routeName) {
-              return MaterialPageRoute(builder: (context) => const ProductOfferScreen());
             }
             if (settings.name == '/subcategories') {
               final args = settings.arguments as Map<String, dynamic>?;
@@ -212,7 +192,6 @@ class MyApp extends StatelessWidget {
               if (mainCategoryId != null && ownerId != null) {
                 return MaterialPageRoute(builder: (context) => ConsumerSubCategoryScreen(mainCategoryId: mainCategoryId, ownerId: ownerId, mainCategoryName: mainCategoryName ?? 'الأقسام الفرعية'));
               }
-              return null;
             }
             if (settings.name == ConsumerProductListScreen.routeName) {
               final args = settings.arguments as Map<String, dynamic>?;
@@ -223,7 +202,6 @@ class MyApp extends StatelessWidget {
               if (ownerId != null && mainId != null && subId != null) {
                 return MaterialPageRoute(builder: (context) => ConsumerProductListScreen(ownerId: ownerId, mainId: mainId, subId: subId, subCategoryName: subCategoryName ?? 'المنتجات'));
               }
-              return null;
             }
             if (settings.name == TraderOffersScreen.routeName) {
               final sellerId = settings.arguments as String? ?? '';
@@ -245,34 +223,22 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// ... باقي الكلاسات (AuthWrapper و PostRegistrationMessageScreen) كما هي
-class AuthWrapper extends StatefulWidget {
+class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
-  @override
-  State<AuthWrapper> createState() => _AuthWrapperState();
-}
 
-class _AuthWrapperState extends State<AuthWrapper> {
-  Future<LoggedInUser?>? _userFuture;
-  @override
-  void initState() {
-    super.initState();
-    _userFuture = _checkUserLoginStatus();
-  }
-
-  Future<LoggedInUser?> _checkUserLoginStatus() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userJsonString = prefs.getString('loggedUser');
-    if (userJsonString != null) {
-      try {
+  Future<LoggedInUser?> _checkUserLoginStatus(BuildContext context) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userJsonString = prefs.getString('loggedUser');
+      if (userJsonString != null) {
         final userData = LoggedInUser.fromJson(jsonDecode(userJsonString));
-        await Provider.of<BuyerDataProvider>(context, listen: false).initializeData(userData.id, userData.id, userData.fullname);
+        // تهيئة البيانات من خلال البروفايدر بشكل آمن
+        final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
+        await buyerProvider.initializeData(userData.id, userData.id, userData.fullname);
         return userData;
-      } catch (e) {
-        debugPrint('🚨 AuthWrapper User Load/Init Error: $e');
-        await prefs.remove('loggedUser');
-        return null;
       }
+    } catch (e) {
+      debugPrint('🚨 Auth Error: $e');
     }
     return null;
   }
@@ -280,7 +246,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<LoggedInUser?>(
-      future: _userFuture,
+      future: _checkUserLoginStatus(context),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -290,9 +256,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
           if (user.role == "seller") return const SellerScreen();
           if (user.role == "consumer") return ConsumerHomeScreen();
           return const BuyerHomeScreen();
-        } else {
-          return const LoginScreen();
         }
+        return const LoginScreen();
       },
     );
   }
@@ -307,18 +272,6 @@ class PostRegistrationMessageScreen extends StatelessWidget {
     Future.delayed(const Duration(seconds: 3), () {
       Navigator.of(context).pushReplacementNamed(LoginScreen.routeName);
     });
-    final String message;
-    final IconData icon;
-    final Color color;
-    if (isSeller) {
-      message = 'تم تسجيل حساب التاجر بنجاح.\nحسابك قيد المراجعة في انتظار النقل إلى التجار النشطين.';
-      icon = Icons.pending_actions;
-      color = Colors.orange;
-    } else {
-      message = 'تم تسجيل بياناتك بنجاح.\nسيتم نقلك الآن لتسجيل الدخول والمصادقة.';
-      icon = Icons.check_circle_outline;
-      color = Colors.green;
-    }
     return Scaffold(
       body: Center(
         child: Padding(
@@ -326,9 +279,11 @@ class PostRegistrationMessageScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: color, size: 80),
+              Icon(isSeller ? Icons.pending_actions : Icons.check_circle_outline, 
+                   color: isSeller ? Colors.orange : Colors.green, size: 80),
               const SizedBox(height: 20),
-              Text(message, textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+              Text(isSeller ? 'تم تسجيل حساب التاجر بنجاح.\nحسابك قيد المراجعة.' : 'تم تسجيل بياناتك بنجاح.',
+                   textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
               const SizedBox(height: 40),
               const CircularProgressIndicator(),
             ],
