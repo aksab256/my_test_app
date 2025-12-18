@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 
-// 🟢 استيراد الشاشات الحقيقية كما وردت في main.dart
+// 🟢 استيراد الشاشات الحقيقية
 import 'package:my_test_app/screens/buyer/my_orders_screen.dart';
 import 'package:my_test_app/screens/buyer/cart_screen.dart';
 import 'package:my_test_app/widgets/home_content.dart';
-
-// ملاحظة: إذا كان اسم ملف التجار هو TradersScreen تأكد من وجود الملف في هذا المسار
-// بناءً على سياق المشروع، سنحاول استيراده أو استبداله بالويدجت المناسب
-import 'package:my_test_app/screens/buyer/traders_screen.dart'; 
+import 'package:my_test_app/screens/buyer/traders_screen.dart';
+// ✅ إضافة استيراد المحفظة
+import 'package:my_test_app/screens/buyer/wallet_screen.dart';
 
 class BuyerMobileNavWidget extends StatelessWidget {
   final int selectedIndex;
@@ -25,11 +24,11 @@ class BuyerMobileNavWidget extends StatelessWidget {
 
   // 🟢 ربط الصفحات الحقيقية بالترتيب الصحيح للأيقونات
   static final List<Widget> mainPages = [
-    const MyOrdersScreen(),    // Index 0: مشترياتي (شغالة فعلياً)
-    const HomeContent(),       // Index 1: الرئيسية (البانرات والأقسام)
-    const CartScreen(),        // Index 2: السلة (شغالة فعلياً)
-    const TradersScreen(),     // Index 3: التجار (هنا سيظهر الوميض لإصلاحه لاحقاً)
-    const Center(child: Text('محفظتي قيد التطوير')), // Index 4: المحفظة
+    const MyOrdersScreen(),    // Index 0: مشترياتي
+    const HomeContent(),       // Index 1: الرئيسية
+    const CartScreen(),        // Index 2: السلة
+    const TradersScreen(),     // Index 3: التجار
+    const WalletScreen(),      // Index 4: المحفظة (تم التفعيل ✅)
   ];
 
   @override

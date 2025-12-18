@@ -1,3 +1,5 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
@@ -40,7 +42,7 @@ import 'package:my_test_app/screens/product_details_screen.dart';
 import 'package:my_test_app/screens/consumer/consumer_sub_category_screen.dart';
 import 'package:my_test_app/screens/consumer/ConsumerProductListScreen.dart';
 
-// --- ✅ إضافات الدليفري الجديدة ---
+// --- ✅ إضافات الدليفري المعتمدة ---
 import 'package:my_test_app/screens/delivery_merchant_dashboard_screen.dart';
 import 'package:my_test_app/screens/delivery_settings_screen.dart';
 import 'package:my_test_app/screens/update_delivery_settings_screen.dart';
@@ -108,15 +110,20 @@ class MyApp extends StatelessWidget {
             '/myDetails': (context) => const MyDetailsScreen(),
             '/about': (context) => const AboutScreen(),
             '/post-reg': (context) => const PostRegistrationMessageScreen(),
+
+            // ✅ تفعيل الأيقونة الخارجية (طلبات أسعار الدليفري) لتفتح اللوحة
+            '/deliveryPrices': (context) => const DeliveryMerchantDashboardScreen(), 
             
-            // ✅ مسارات الدليفري (تم تفعيلها الآن)
-            '/deliveryPrices': (context) => const DeliveryMerchantDashboardScreen(),
-            '/deliverySettings': (context) => const DeliverySettingsScreen(),
+            // ✅ مسارات لوحة التحكم الداخلية (كما يطلبها الـ Sidebar الداخلي)
+            '/deliveryMerchantDashboard': (context) => const DeliveryMerchantDashboardScreen(),
+            '/product_management': (context) => const DeliveryMerchantDashboardScreen(), 
             '/updatsupermarket': (context) => const UpdateDeliverySettingsScreen(),
             '/con-orders': (context) => const ConsumerOrdersScreen(),
+            '/delivery-offers': (context) => const DeliveryMerchantDashboardScreen(),
+            '/constore': (context) => const BuyerHomeScreen(), 
           },
           onGenerateRoute: (settings) {
-            // 1. تفاصيل المنتج
+            // تفاصيل المنتج
             if (settings.name == '/productDetails') {
               final args = settings.arguments as Map<String, dynamic>?;
               return MaterialPageRoute(builder: (context) => ProductDetailsScreen(
@@ -124,17 +131,17 @@ class MyApp extends StatelessWidget {
                 offerId: args?['offerId'],
               ));
             }
-            // 2. عروض التاجر
+            // عروض التاجر
             if (settings.name == TraderOffersScreen.routeName) {
               final sellerId = settings.arguments as String? ?? '';
               return MaterialPageRoute(builder: (context) => TraderOffersScreen(sellerId: sellerId));
             }
-            // 3. الأقسام الرئيسية
+            // الأقسام الرئيسية
             if (settings.name == '/category') {
               final mainId = settings.arguments as String? ?? '';
               return MaterialPageRoute(builder: (context) => BuyerCategoryScreen(mainCategoryId: mainId));
             }
-            // 4. الأقسام الفرعية
+            // الأقسام الفرعية
             if (settings.name == '/subcategories') {
               final args = settings.arguments as Map<String, dynamic>?;
               return MaterialPageRoute(builder: (context) => ConsumerSubCategoryScreen(
@@ -143,7 +150,7 @@ class MyApp extends StatelessWidget {
                 mainCategoryName: args?['mainCategoryName'] ?? '',
               ));
             }
-            // 5. ✅ قائمة المنتجات (تمت إضافتها الآن)
+            // قائمة المنتجات
             if (settings.name == '/products') {
               final args = settings.arguments as Map<String, dynamic>? ?? {};
               return MaterialPageRoute(builder: (context) => BuyerProductListScreen(
