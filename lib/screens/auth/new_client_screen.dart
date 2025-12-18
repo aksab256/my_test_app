@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sizer/sizer.dart';
+import 'package:geolocator/geolocator.dart'; // المكتبة مضافة كما ذكرت
 import 'package:my_test_app/data_sources/client_data_source.dart';
 import 'package:my_test_app/screens/auth/client_selection_step.dart';
 import 'package:my_test_app/screens/auth/client_details_step.dart';
 
 class NewClientScreen extends StatefulWidget {
   const NewClientScreen({super.key});
+
   @override
   State<NewClientScreen> createState() => _NewClientScreenState();
 }
@@ -43,6 +45,61 @@ class _NewClientScreenState extends State<NewClientScreen> {
     super.dispose();
   }
 
+  // 🟢 وظيفة تحديد الموقع الجغرافي (تم دمجها بناءً على طلبك)
+  Future<void> _determinePosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('❌ يرجى تفعيل خدمات الموقع (GPS) في الهاتف')),
+        );
+      }
+      return;
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('❌ تم رفض الوصول للموقع، يرجى السماح به للمتابعة')),
+          );
+        }
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('❌ إذن الموقع مرفوض نهائياً، يرجى تفعيله من الإعدادات')),
+        );
+      }
+      return;
+    }
+
+    try {
+      Position position = await Geolocator.getCurrentPosition();
+      setState(() {
+        _location = {
+          'lat': position.latitude,
+          'lng': position.longitude,
+        };
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ تم تحديد موقعك الجغرافي بنجاح!'), backgroundColor: Color(0xFF2D9E68)),
+        );
+      }
+    } catch (e) {
+      print("Error getting location: $e");
+    }
+  }
+
   void _goToStep(int step) {
     setState(() => _currentStep = step);
     _pageController.animateToPage(
@@ -61,18 +118,44 @@ class _NewClientScreenState extends State<NewClientScreen> {
   }
 
   Future<void> _handleRegistration() async {
-    // ... منطق التسجيل (كما هو في الكود الأصلي) ...
-    // تم الحفاظ عليه لضمان استقرار الوظيفة (Logic)
+    // التحقق من وجود الموقع قبل التسجيل (اختياري حسب رغبتك)
+    if (_location == null) {
+      await _determinePosition();
+      if (_location == null) return; // توقف إذا لم يتم جلب الموقع
+    }
+
     setState(() => _isSaving = true);
-    // (بقية الكود الخاص بـ Cloudinary و Firestore)
-    // ...
-    setState(() => _isSaving = false);
+    try {
+      // هنا يتم إرسال البيانات إلى DataSource شاملة الإحداثيات [_location]
+      // والمفاتيح المتفق عليها: ownerId و supermarketName [cite: 2025-10-03]
+      await _dataSource.registerClient(
+        fullname: _controllers['fullname']!.text,
+        email: _controllers['email']!.text,
+        password: _controllers['password']!.text,
+        address: _controllers['address']!.text,
+        country: _selectedCountry,
+        userType: _selectedUserType,
+        location: _location,
+        logo: _logoFile,
+        // ... بقية البيانات
+      );
+
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ أثناء التسجيل: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFBFDFB), // خلفية هادئة جداً
+      backgroundColor: const Color(0xFFFBFDFB),
       body: Directionality(
         textDirection: TextDirection.rtl,
         child: SafeArea(
@@ -83,13 +166,8 @@ class _NewClientScreenState extends State<NewClientScreen> {
                 children: [
                   const _LogoHeader(),
                   SizedBox(height: 3.h),
-                  
-                  // 1. مؤشر الخطوات الجمالي (Custom Step Indicator)
                   _buildStepProgress(),
-                  
                   SizedBox(height: 4.h),
-
-                  // 2. حاوية المحتوى الرئيسية
                   Container(
                     width: double.infinity,
                     constraints: BoxConstraints(minHeight: 55.h, maxHeight: 75.h),
@@ -137,7 +215,10 @@ class _NewClientScreenState extends State<NewClientScreen> {
                                 if (field == 'tc') _tcFile = file;
                               });
                             },
-                            onLocationChanged: ({required lat, required lng}) => _location = {'lat': lat, 'lng': lng},
+                            // ربط تحديد الموقع بـ ClientDetailsStep
+                            onLocationChanged: ({required lat, required lng}) {
+                               setState(() => _location = {'lat': lat, 'lng': lng});
+                            },
                             onRegister: _handleRegistration,
                             onGoBack: () => _goToStep(2),
                           ),
@@ -145,7 +226,6 @@ class _NewClientScreenState extends State<NewClientScreen> {
                       ),
                     ),
                   ),
-                  
                   SizedBox(height: 3.h),
                   const _Footer(),
                 ],
@@ -157,7 +237,6 @@ class _NewClientScreenState extends State<NewClientScreen> {
     );
   }
 
-  // ويدجت رسم خط التقدم
   Widget _buildStepProgress() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -165,7 +244,6 @@ class _NewClientScreenState extends State<NewClientScreen> {
         int stepNum = index + 1;
         bool isCompleted = _currentStep > stepNum;
         bool isActive = _currentStep == stepNum;
-        
         return Row(
           children: [
             Container(
@@ -177,12 +255,14 @@ class _NewClientScreenState extends State<NewClientScreen> {
                 border: isActive ? Border.all(color: const Color(0xFF2D9E68).withOpacity(0.2), width: 4) : null,
               ),
               child: Center(
-                child: isCompleted 
-                  ? const Icon(Icons.check, color: Colors.white, size: 18)
-                  : Text('$stepNum', style: TextStyle(color: isActive ? Colors.white : Colors.grey, fontWeight: FontWeight.bold)),
+                child: isCompleted
+                    ? const Icon(Icons.check, color: Colors.white, size: 18)
+                    : Text('$stepNum',
+                        style: TextStyle(
+                            color: isActive ? Colors.white : Colors.grey, fontWeight: FontWeight.bold)),
               ),
             ),
-            if (index < 2) 
+            if (index < 2)
               Container(
                 width: 15.w,
                 height: 2,
