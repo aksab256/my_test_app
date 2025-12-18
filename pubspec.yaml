@@ -9,6 +9,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # 🎯 إضافة دعم اللغات والاتجاهات (RTL)
+  flutter_localizations:
+    sdk: flutter
 
   # Core packages
   http: ^1.2.2
@@ -70,3 +73,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/
+
