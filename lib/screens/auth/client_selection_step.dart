@@ -1,3 +1,4 @@
+// lib/screens/auth/client_selection_step.dart
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 
@@ -25,26 +26,27 @@ class ClientSelectionStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 2.w),
+      padding: EdgeInsets.symmetric(horizontal: 3.w),
       child: Column(
         children: [
+          const SizedBox(height: 20),
           Text(
             stepNumber == 1 ? 'أين يقع نشاطك التجاري؟' : 'ما هو دورك في المنصة؟',
             style: TextStyle(
-              fontSize: 14.sp,
+              fontSize: 16.sp, // 🟢 تم تكبير عنوان الخطوة
               fontWeight: FontWeight.bold,
               color: const Color(0xFF1A1A1A),
             ),
             textAlign: TextAlign.center,
           ),
-          SizedBox(height: 1.h),
+          SizedBox(height: 1.5.h),
           Text(
             stepNumber == 1 ? 'اختر الدولة لبدء تخصيص تجربتك' : 'اختر نوع الحساب المناسب لطبيعة عملك',
-            style: TextStyle(fontSize: 9.sp, color: Colors.grey.shade500),
+            style: TextStyle(fontSize: 11.sp, color: Colors.grey.shade600), // 🟢 تكبير الوصف
             textAlign: TextAlign.center,
           ),
           SizedBox(height: 4.h),
-          
+
           Expanded(
             child: stepNumber == 1
                 ? _buildCountrySelection(context)
@@ -52,11 +54,14 @@ class ClientSelectionStep extends StatelessWidget {
           ),
 
           if (stepNumber == 2 && onGoBack != null)
-            TextButton.icon(
-              onPressed: onGoBack,
-              icon: Icon(Icons.keyboard_arrow_right_rounded, size: 20),
-              label: const Text('العودة للخطوة السابقة'),
-              style: TextButton.styleFrom(foregroundColor: Colors.grey),
+            Padding(
+              padding: EdgeInsets.only(bottom: 2.h),
+              child: TextButton.icon(
+                onPressed: onGoBack,
+                icon: const Icon(Icons.keyboard_arrow_right_rounded, size: 24),
+                label: Text('العودة للخطوة السابقة', style: TextStyle(fontSize: 12.sp)),
+                style: TextButton.styleFrom(foregroundColor: Colors.grey[700]),
+              ),
             ),
         ],
       ),
@@ -75,7 +80,7 @@ class ClientSelectionStep extends StatelessWidget {
           isActive: initialCountry == 'egypt',
           onTap: () => onCountrySelected('egypt'),
         ),
-        SizedBox(height: 2.h),
+        SizedBox(height: 2.5.h),
         _OptionCard(
           title: 'المملكة العربية السعودية',
           subtitle: 'توسع في أسواق الخليج العربي',
@@ -100,7 +105,7 @@ class ClientSelectionStep extends StatelessWidget {
           isActive: initialUserType == 'buyer',
           onTap: () => onCompleted!(country: initialCountry, userType: 'buyer'),
         ),
-        SizedBox(height: 2.h),
+        SizedBox(height: 2.5.h),
         _OptionCard(
           title: 'موردين (شركات ومصانع)',
           subtitle: 'اعرض منتجاتك وزود مبيعاتك',
@@ -109,7 +114,7 @@ class ClientSelectionStep extends StatelessWidget {
           isActive: initialUserType == 'seller',
           onTap: () => onCompleted!(country: initialCountry, userType: 'seller'),
         ),
-        SizedBox(height: 2.h),
+        SizedBox(height: 2.5.h),
         _OptionCard(
           title: 'مستهلك (مشتري)',
           subtitle: 'تسوق أفضل العروض من حولك',
@@ -145,7 +150,7 @@ class _OptionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primary = const Color(0xFF2D9E68);
-    
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       decoration: BoxDecoration(
@@ -153,41 +158,51 @@ class _OptionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isActive ? primary : Colors.grey.shade200,
-          width: isActive ? 2 : 1,
+          width: isActive ? 2.5 : 1.5,
         ),
+        boxShadow: isActive ? [
+          BoxShadow(color: primary.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))
+        ] : [],
       ),
       child: ListTile(
         onTap: onTap,
-        contentPadding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 1.h),
-        leading: flagColors != null 
+        contentPadding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 1.5.h),
+        leading: flagColors != null
           ? _buildFlagIcon(flagColors!)
           : Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: (iconColor ?? primary).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(15),
               ),
-              child: Icon(icon, color: iconColor ?? primary, size: 28),
+              child: Icon(icon, color: iconColor ?? primary, size: 30),
             ),
         title: Text(
           title,
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.sp, color: isActive ? primary : Colors.black87),
+          style: TextStyle(
+            fontWeight: FontWeight.bold, 
+            fontSize: 13.sp, // 🟢 تكبير اسم الدولة/الحساب
+            color: isActive ? primary : Colors.black87
+          ),
         ),
-        subtitle: Text(subtitle, style: TextStyle(fontSize: 8.5.sp, color: Colors.grey.shade500)),
-        trailing: isActive 
-          ? Icon(Icons.check_circle_rounded, color: primary) 
-          : Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: Colors.grey.shade300),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(subtitle, style: TextStyle(fontSize: 10.sp, color: Colors.grey.shade600)), // 🟢 تكبير الوصف الفرعي
+        ),
+        trailing: isActive
+          ? Icon(Icons.check_circle_rounded, color: primary, size: 28)
+          : Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Colors.grey.shade400),
       ),
     );
   }
 
   Widget _buildFlagIcon(List<Color> colors) {
     return Container(
-      width: 48,
-      height: 48,
+      width: 52,
+      height: 52,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.grey.shade100, width: 2),
+        border: Border.all(color: Colors.grey.shade200, width: 2),
       ),
       child: ClipOval(
         child: Column(
@@ -197,3 +212,4 @@ class _OptionCard extends StatelessWidget {
     );
   }
 }
+

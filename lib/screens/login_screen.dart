@@ -1,6 +1,8 @@
+// lib/screens/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:my_test_app/widgets/login_form_widget.dart';
 import 'package:flutter/gestures.dart';
+import 'package:sizer/sizer.dart'; // سنستخدم sizer للخطوط
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -18,34 +20,48 @@ class LoginScreen extends StatelessWidget {
         child: Stack(
           children: [
             Positioned(
-              top: -100,
-              right: -100,
-              child: CircleAvatar(radius: 150, backgroundColor: primaryGreen.withOpacity(0.05)),
+              top: -80,
+              right: -80,
+              child: CircleAvatar(radius: 120, backgroundColor: primaryGreen.withOpacity(0.05)),
             ),
             Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                padding: EdgeInsets.symmetric(horizontal: 6.w),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // تم حذف اللوجو بناءً على طلبك لمنع أخطاء الـ Assets
-                    const Icon(Icons.account_circle, size: 100, color: primaryGreen), 
-                    const SizedBox(height: 24),
-                    const Text(
+                    const Icon(Icons.account_circle, size: 120, color: primaryGreen),
+                    SizedBox(height: 3.h),
+                    Text(
                       'أهلاً بك في أكسب',
-                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A)),
+                      style: TextStyle(
+                        fontSize: 22.sp, // خط كبير وواضح
+                        fontWeight: FontWeight.w900, 
+                        color: const Color(0xFF1A1A1A)
+                      ),
                     ),
-                    const SizedBox(height: 40),
+                    SizedBox(height: 1.h),
+                    Text(
+                      'سجل دخولك برقم الهاتف للمتابعة',
+                      style: TextStyle(fontSize: 12.sp, color: Colors.grey.shade600),
+                    ),
+                    SizedBox(height: 5.h),
                     Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(28),
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 10))],
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.06), 
+                            blurRadius: 30, 
+                            offset: const Offset(0, 15)
+                          )
+                        ],
                       ),
-                      child: const LoginFormWidget(),
+                      child: const LoginFormWidget(), // 🎯 هنا يتم التعديل الجوهري
                     ),
-                    const SizedBox(height: 32),
+                    SizedBox(height: 4.h),
                     const _FooterWidget(),
                   ],
                 ),
@@ -65,7 +81,7 @@ class _FooterWidget extends StatelessWidget {
     return Text.rich(
       TextSpan(
         text: 'ليس لديك حساب؟ ',
-        style: TextStyle(color: Colors.grey.shade700, fontSize: 15),
+        style: TextStyle(color: Colors.grey.shade700, fontSize: 13.sp),
         children: [
           TextSpan(
             text: 'إنشاء حساب جديد',

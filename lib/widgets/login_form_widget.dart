@@ -1,6 +1,8 @@
+// lib/widgets/login_form_widget.dart
 import 'package:flutter/material.dart';
 import 'package:my_test_app/helpers/auth_service.dart';
 import 'package:my_test_app/screens/forgot_password_screen.dart';
+import 'package:sizer/sizer.dart';
 
 class LoginFormWidget extends StatefulWidget {
   const LoginFormWidget({super.key});
@@ -11,11 +13,11 @@ class LoginFormWidget extends StatefulWidget {
 
 class _LoginFormWidgetState extends State<LoginFormWidget> {
   final _formKey = GlobalKey<FormState>();
-  String _email = '';
+  String _phone = ''; // تم تغيير الاسم من _email إلى _phone
   String _password = '';
   bool _isLoading = false;
   String? _errorMessage;
-  bool _obscurePassword = true; // للتحكم في رؤية كلمة السر
+  bool _obscurePassword = true;
   final AuthService _authService = AuthService();
 
   Future<void> _submitLogin() async {
@@ -28,10 +30,13 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     });
 
     try {
-      await _authService.signInWithEmailAndPassword(_email, _password);
+      // 🎯 تحويل رقم الهاتف إلى البريد الوهمي المسجل به في النظام
+      String fakeEmail = "${_phone.trim()}@aswaq.com";
       
+      await _authService.signInWithEmailAndPassword(fakeEmail, _password);
+
       if (!mounted) return;
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('✅ تم تسجيل الدخول بنجاح!', textAlign: TextAlign.center),
@@ -40,16 +45,10 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       );
 
       Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-    } on String catch (e) {
-      setState(() {
-        _errorMessage = (e == 'user-not-found' || e == 'wrong-password') 
-            ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة.' 
-            : 'حدث خطأ أثناء تسجيل الدخول.';
-        _isLoading = false;
-      });
     } catch (e) {
       setState(() {
-        _errorMessage = 'حدث خطأ غير متوقع.';
+        // رسالة خطأ عامة وشاملة
+        _errorMessage = 'رقم الهاتف أو كلمة المرور غير صحيحة.';
         _isLoading = false;
       });
     }
@@ -62,15 +61,16 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // حقل البريد
+          // حقل رقم الهاتف
           _buildTextField(
-            hint: 'البريد الإلكتروني',
-            icon: Icons.alternate_email_rounded,
-            onSaved: (value) => _email = value!,
-            validator: (value) => (value == null || !value.contains('@')) ? 'بريد غير صالح' : null,
+            hint: 'رقم الهاتف',
+            icon: Icons.phone_android_rounded,
+            keyboardType: TextInputType.phone,
+            onSaved: (value) => _phone = value!,
+            validator: (value) => (value == null || value.length < 8) ? 'يرجى إدخال رقم هاتف صحيح' : null,
           ),
-          const SizedBox(height: 16),
-          
+          SizedBox(height: 2.5.h),
+
           // حقل كلمة المرور
           _buildTextField(
             hint: 'كلمة المرور',
@@ -89,18 +89,16 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
               ),
-              child: const Text('نسيت كلمة المرور؟', style: TextStyle(color: Colors.grey)),
+              child: Text('نسيت كلمة المرور؟', 
+                style: TextStyle(color: Colors.grey[600], fontSize: 11.sp, fontWeight: FontWeight.bold)),
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 2.h),
 
-          // زر الدخول المطور
+          // زر الدخول المطور والضخم
           _buildSubmitButton(),
-
-          // عرض الخطأ إن وجد
-          if (_errorMessage != null) _buildErrorBox(),
           
-          // 💡 ملاحظة: تم حذف رابط "ليس لديك حساب" من هنا لأنه موجود في الـ Footer بالـ LoginScreen
+          if (_errorMessage != null) _buildErrorBox(),
         ],
       ),
     );
@@ -112,30 +110,37 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     bool isPassword = false,
     bool obscureText = false,
     VoidCallback? toggleVisibility,
+    TextInputType keyboardType = TextInputType.text,
     required FormFieldSetter<String> onSaved,
     required FormFieldValidator<String> validator,
   }) {
     return TextFormField(
       obscureText: obscureText,
       textAlign: TextAlign.right,
+      keyboardType: keyboardType,
       onSaved: onSaved,
       validator: validator,
+      style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600), // خط الكتابة
       decoration: InputDecoration(
         filled: true,
-        fillColor: const Color(0xFFF0F4F2), // خلفية هادئة للخانات
+        fillColor: const Color(0xFFF7F9F8),
         hintText: hint,
-        hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-        prefixIcon: isPassword 
+        hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 13.sp),
+        contentPadding: EdgeInsets.symmetric(vertical: 2.5.h, horizontal: 20),
+        prefixIcon: isPassword
             ? IconButton(
-                icon: Icon(obscureText ? Icons.visibility_off : Icons.visibility, size: 20),
+                icon: Icon(obscureText ? Icons.visibility_off : Icons.visibility, size: 24, color: Colors.grey),
                 onPressed: toggleVisibility,
-              ) 
+              )
             : null,
-        suffixIcon: Icon(icon, color: const Color(0xFF2D9E68), size: 20),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+        suffixIcon: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          child: Icon(icon, color: const Color(0xFF2D9E68), size: 28),
+        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFF2D9E68), width: 1.5),
+          borderRadius: BorderRadius.circular(20),
+          borderSide: const BorderSide(color: Color(0xFF2D9E68), width: 2),
         ),
       ),
     );
@@ -143,15 +148,15 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
   Widget _buildSubmitButton() {
     return Container(
-      height: 55,
+      height: 75, // زيادة الطول ليتناسب مع التصميم الجديد
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: const LinearGradient(colors: [Color(0xFF2D9E68), Color(0xFF43B97F)]),
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(colors: [Color(0xFF2D9E68), Color(0xFF38B277)]),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF2D9E68).withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -160,11 +165,12 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         ),
         child: _isLoading
             ? const CircularProgressIndicator(color: Colors.white)
-            : const Text('دخول', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            : Text('دخول', 
+                style: TextStyle(color: Colors.white, fontSize: 16.sp, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -172,9 +178,24 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   Widget _buildErrorBox() {
     return Container(
       margin: const EdgeInsets.only(top: 20),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(12)),
-      child: Text('❌ $_errorMessage', textAlign: TextAlign.center, style: TextStyle(color: Colors.red.shade800)),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50, 
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.red.shade200)
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.error_outline, color: Colors.red.shade800),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(_errorMessage!, 
+              style: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.bold, fontSize: 11.sp)),
+          ),
+        ],
+      ),
     );
   }
 }
+

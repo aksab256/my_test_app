@@ -1,3 +1,4 @@
+// lib/screens/auth/new_client_screen.dart
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:sizer/sizer.dart';
@@ -17,21 +18,20 @@ class _NewClientScreenState extends State<NewClientScreen> {
   final PageController _pageController = PageController();
   final ClientDataSource _dataSource = ClientDataSource();
 
-  // البيانات المختارة (مطابقة لمنطق HTML)
   String _selectedCountry = 'egypt';
   String _selectedUserType = '';
-  
+
   final Map<String, TextEditingController> _controllers = {
     'fullname': TextEditingController(),
-    'email': TextEditingController(),
+    'phone': TextEditingController(), // 🎯 الحقل الجديد والأساسي
     'password': TextEditingController(),
     'confirmPassword': TextEditingController(),
     'address': TextEditingController(),
-    'merchantName': TextEditingController(), // اسم النشاط التجاري
-    'additionalPhone': TextEditingController(), // رقم الهاتف الإضافي
+    'merchantName': TextEditingController(),
+    'additionalPhone': TextEditingController(),
   };
 
-  String? _businessType; // نوع النشاط التجاري
+  String? _businessType;
   File? _logoFile;
   File? _crFile;
   File? _tcFile;
@@ -46,7 +46,6 @@ class _NewClientScreenState extends State<NewClientScreen> {
     super.dispose();
   }
 
-  // وظيفة تحديد الموقع الجغرافي
   Future<void> _determinePosition() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
@@ -69,13 +68,8 @@ class _NewClientScreenState extends State<NewClientScreen> {
       setState(() {
         _location = {'lat': position.latitude, 'lng': position.longitude};
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ تم تحديد الموقع بنجاح'), backgroundColor: Color(0xFF2D9E68)),
-        );
-      }
     } catch (e) {
-      print("Error: $e");
+      print("Error location: $e");
     }
   }
 
@@ -96,39 +90,47 @@ class _NewClientScreenState extends State<NewClientScreen> {
     _goToStep(3);
   }
 
-  // 🟢 دالة التسجيل النهائية (مطابقة لمنطق الـ HTML المبعوث)
+  // 🎯 الدالة المعدلة لتحويل الهاتف إلى بريد وهمي
   Future<void> _handleRegistration() async {
-    // 1. التحقق من الحقول الأساسية
-    if (_controllers['password']!.text != _controllers['confirmPassword']!.text) {
+    final phone = _controllers['phone']!.text.trim();
+    final pass = _controllers['password']!.text;
+    final confirmPass = _controllers['confirmPassword']!.text;
+
+    // التحققات الأساسية
+    if (phone.length < 8) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ يرجى إدخال رقم هاتف صحيح')));
+      return;
+    }
+    if (pass != confirmPass) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ كلمة المرور غير متطابقة')));
       return;
     }
 
-    // 2. التحقق من الموقع
+    // إنشاء البريد الوهمي
+    String fakeEmail = "$phone@aswaq.com";
+
     if (_location == null) {
       await _determinePosition();
-      if (_location == null) return;
     }
 
     setState(() => _isSaving = true);
     try {
-      // إرسال كافة البيانات لـ DataSource (بما فيها بيانات التاجر)
       await _dataSource.registerClient(
         fullname: _controllers['fullname']!.text,
-        email: _controllers['email']!.text,
-        password: _controllers['password']!.text,
+        email: fakeEmail, // 🚀 نرسل البريد الوهمي لـ Firebase
+        password: pass,
         address: _controllers['address']!.text,
         country: _selectedCountry,
         userType: _selectedUserType,
         location: _location,
         logo: _logoFile,
-        merchantName: _controllers['merchantName']!.text, // من الـ HTML
-        businessType: _businessType, // من الـ HTML
-        additionalPhone: _controllers['additionalPhone']!.text, // من الـ HTML
+        merchantName: _controllers['merchantName']!.text,
+        businessType: _businessType,
+        additionalPhone: _controllers['additionalPhone']!.text,
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم التسجيل بنجاح')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم التسجيل بنجاح'), backgroundColor: Colors.green));
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
     } catch (e) {
@@ -158,16 +160,12 @@ class _NewClientScreenState extends State<NewClientScreen> {
                   SizedBox(height: 4.h),
                   Container(
                     width: double.infinity,
-                    constraints: BoxConstraints(minHeight: 55.h, maxHeight: 75.h),
+                    constraints: BoxConstraints(minHeight: 60.h, maxHeight: 80.h),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(30),
                       boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
+                        BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 10)),
                       ],
                     ),
                     child: ClipRRect(
@@ -176,13 +174,16 @@ class _NewClientScreenState extends State<NewClientScreen> {
                         controller: _pageController,
                         physics: const NeverScrollableScrollPhysics(),
                         children: [
+                          // 🎯 الخطوة الأولى: اختيار الدولة (مع تكبير الخط)
                           ClientSelectionStep(
                             stepNumber: 1,
                             onCountrySelected: (country) => _goToStep(2),
                             initialCountry: _selectedCountry,
                             initialUserType: _selectedUserType,
                             onCompleted: ({required country, required userType}) {},
+                            // سنقوم بتعديل الودجت لاستقبال خصائص الحجم
                           ),
+                          // 🎯 الخطوة الثانية: اختيار نوع الحساب (مع تكبير الخط)
                           ClientSelectionStep(
                             stepNumber: 2,
                             initialCountry: _selectedCountry,
@@ -239,7 +240,6 @@ class _NewClientScreenState extends State<NewClientScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isActive || isCompleted ? const Color(0xFF2D9E68) : Colors.grey.shade200,
-                border: isActive ? Border.all(color: const Color(0xFF2D9E68).withOpacity(0.2), width: 4) : null,
               ),
               child: Center(
                 child: isCompleted
@@ -249,11 +249,7 @@ class _NewClientScreenState extends State<NewClientScreen> {
               ),
             ),
             if (index < 2)
-              Container(
-                width: 15.w,
-                height: 2,
-                color: isCompleted ? const Color(0xFF2D9E68) : Colors.grey.shade200,
-              ),
+              Container(width: 15.w, height: 2, color: isCompleted ? const Color(0xFF2D9E68) : Colors.grey.shade200),
           ],
         );
       }),
@@ -267,24 +263,13 @@ class _LogoHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF2D9E68).withOpacity(0.1),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.person_add_rounded, size: 40, color: Color(0xFF2D9E68)),
-        ),
+        const Icon(Icons.person_add_rounded, size: 50, color: Color(0xFF2D9E68)),
         const SizedBox(height: 12),
-        Text(
-          'إنشاء حساب جديد',
-          style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold, color: const Color(0xFF1A1A1A)),
-        ),
+        Text('إنشاء حساب جديد',
+          style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.bold, color: const Color(0xFF1A1A1A))),
         const SizedBox(height: 4),
-        Text(
-          'انضم إلى شبكة تجار أكسب في ثوانٍ',
-          style: TextStyle(fontSize: 10.sp, color: Colors.grey.shade600),
-        ),
+        Text('سجل برقم هاتفك لسهولة الوصول',
+          style: TextStyle(fontSize: 11.sp, color: Colors.grey.shade600)),
       ],
     );
   }
@@ -299,7 +284,7 @@ class _Footer extends StatelessWidget {
       child: Text.rich(
         TextSpan(
           text: 'لديك حساب بالفعل؟ ',
-          style: TextStyle(color: Colors.grey.shade600, fontSize: 11.sp),
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 12.sp),
           children: const [
             TextSpan(
               text: 'تسجيل الدخول',

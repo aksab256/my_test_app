@@ -5,7 +5,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'package:sizer/sizer.dart'; // التأكد من استخدام الإصدار الأحدث
+import 'package:sizer/sizer.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class ClientDetailsStep extends StatefulWidget {
@@ -38,7 +38,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   final _formKey = GlobalKey<FormState>();
   late MapController _mapController;
   LatLng _initialPosition = const LatLng(30.0444, 31.2357);
-  
+
   File? _logoPreview, _crPreview, _tcPreview;
   bool _termsAgreed = false;
   bool _isMapActive = false;
@@ -51,7 +51,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     widget.onLocationChanged(lat: _initialPosition.latitude, lng: _initialPosition.longitude);
   }
 
-  // --- وظائف الموقع والملفات ---
   Future<void> _updateAddress(LatLng position) async {
     try {
       final placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
@@ -60,7 +59,9 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         widget.controllers['address']!.text = "${place.street ?? ''}, ${place.locality ?? ''}";
       }
       widget.onLocationChanged(lat: position.latitude, lng: position.longitude);
-    } catch (e) { debugPrint(e.toString()); }
+    } catch (e) {
+      debugPrint(e.toString());
+    }
   }
 
   Future<void> _goToCurrentLocation() async {
@@ -68,7 +69,10 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       Position position = await Geolocator.getCurrentPosition();
       final newPos = LatLng(position.latitude, position.longitude);
       _mapController.move(newPos, 15);
-      setState(() { _initialPosition = newPos; _isMapActive = true; });
+      setState(() {
+        _initialPosition = newPos;
+        _isMapActive = true;
+      });
       _updateAddress(newPos);
     }
   }
@@ -97,13 +101,12 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // عنوان عريض جداً
               Text(
                 'إكمال بيانات الحساب',
                 style: TextStyle(
-                  fontSize: 22.sp, // زيادة ضخمة في الحجم
-                  fontWeight: FontWeight.w900, 
-                  color: const Color(0xFF2D9E68)
+                  fontSize: 22.sp,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF2D9E68),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -111,8 +114,10 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
 
               _buildSectionHeader('المعلومات الأساسية', Icons.badge_rounded),
               _buildInputField('fullname', 'الاسم الكامل', Icons.person_rounded),
-              _buildInputField('email', 'البريد الإلكتروني', Icons.alternate_email_rounded),
               
+              // 🎯 تم تغيير المسمى هنا إلى رقم الهاتف مع الاحتفاظ بالمفتاح 'phone' 
+              _buildInputField('phone', 'رقم الهاتف (سيكون هو اسم المستخدم)', Icons.phone_android_rounded, keyboardType: TextInputType.phone),
+
               _buildSectionHeader('العنوان والموقع', Icons.map_rounded),
               _buildInputField('address', 'العنوان الحالي', Icons.location_on_rounded, readOnly: true),
               _buildMapContainer(),
@@ -128,15 +133,14 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
 
               SizedBox(height: 3.h),
               _buildTermsCheckbox(),
-              
+
               SizedBox(height: 4.h),
               _buildSubmitButton(),
-              
               SizedBox(height: 3.h),
               TextButton(
                 onPressed: widget.onGoBack,
-                child: Text('العودة لتعديل نوع الحساب', 
-                  style: TextStyle(color: Colors.grey, fontSize: 14.sp, fontWeight: FontWeight.bold)),
+                child: Text('العودة لتعديل نوع الحساب',
+                    style: TextStyle(color: Colors.grey, fontSize: 14.sp, fontWeight: FontWeight.bold)),
               ),
               SizedBox(height: 10.h),
             ],
@@ -160,26 +164,29 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     );
   }
 
-  Widget _buildInputField(String key, String label, IconData icon, {bool isPassword = false, bool readOnly = false}) {
+  Widget _buildInputField(String key, String label, IconData icon, {bool isPassword = false, bool readOnly = false, TextInputType keyboardType = TextInputType.text}) {
     return Padding(
       padding: EdgeInsets.only(bottom: 3.h),
       child: TextFormField(
         controller: widget.controllers[key],
         obscureText: isPassword && _obscurePassword,
         readOnly: readOnly,
-        style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600), // خط الكتابة كبير
+        keyboardType: keyboardType,
+        style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600),
         decoration: InputDecoration(
           labelText: label,
           labelStyle: TextStyle(fontSize: 14.sp, color: Colors.grey.shade700),
-          contentPadding: EdgeInsets.symmetric(vertical: 25, horizontal: 25), // حقل ضخم
+          contentPadding: const EdgeInsets.symmetric(vertical: 25, horizontal: 25),
           suffixIcon: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Icon(icon, color: const Color(0xFF2D9E68), size: 35), // أيقونات ضخمة
+            child: Icon(icon, color: const Color(0xFF2D9E68), size: 35),
           ),
-          prefixIcon: isPassword ? IconButton(
-            icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, size: 30),
-            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-          ) : null,
+          prefixIcon: isPassword
+              ? IconButton(
+                  icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, size: 30),
+                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                )
+              : null,
           filled: true,
           fillColor: readOnly ? Colors.grey.shade100 : Colors.white,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(width: 2)),
@@ -191,7 +198,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
 
   Widget _buildMapContainer() {
     return Container(
-      height: 35.h, // ارتفاع يعتمد على طول الشاشة
+      height: 35.h,
       margin: EdgeInsets.only(bottom: 3.h),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
@@ -255,7 +262,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       onTap: () => _pickFile(field),
       child: Container(
         margin: EdgeInsets.only(bottom: 2.h),
-        padding: EdgeInsets.all(20),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
@@ -285,20 +292,20 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
 
   Widget _buildSubmitButton() {
     return Container(
-      height: 85, // زرار تسجيل ضخم جداً
+      height: 85,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(25),
         boxShadow: [BoxShadow(color: const Color(0xFF2D9E68).withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 10))],
       ),
       child: ElevatedButton(
-        onPressed: widget.isSaving ? null : widget.onRegister,
+        onPressed: (widget.isSaving || !_termsAgreed) ? null : widget.onRegister,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF2D9E68),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
         ),
-        child: widget.isSaving 
-          ? const CircularProgressIndicator(color: Colors.white)
-          : Text('إتمام التسجيل والبدء', style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold, color: Colors.white)),
+        child: widget.isSaving
+            ? const CircularProgressIndicator(color: Colors.white)
+            : Text('إتمام التسجيل والبدء', style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold, color: Colors.white)),
       ),
     );
   }
