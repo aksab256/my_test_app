@@ -4,10 +4,10 @@ import 'package:my_test_app/screens/consumer/consumer_widgets.dart';
 import 'package:my_test_app/screens/consumer/consumer_data_models.dart';
 import 'package:my_test_app/services/consumer_data_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:my_test_app/theme/app_theme.dart';
 
 class ConsumerHomeScreen extends StatelessWidget {
   static const routeName = '/consumerHome';
-  
   ConsumerHomeScreen({super.key});
 
   final ConsumerDataService dataService = ConsumerDataService();
@@ -16,34 +16,54 @@ class ConsumerHomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
 
-    // 🎯 استخدام Builder هنا ضروري جداً لتوفير Context يرى الـ Scaffold
-    // لكي يعمل أمر فتح القائمة (Drawer) بدون مشاكل
     return Builder(
       builder: (context) {
         return Scaffold(
-          // القائمة الجانبية ستفتح من اليمين تلقائياً بسبب إعدادات main.dart
+          // خلفية هادئة لتعزيز بروز العناصر
+          backgroundColor: const Color(0xFFF8F9FA),
+          
           drawer: const ConsumerSideMenu(),
 
+          // استخدام الـ AppBar المطور الذي قمنا بتعديله سابقاً لجلب الاسم والنقاط
           appBar: ConsumerCustomAppBar(
             userName: user?.displayName ?? 'مستخدم',
             userPoints: 0,
             onMenuPressed: () {
-              // ✅ التصحيح: استدعاء مباشر لفتح القائمة
               Scaffold.of(context).openDrawer();
             },
           ),
-
+          
           body: SafeArea(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.only(top: 10),
-                    child: ConsumerSearchBar(),
+                  // 1. قسم البحث المبتكر (تصميم بارز يشبه الصورة)
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        height: 60,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surface,
+                          borderRadius: const BorderRadius.only(
+                            bottomLeft: Radius.circular(30),
+                            bottomRight: Radius.circular(30),
+                          ),
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.only(top: 10),
+                        child: ConsumerSearchBar(), // هذا الودجت يحتوي على زر البحث المبتكر
+                      ),
+                    ],
                   ),
 
+                  const SizedBox(height: 10),
+
+                  // 2. قسم الأقسام المميزة بتنسيق دائري
                   const ConsumerSectionTitle(title: 'الأقسام المميزة'),
                   FutureBuilder<List<ConsumerCategory>>(
                     future: dataService.fetchMainCategories(),
@@ -61,10 +81,14 @@ class ConsumerHomeScreen extends StatelessWidget {
                           child: Center(child: Text('لا توجد أقسام نشطة حالياً.')),
                         );
                       }
+                      // هذا الودجت سيعرض الدوائر كما في الصورة
                       return ConsumerCategoriesBanner(categories: categories);
                     },
                   ),
 
+                  const SizedBox(height: 15),
+
+                  // 3. قسم العروض الحصرية (Banners)
                   const ConsumerSectionTitle(title: 'أحدث العروض الحصرية'),
                   FutureBuilder<List<ConsumerBanner>>(
                     future: dataService.fetchPromoBanners(),
@@ -83,17 +107,17 @@ class ConsumerHomeScreen extends StatelessWidget {
                     },
                   ),
 
-                  const SizedBox(height: 30),
+                  // مسافة جمالية في نهاية الصفحة
+                  const SizedBox(height: 40),
                 ],
               ),
             ),
           ),
-
+          
+          // شريط التنقل السفلي المطور
           bottomNavigationBar: const ConsumerFooterNav(cartCount: 3, activeIndex: 0),
         );
       }
     );
   }
 }
-
-
