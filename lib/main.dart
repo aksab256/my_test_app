@@ -42,11 +42,13 @@ import 'package:my_test_app/screens/product_details_screen.dart';
 import 'package:my_test_app/screens/consumer/consumer_sub_category_screen.dart';
 import 'package:my_test_app/screens/consumer/ConsumerProductListScreen.dart';
 
-// --- ✅ إضافات الدليفري المعتمدة ---
+// --- ✅ إضافات الدليفري المعتمدة وشاشات العروض الجديدة ---
 import 'package:my_test_app/screens/delivery_merchant_dashboard_screen.dart';
 import 'package:my_test_app/screens/delivery_settings_screen.dart';
 import 'package:my_test_app/screens/update_delivery_settings_screen.dart';
 import 'package:my_test_app/screens/consumer_orders_screen.dart';
+import 'package:my_test_app/screens/delivery/product_offer_screen.dart'; // شاشة إضافة العروض
+import 'package:my_test_app/screens/delivery/delivery_offers_screen.dart'; // شاشة عرض وإدارة العروض
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -111,19 +113,19 @@ class MyApp extends StatelessWidget {
             '/about': (context) => const AboutScreen(),
             '/post-reg': (context) => const PostRegistrationMessageScreen(),
 
-            // ✅ تفعيل الأيقونة الخارجية (طلبات أسعار الدليفري) لتفتح اللوحة
-            '/deliveryPrices': (context) => const DeliveryMerchantDashboardScreen(), 
-            
-            // ✅ مسارات لوحة التحكم الداخلية (كما يطلبها الـ Sidebar الداخلي)
+            // ✅ مسارات الدليفري المحدثة
+            '/deliveryPrices': (context) => const DeliveryMerchantDashboardScreen(),
             '/deliveryMerchantDashboard': (context) => const DeliveryMerchantDashboardScreen(),
-            '/product_management': (context) => const DeliveryMerchantDashboardScreen(), 
+            
+            // ربط المسارات بالشاشات الفعلية بدلاً من لوحة القيادة
+            '/product_management': (context) => const ProductOfferScreen(), // تم الربط بشاشة الإضافة
+            '/delivery-offers': (context) => const DeliveryOffersScreen(),  // تم الربط بشاشة عرض العروض
+            
             '/updatsupermarket': (context) => const UpdateDeliverySettingsScreen(),
             '/con-orders': (context) => const ConsumerOrdersScreen(),
-            '/delivery-offers': (context) => const DeliveryMerchantDashboardScreen(),
-            '/constore': (context) => const BuyerHomeScreen(), 
+            '/constore': (context) => const BuyerHomeScreen(),
           },
           onGenerateRoute: (settings) {
-            // تفاصيل المنتج
             if (settings.name == '/productDetails') {
               final args = settings.arguments as Map<String, dynamic>?;
               return MaterialPageRoute(builder: (context) => ProductDetailsScreen(
@@ -131,17 +133,14 @@ class MyApp extends StatelessWidget {
                 offerId: args?['offerId'],
               ));
             }
-            // عروض التاجر
             if (settings.name == TraderOffersScreen.routeName) {
               final sellerId = settings.arguments as String? ?? '';
               return MaterialPageRoute(builder: (context) => TraderOffersScreen(sellerId: sellerId));
             }
-            // الأقسام الرئيسية
             if (settings.name == '/category') {
               final mainId = settings.arguments as String? ?? '';
               return MaterialPageRoute(builder: (context) => BuyerCategoryScreen(mainCategoryId: mainId));
             }
-            // الأقسام الفرعية
             if (settings.name == '/subcategories') {
               final args = settings.arguments as Map<String, dynamic>?;
               return MaterialPageRoute(builder: (context) => ConsumerSubCategoryScreen(
@@ -150,7 +149,6 @@ class MyApp extends StatelessWidget {
                 mainCategoryName: args?['mainCategoryName'] ?? '',
               ));
             }
-            // قائمة المنتجات
             if (settings.name == '/products') {
               final args = settings.arguments as Map<String, dynamic>? ?? {};
               return MaterialPageRoute(builder: (context) => BuyerProductListScreen(
@@ -166,7 +164,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// --- AuthWrapper (المستقر) ---
 class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
   @override
@@ -219,7 +216,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 }
 
-// --- شاشة رسالة ما بعد التسجيل ---
 class PostRegistrationMessageScreen extends StatelessWidget {
   const PostRegistrationMessageScreen({super.key});
   @override
@@ -235,7 +231,7 @@ class PostRegistrationMessageScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(isSeller ? Icons.pending_actions : Icons.check_circle,
-                 color: isSeller ? Colors.orange : Colors.green, size: 80),
+                color: isSeller ? Colors.orange : Colors.green, size: 80),
             const SizedBox(height: 20),
             Text(isSeller ? 'حسابك قيد المراجعة' : 'تم التسجيل بنجاح',
                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
