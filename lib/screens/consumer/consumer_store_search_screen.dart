@@ -10,7 +10,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/screens/consumer/MarketplaceHomeScreen.dart';
-// استيراد الصفحة الجديدة
 import 'package:my_test_app/screens/special_requests/abaatly_had_pro_screen.dart';
 
 class ConsumerStoreSearchScreen extends StatefulWidget {
@@ -180,9 +179,9 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
               child: _buildFloatingActionHeader(),
             ),
 
-            // 2. زر "ابعتلي حد" - الرابط بالصفحة الجديدة
+            // 2. زر "ابعتلي حد" - تم رفعه ليكون فوق الكروت المحمية
             Positioned(
-              bottom: 210,
+              bottom: 235, // تم رفعه لضمان عدم التداخل
               left: 20,
               child: FloatingActionButton.extended(
                 onPressed: () {
@@ -209,7 +208,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
               ),
             ),
 
-            // 3. قائمة المتاجر السفلية
+            // 3. قائمة المتاجر السفلية مع Safe Area
             Positioned(
               bottom: 0, left: 0, right: 0,
               child: _buildStoresPreviewList(),
@@ -254,17 +253,20 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
 
   Widget _buildStoresPreviewList() {
     if (_nearbySupermarkets.isEmpty) return const SizedBox.shrink();
-    return Container(
-      height: 180,
-      margin: const EdgeInsets.only(bottom: 25),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 15),
-        itemCount: _nearbySupermarkets.length,
-        itemBuilder: (context, index) {
-          final store = _nearbySupermarkets[index];
-          return _buildStoreSmallCard(store);
-        },
+    return SafeArea( // حماية المحتوى من أزرار النظام
+      top: false,
+      child: Container(
+        height: 180,
+        margin: const EdgeInsets.only(bottom: 35), // مسافة أمان إضافية
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          itemCount: _nearbySupermarkets.length,
+          itemBuilder: (context, index) {
+            final store = _nearbySupermarkets[index];
+            return _buildStoreSmallCard(store);
+          },
+        ),
       ),
     );
   }
