@@ -38,8 +38,6 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     });
   }
 
-  // --- منطق البحث الجغرافي ---
-
   Future<Position?> _getCurrentLocation() async {
     setState(() {
       _isLoading = true;
@@ -96,8 +94,6 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     });
     try {
       _mapController.move(location, 14.5);
-      
-      // إضافة مؤشر موقع المستخدم بتصميم نبضي
       _mapMarkers.add(Marker(
         point: location,
         width: 60, height: 60,
@@ -105,7 +101,6 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
       ));
 
       final QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('deliverySupermarkets').get();
-      
       final List<Map<String, dynamic>> foundStores = [];
 
       for (var doc in snapshot.docs) {
@@ -145,11 +140,8 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
       });
     } catch (e) {
       setState(() { _isLoading = false; });
-      debugPrint("Error: $e");
     }
   }
-
-  // --- بناء عناصر الواجهة المبتكرة ---
 
   @override
   Widget build(BuildContext context) {
@@ -164,18 +156,9 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
           centerTitle: true,
           backgroundColor: Colors.transparent,
           elevation: 0,
-          flexibleSpace: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [themeColor.withOpacity(0.8), Colors.transparent],
-                begin: Alignment.topCenter, end: Alignment.bottomCenter,
-              ),
-            ),
-          ),
         ),
         body: Stack(
           children: [
-            // 1. الخريطة كخلفية كاملة
             FlutterMap(
               mapController: _mapController,
               options: MapOptions(
@@ -184,26 +167,45 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', // ستايل خريطة عصري وهادئ
+                  urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
                   userAgentPackageName: 'com.example.app',
                 ),
                 MarkerLayer(markers: _mapMarkers),
               ],
             ),
 
-            // 2. كبسولة البحث العائمة
+            // 1. كبسولة البحث
             Positioned(
               top: 110, left: 20, right: 20,
               child: _buildFloatingActionHeader(),
             ),
 
-            // 3. قائمة المتاجر السفلية (Horizontal Carousel Style)
+            // 2. زر "ابعتلي حد" المبتكر
+            Positioned(
+              bottom: 210, 
+              left: 20,
+              child: FloatingActionButton.extended(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("ميزة 'ابعتلي حد' للمهمات الخاصة قيد التجهيز 🚀"),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+                label: const Text("ابعتلي حد", style: TextStyle(fontWeight: FontWeight.bold)),
+                icon: const Icon(Icons.directions_run_rounded, color: Colors.white),
+                backgroundColor: Colors.orange[800],
+                elevation: 10,
+              ),
+            ),
+
+            // 3. قائمة المتاجر السفلية
             Positioned(
               bottom: 0, left: 0, right: 0,
               child: _buildStoresPreviewList(),
             ),
 
-            // 4. مؤشر التحميل الزجاجي
             if (_isLoading) _buildLoadingOverlay(),
           ],
         ),
@@ -215,7 +217,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.9),
+        color: Colors.white.withOpacity(0.95),
         borderRadius: BorderRadius.circular(30),
         boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20, offset: const Offset(0, 10))],
       ),
@@ -233,7 +235,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
             onPressed: _promptLocationSelection,
             icon: CircleAvatar(
               backgroundColor: Theme.of(context).primaryColor,
-              child: const Icon(Icons.search, color: Colors.white, size: 20),
+              child: const Icon(Icons.my_location, color: Colors.white, size: 20),
             ),
           )
         ],
@@ -276,10 +278,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
             children: [
               Container(
                 width: 60, height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(15),
-                ),
+                decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(15)),
                 child: const Icon(Icons.storefront_rounded, color: Colors.green, size: 30),
               ),
               const SizedBox(width: 12),
@@ -305,17 +304,8 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     return Stack(
       alignment: Alignment.center,
       children: [
-        Container(
-          width: 40, height: 40,
-          decoration: BoxDecoration(
-            color: Colors.blue.withOpacity(0.2),
-            shape: BoxShape.circle,
-          ),
-        ),
-        Container(
-          width: 15, height: 15,
-          decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle, border: Border.fromBorderSide(BorderSide(color: Colors.white, width: 2))),
-        ),
+        Container(width: 40, height: 40, decoration: BoxDecoration(color: Colors.blue.withOpacity(0.2), shape: BoxShape.circle)),
+        Container(width: 15, height: 15, decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle, border: Border.fromBorderSide(BorderSide(color: Colors.white, width: 2)))),
       ],
     );
   }
@@ -330,7 +320,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 5)]),
             child: const Icon(Icons.shopping_basket, color: Colors.green, size: 20),
           ),
-          const Icon(Icons.arrow_drop_down, color: Colors.white, height: 10),
+          const Icon(Icons.arrow_drop_down, color: Colors.white, size: 25), // تم إصلاح الخطأ هنا
         ],
       ),
     );
@@ -382,7 +372,6 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
       leading: CircleAvatar(backgroundColor: Colors.green.withOpacity(0.1), child: Icon(icon, color: Colors.green)),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
       subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
-      trailing: const Icon(Icons.arrow_forward_ios, size: 14),
       onTap: onTap,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15), side: BorderSide(color: Colors.grey[200]!)),
     );
@@ -398,7 +387,6 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
   }
 }
 
-// 💡 ودجت تفاصيل المتجر المطور (StoreDetailsBottomSheet)
 class StoreDetailsBottomSheet extends StatelessWidget {
   final Map<String, dynamic> store;
   const StoreDetailsBottomSheet({super.key, required this.store});
@@ -426,7 +414,6 @@ class StoreDetailsBottomSheet extends StatelessWidget {
             ],
           ),
           const Divider(),
-          const SizedBox(height: 15),
           _buildInfoRow(Icons.location_on_outlined, store['address'] ?? 'العنوان غير متاح'),
           _buildInfoRow(Icons.directions_walk, "يبعد عنك مسافة ${store['distance']} كم"),
           const SizedBox(height: 25),
@@ -438,11 +425,9 @@ class StoreDetailsBottomSheet extends StatelessWidget {
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(vertical: 18),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-              elevation: 5,
             ),
             child: const Text("دخول المتجر وتصفح العروض 🔥", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
           ),
-          const SizedBox(height: 10),
         ],
       ),
     );
