@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
+// استيراد صفحة اختيار الموقع الجديدة
+import 'location_picker_screen.dart'; 
 
 class AbaatlyHadProScreen extends StatefulWidget {
   final LatLng userCurrentLocation;
@@ -23,10 +25,8 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
   final TextEditingController _pickupController = TextEditingController();
   final TextEditingController _dropoffController = TextEditingController();
   
-  // متغيرات حفظ الإحداثيات الحقيقية للمناديب والخرائط
   LatLng? _pickupCoords;
   LatLng? _dropoffCoords;
-  
   bool _isLoading = false;
 
   @override
@@ -37,34 +37,38 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
 
   void _setupInitialLocations() {
     if (widget.isStoreOwner) {
-      // صاحب المحل: الاستلام من موقعه الحالي
       _pickupController.text = "موقعي الحالي (المحل)";
       _pickupCoords = widget.userCurrentLocation;
     } else {
-      // المستهلك: التسليم لموقعه الحالي (المنزل)
       _dropoffController.text = "موقعي الحالي (المنزل)";
       _dropoffCoords = widget.userCurrentLocation;
     }
   }
 
-  // دالة وهمية حالياً لفتح الخريطة واختيار الموقع
+  // --- التعديل الجوهري هنا: ربط الخريطة الحقيقية ---
   Future<void> _pickLocation(bool isPickup) async {
-    // هنا مستقبلاً هنفتح شاشة الخريطة (MapPicker)
-    // حالياً هنفترض إن المستخدم اختار نقطة تجريبية لنرى كيف يتم تخزينها
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("سيتم فتح الخريطة لاختيار الموقع بدقة..."))
+    final LatLng? result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LocationPickerScreen(
+          initialLocation: widget.userCurrentLocation,
+          title: isPickup ? "حدد مكان الاستلام" : "حدد مكان التسليم",
+        ),
+      ),
     );
-    
-    // مثال لما سيحدث بعد اختيار الموقع من الخريطة:
-    setState(() {
-      if (isPickup) {
-        _pickupCoords = LatLng(31.2, 29.9); // الإحداثيات المختارة
-        _pickupController.text = "تم تحديد الموقع من الخريطة ✅";
-      } else {
-        _dropoffCoords = LatLng(31.21, 29.91);
-        _dropoffController.text = "تم تحديد موقع التسليم ✅";
-      }
-    });
+
+    if (result != null) {
+      setState(() {
+        if (isPickup) {
+          _pickupCoords = result;
+          // عرض الإحداثيات بشكل مبسط للمستخدم للتأكيد
+          _pickupController.text = "تم التحديد من الخريطة ✅"; 
+        } else {
+          _dropoffCoords = result;
+          _dropoffController.text = "تم التحديد من الخريطة ✅";
+        }
+      });
+    }
   }
 
   Future<void> _submitOrder() async {
@@ -73,9 +77,8 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
       return;
     }
     
-    // التأكد من وجود إحداثيات قبل الإرسال
     if (_pickupCoords == null || _dropoffCoords == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("يرجى تحديد نقطة الاستلام والتسليم من الخريطة")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("يرجى تحديد النقطتين من الخريطة")));
       return;
     }
 
@@ -86,20 +89,19 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
         'details': _detailsController.text,
         'pickupAddress': _pickupController.text,
         'dropoffAddress': _dropoffController.text,
-        // إرسال الإحداثيات كـ GeoPoint ليفهمها الفايربيز والخرائط
+        // إرسال الإحداثيات الفعلية كـ GeoPoint للمناديب
         'pickupLocation': GeoPoint(_pickupCoords!.latitude, _pickupCoords!.longitude),
         'dropoffLocation': GeoPoint(_dropoffCoords!.latitude, _dropoffCoords!.longitude),
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
         'requestType': widget.isStoreOwner ? 'store_delivery' : 'consumer_personal',
-        'senderId': 'current_user_id', // يجب ربطها بـ Auth لاحقاً
       });
 
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم إرسال طلبك للمناديب 🚀")));
       Navigator.pop(context);
     } catch (e) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ في الإرسال: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
     }
   }
 
@@ -116,7 +118,6 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              // خانة الاستلام - مع تعطيل الكتابة اليدوية (readOnly)
               _buildLocationInput(
                 label: "منين؟ (مكان الاستلام)", 
                 controller: _pickupController, 
@@ -124,10 +125,7 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
                 color: Colors.green,
                 onTap: () => _pickLocation(true),
               ),
-              
               const Icon(Icons.arrow_downward, color: Colors.grey, size: 30),
-              
-              // خانة التسليم - مع تعطيل الكتابة اليدوية (readOnly)
               _buildLocationInput(
                 label: "لفين؟ (مكان التسليم)", 
                 controller: _dropoffController, 
@@ -135,29 +133,23 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
                 color: Colors.red,
                 onTap: () => _pickLocation(false),
               ),
-              
               const SizedBox(height: 25),
-              
               TextField(
                 controller: _detailsController,
                 maxLines: 4,
                 decoration: InputDecoration(
-                  hintText: "اكتب تفاصيل الطلب (مثلاً: كرتونة مياه، أو مفاتيح..)",
+                  hintText: "اكتب تفاصيل الطلب..",
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-                  filled: true, 
-                  fillColor: Colors.grey[100],
+                  filled: true, fillColor: Colors.grey[100],
                 ),
               ),
-              
               const SizedBox(height: 35),
-              
               ElevatedButton(
                 onPressed: _isLoading ? null : _submitOrder,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.orange[900],
                   minimumSize: const Size(double.infinity, 65),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  elevation: 5,
                 ),
                 child: _isLoading 
                   ? const CircularProgressIndicator(color: Colors.white)
@@ -178,7 +170,7 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
     required VoidCallback onTap,
   }) {
     return InkWell(
-      onTap: onTap, // الضغط على الخانة يفتح الخريطة
+      onTap: onTap,
       borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.all(18),
@@ -186,7 +178,6 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: Colors.grey[200]!),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 5))],
         ),
         child: Row(
           children: [
@@ -197,11 +188,9 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                  TextField(
-                    controller: controller,
-                    enabled: false, // يمنع الكتابة اليدوية تماماً لضمان عدم تلف الإحداثيات
+                  Text(
+                    controller.text.isEmpty ? "اضغط للتحديد من الخريطة" : controller.text,
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                    decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.only(top: 5)),
                   ),
                 ],
               ),
