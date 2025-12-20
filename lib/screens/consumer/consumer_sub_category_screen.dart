@@ -5,11 +5,9 @@ import 'package:sizer/sizer.dart';
 import '../../models/category_model.dart';
 import '../../services/marketplace_data_service.dart';
 import '../../theme/app_theme.dart';
-import '../../providers/theme_notifier.dart'; // لتغيير الثيم
-import '../../providers/cart_provider.dart';  // لحساب السلة
-// 🟢🟢 [الإضافة الجديدة]: استيراد مسار شاشة المنتجات الجديدة 🟢🟢
-// تم تصحيح الاستيراد ليكون مطلقاً لحل مشكلة 'No such file or directory'
+import '../../providers/cart_provider.dart';
 import 'package:my_test_app/screens/consumer/ConsumerProductListScreen.dart';
+import 'package:my_test_app/screens/consumer/consumer_home_screen.dart'; // للعودة للهوم
 
 class ConsumerSubCategoryScreen extends StatefulWidget {
   final String mainCategoryId;
@@ -35,150 +33,176 @@ class _ConsumerSubCategoryScreenState extends State<ConsumerSubCategoryScreen> {
   @override
   void initState() {
     super.initState();
-    // 💡 بدلاً من loadSubCategories() في JavaScript، نستدعي دالة الخدمة هنا
     _subCategoriesFuture = _dataService.fetchSubCategoriesByOffers(
       widget.mainCategoryId,
       widget.ownerId,
     );
   }
 
-  // 🎯🎯 [التعديل الرئيسي]: توجيه المستخدم لصفحة منتجات المستهلك 🎯🎯
   void _navigateToProductList(BuildContext context, CategoryModel subCategory) {
     Navigator.of(context).pushNamed(
-      ConsumerProductListScreen.routeName, // ⬅️ المسار الجديد الذي يفتح شاشة المستهلك
+      ConsumerProductListScreen.routeName,
       arguments: {
         'mainId': widget.mainCategoryId,
         'subId': subCategory.id,
         'ownerId': widget.ownerId,
-        'subCategoryName': subCategory.name, // تمرير اسم القسم لاستخدامه كعنوان
+        'subCategoryName': subCategory.name,
       },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // لقراءة حالة السلة والثيم (مثل JavaScript)
     final cartProvider = Provider.of<CartProvider>(context);
-    final themeNotifier = Provider.of<ThemeNotifier>(context);
-
-    // 🟢 [التصحيح 1]: استخدام MediaQuery للحصول على الاتجاه بدلاً من SizerUtil
     final screenOrientation = MediaQuery.of(context).orientation;
 
-    return Scaffold(
-      appBar: AppBar(
-        // 💡 يحاكي .top-header والـ page-title
-        title: Text(widget.mainCategoryName),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(), // زر الرجوع
-        ),
-        actions: [
-          // 💡 يحاكي .theme-toggle (زر تفعيل الثيم)
-          IconButton(
-            icon: Icon(themeNotifier.isDarkMode ? Icons.wb_sunny : Icons.dark_mode),
-            onPressed: themeNotifier.toggleTheme,
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        // 1. شريط علوي بسيط ونظيف بدون وضع ليلي
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          centerTitle: true,
+          title: Column(
+            children: [
+              Text(widget.mainCategoryName, 
+                style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold)),
+              Text("متجر: ${widget.ownerId.substring(0,5)}...", // يفضل تمرير اسم المتجر مستقبلاً
+                style: TextStyle(fontSize: 9.sp, color: Colors.grey)),
+            ],
           ),
-        ],
-      ),
-      body: FutureBuilder<List<CategoryModel>>(
-        future: _subCategoriesFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            // 💡 يحاكي .loading في HTML
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(color: AppTheme.primaryGreen),
-                  const SizedBox(height: 20),
-                  Text('جاري تحميل الأقسام الفرعية...', style: TextStyle(color: AppTheme.primaryGreen)),
-                ],
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+
+        body: CustomScrollView(
+          slivers: [
+            // 2. بانر إعلاني جذاب في المساحة الفاضية
+            SliverToBoxAdapter(
+              child: Container(
+                height: 18.h,
+                margin: EdgeInsets.all(4.w),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(15),
+                  gradient: LinearGradient(
+                    colors: [AppTheme.primaryGreen, Colors.greenAccent],
+                  ),
+                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(left: -20, top: -20, 
+                      child: Icon(Icons.stars, size: 100, color: Colors.white10)),
+                    Padding(
+                      padding: EdgeInsets.all(5.w),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text("عروض خاصة داخل هذا القسم", 
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.sp)),
+                          Text("اكتشف أفضل الأسعار اليوم في ${widget.mainCategoryName}", 
+                            style: TextStyle(color: Colors.white70, fontSize: 10.sp)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            );
-          }
-
-          if (snapshot.hasError) {
-            // 💡 يحاكي رسالة الخطأ في HTML
-            return Center(child: Text('حدث خطأ: ${snapshot.error.toString()}', textAlign: TextAlign.center));
-          }
-
-          final subCategories = snapshot.data ?? [];
-
-          if (subCategories.isEmpty) {
-            return const Center(child: Text('لا توجد أقسام فرعية نشطة حاليًا.'));
-          }
-
-          // 💡 يحاكي .categories-grid في HTML
-          return GridView.builder(
-            padding: EdgeInsets.all(4.w),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              // 🟢 [التصحيح 2]: استخدام screenOrientation بدلاً من SizerUtil.orientation
-              crossAxisCount: screenOrientation == Orientation.portrait ? 2 : 3, // 2 أو 3 أعمدة
-              childAspectRatio: 0.85,
-              crossAxisSpacing: 4.w,
-              mainAxisSpacing: 4.w,
             ),
-            itemCount: subCategories.length,
-            itemBuilder: (context, index) {
-              final category = subCategories[index];
-              return _buildCategoryCard(context, category);
-            },
-          );
-        },
+
+            // 3. شبكة الأقسام الفرعية
+            FutureBuilder<List<CategoryModel>>(
+              future: _subCategoriesFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const SliverFillRemaining(child: Center(child: CircularProgressIndicator()));
+                }
+                final subCategories = snapshot.data ?? [];
+                if (subCategories.isEmpty) {
+                  return const SliverFillRemaining(child: Center(child: Text('لا توجد أقسام حاليًا.')));
+                }
+
+                return SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: 4.w),
+                  sliver: SliverGrid(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: screenOrientation == Orientation.portrait ? 2 : 3,
+                      childAspectRatio: 0.9,
+                      crossAxisSpacing: 4.w,
+                      mainAxisSpacing: 4.w,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => _buildCategoryCard(context, subCategories[index]),
+                      childCount: subCategories.length,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+
+        // 4. شريط سفلي مخصص للمستهلك فقط
+        bottomNavigationBar: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
+          selectedItemColor: AppTheme.primaryGreen,
+          unselectedItemColor: Colors.grey,
+          currentIndex: 0, // افتراضياً نحن في الأقسام
+          onTap: (index) {
+            if (index == 0) Navigator.pushNamed(context, ConsumerHomeScreen.routeName);
+            if (index == 1) /* اذهب للسلة */;
+            if (index == 2) /* اذهب للمحفظة */;
+            if (index == 3) /* اذهب للإشعارات أو الطلبات */;
+          },
+          items: [
+            const BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'الرئيسية'),
+            BottomNavigationBarItem(
+              icon: Badge(
+                label: Text(cartProvider.itemsCount.toString()),
+                child: const Icon(Icons.shopping_cart_outlined),
+              ),
+              label: 'سلتك',
+            ),
+            const BottomNavigationBarItem(icon: Icon(Icons.wallet_outlined), label: 'محفظتي'),
+            const BottomNavigationBarItem(icon: Icon(Icons.history_edu_rounded), label: 'طلباتي'), // الأيقونة الرابعة المقترحة
+          ],
+        ),
       ),
-      // 💡 يحاكي .bottom-nav
-      // *ملاحظة*: يجب أن يكون لديك BottomNavigationBar منفصل أو يجب استخدامه من الشاشات الرئيسية
-      // في هذا المثال سنعتمد على التصميم القياسي للسكرين (أو يجب استيراد الـ Widget الخاص بالـ Nav Bar)
     );
   }
 
   Widget _buildCategoryCard(BuildContext context, CategoryModel category) {
     return InkWell(
-      onTap: () => _navigateToProductList(context, category), // 🚨 أهم جزء: الضغط ينقل للـ products
+      onTap: () => _navigateToProductList(context, category),
       child: Container(
         decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(15.0),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey.shade100),
           boxShadow: [
-            BoxShadow(
-              color: Theme.of(context).shadowColor.withOpacity(0.1),
-              spreadRadius: 1,
-              blurRadius: 5,
-              offset: const Offset(0, 3),
-            ),
+            BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
           ],
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 💡 يحاكي .category-card img
             Expanded(
               child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(15.0)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                 child: category.imageUrl.isNotEmpty
-                    ? Image.network(
-                        category.imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const Icon(Icons.category, size: 50, color: Colors.grey),
-                      )
-                    : const Icon(Icons.category, size: 50, color: Colors.grey),
+                    ? Image.network(category.imageUrl, fit: BoxFit.cover, width: double.infinity)
+                    : Container(color: Colors.grey.shade50, child: const Icon(Icons.category, color: Colors.grey)),
               ),
             ),
-            // 💡 يحاكي .category-name
             Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Text(
-                category.name,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 10.sp, // استخدام Sizer
-                  color: Theme.of(context).textTheme.bodyLarge?.color,
-                ),
-              ),
+              padding: EdgeInsets.all(3.w),
+              child: Text(category.name,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10.sp)),
             ),
           ],
         ),

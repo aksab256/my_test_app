@@ -1,5 +1,4 @@
 // lib/screens/consumer/consumer_store_search_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
@@ -10,7 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/screens/consumer/MarketplaceHomeScreen.dart';
-import 'package:my_test_app/screens/special_requests/abaatly_had_pro_screen.dart';
+import 'package:my_test_app/screens/special_requests/location_picker_screen.dart'; 
 
 class ConsumerStoreSearchScreen extends StatefulWidget {
   static const routeName = '/consumerStoreSearch';
@@ -146,6 +145,10 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ⭐️ [تعديل]: جلب المعرف الصحيح بناءً على ملف الـ Provider
+    final buyerProvider = Provider.of<BuyerDataProvider>(context);
+    final String userId = buyerProvider.currentUserId ?? 'guest';
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -172,16 +175,14 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
                 MarkerLayer(markers: _mapMarkers),
               ],
             ),
-
-            // 1. كبسولة البحث العلوي
             Positioned(
               top: 110, left: 20, right: 20,
               child: _buildFloatingActionHeader(),
             ),
-
-            // 2. زر "ابعتلي حد" - تم رفعه ليكون فوق الكروت المحمية
+            
+            // ⭐️ [تعديل]: رفع الزر ليكون فوق قائمة المتاجر بوضوح
             Positioned(
-              bottom: 235, // تم رفعه لضمان عدم التداخل
+              bottom: 255, 
               left: 20,
               child: FloatingActionButton.extended(
                 onPressed: () {
@@ -189,9 +190,10 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => AbaatlyHadProScreen(
-                          userCurrentLocation: _currentSearchLocation!,
-                          isStoreOwner: false,
+                        builder: (context) => LocationPickerScreen(
+                          initialLocation: _currentSearchLocation!,
+                          title: "ابعتلي حد",
+                          userId: userId, // تمرير المعرف المأخوذ من currentUserId
                         ),
                       ),
                     );
@@ -207,13 +209,11 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
                 elevation: 10,
               ),
             ),
-
-            // 3. قائمة المتاجر السفلية مع Safe Area
+            
             Positioned(
               bottom: 0, left: 0, right: 0,
               child: _buildStoresPreviewList(),
             ),
-
             if (_isLoading) _buildLoadingOverlay(),
           ],
         ),
@@ -253,11 +253,11 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
 
   Widget _buildStoresPreviewList() {
     if (_nearbySupermarkets.isEmpty) return const SizedBox.shrink();
-    return SafeArea( // حماية المحتوى من أزرار النظام
+    return SafeArea(
       top: false,
       child: Container(
         height: 180,
-        margin: const EdgeInsets.only(bottom: 35), // مسافة أمان إضافية
+        margin: const EdgeInsets.only(bottom: 35),
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 15),
