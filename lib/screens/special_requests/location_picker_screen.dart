@@ -1,265 +1,248 @@
 // lib/screens/special_requests/location_picker_screen.dart
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:my_test_app/screens/consumer/consumer_home_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/delivery_service.dart';
+import 'package:sizer/sizer.dart';
+
+enum PickerStep { pickup, dropoff, confirm }
 
 class LocationPickerScreen extends StatefulWidget {
-  final LatLng initialLocation;
-  final String title;
-  final String userId;
-
-  const LocationPickerScreen({
-    super.key,
-    required this.initialLocation,
-    required this.title,
-    required this.userId,
-  });
+  static const routeName = '/location-picker';
+  const LocationPickerScreen({super.key});
 
   @override
   State<LocationPickerScreen> createState() => _LocationPickerScreenState();
 }
 
 class _LocationPickerScreenState extends State<LocationPickerScreen> {
-  late LatLng _draggedLocation;
-  String _address = "جاري جلب العنوان...";
   final MapController _mapController = MapController();
-  bool _isAgreed = false; // حالة الموافقة على الشروط
+  final DeliveryService _deliveryService = DeliveryService();
+  
+  PickerStep _currentStep = PickerStep.pickup;
+  LatLng _currentMapCenter = const LatLng(30.0444, 31.2357); // القاهرة افتراضياً
+  
+  LatLng? _pickupLocation;
+  String _pickupAddress = "جاري جلب العنوان...";
+  
+  LatLng? _dropoffLocation;
+  String _dropoffAddress = "";
+  
+  String _tempAddress = "حرك الخريطة لتحديد الموقع";
+  double _estimatedPrice = 0.0;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _draggedLocation = widget.initialLocation;
-    _reverseGeocode(_draggedLocation);
+    _determinePosition();
   }
 
-  Future<void> _reverseGeocode(LatLng location) async {
+  // جلب موقع المستخدم الحالي عند الفتح
+  Future<void> _determinePosition() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+
+    Position position = await Geolocator.getCurrentPosition();
+    setState(() {
+      _currentMapCenter = LatLng(position.latitude, position.longitude);
+      _mapController.move(_currentMapCenter, 15);
+    });
+  }
+
+  // تحويل الإحداثيات لعنوان نصي
+  Future<void> _getAddress(LatLng position) async {
     try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(location.latitude, location.longitude);
+      List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
         setState(() {
-          _address = "${place.street}, ${place.subLocality}";
+          _tempAddress = "${place.street}, ${place.subLocality}, ${place.locality}";
         });
       }
     } catch (e) {
-      setState(() => _address = "موقع غير محدد بدقة");
+      setState(() { _tempAddress = "موقع غير مسمى"; });
     }
   }
 
-  // نافذة تأكيد الطلب مع الموافقة القانونية (Explicit Consent)
-  void _showConfirmationSheet() {
+  void _handleNextStep() async {
+    if (_currentStep == PickerStep.pickup) {
+      _pickupLocation = _currentMapCenter;
+      _pickupAddress = _tempAddress;
+      setState(() {
+        _currentStep = PickerStep.dropoff;
+        _tempAddress = "حدد وجهة التوصيل...";
+      });
+    } else if (_currentStep == PickerStep.dropoff) {
+      _dropoffLocation = _currentMapCenter;
+      _dropoffAddress = _tempAddress;
+      
+      _estimatedPrice = await _calculatePrice();
+      _showFinalConfirmation();
+    }
+  }
+
+  Future<double> _calculatePrice() async {
+    if (_pickupLocation == null || _dropoffLocation == null) return 0.0;
+    double distance = _deliveryService.calculateDistance(
+      _pickupLocation!.latitude, _pickupLocation!.longitude,
+      _dropoffLocation!.latitude, _dropoffLocation!.longitude
+    );
+    return await _deliveryService.calculateTripCost(distanceInKm: distance);
+  }
+
+  // رفع الطلب النهائي لـ Firestore
+  Future<void> _finalizeAndUpload() async {
+    setState(() => _isLoading = true);
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      await FirebaseFirestore.instance.collection('specialRequests').add({
+        'userId': user?.uid ?? 'anonymous',
+        'pickupLocation': GeoPoint(_pickupLocation!.latitude, _pickupLocation!.longitude),
+        'pickupAddress': _pickupAddress,
+        'dropoffLocation': GeoPoint(_dropoffLocation!.latitude, _dropoffLocation!.longitude),
+        'dropoffAddress': _dropoffAddress,
+        'price': _estimatedPrice,
+        'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
+        'type': 'delivery_only',
+      });
+      
+      Navigator.pop(context); // إغلاق الـ BottomSheet
+      Navigator.pop(context); // العودة للرئيسية
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم إرسال طلبك بنجاح!")));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _showFinalConfirmation() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setSheetState) => Container(
-          padding: const EdgeInsets.all(25),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-              const SizedBox(height: 20),
-              const Icon(Icons.verified_user_rounded, color: Colors.blue, size: 40),
-              const SizedBox(height: 10),
-              const Text("تأكيد طلب 'ابعتلي حد'", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-              const Divider(height: 30),
-              
-              Row(
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+            const SizedBox(height: 20),
+            Text("ملخص الرحلة", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15.sp)),
+            const Divider(),
+            _buildInfoRow(Icons.circle, Colors.green, "من: $_pickupAddress"),
+            _buildInfoRow(Icons.location_on, Colors.red, "إلى: $_dropoffAddress"),
+            const Divider(),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Icon(Icons.location_on, color: Colors.red),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text("سيتم الاستلام من: $_address", style: const TextStyle(fontSize: 14))),
+                  Text("تكلفة التوصيل التقديرية:", style: TextStyle(fontSize: 12.sp)),
+                  Text("${_estimatedPrice.toStringAsFixed(2)} ج.م", 
+                       style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.bold, fontSize: 16.sp)),
                 ],
               ),
-              const SizedBox(height: 15),
-
-              // مربع الموافقة الصريحة
-              CheckboxListTile(
-                value: _isAgreed,
-                activeColor: Colors.blue,
-                contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  "أتعهد بعدم نقل مواد مخالفة للقانون، سوائل قابلة للاشتعال، أو مستندات حساسة، وأقر بأن التطبيق وسيط تقني فقط.",
-                  style: TextStyle(fontSize: 11, color: Colors.black87),
-                ),
-                onChanged: (val) => setSheetState(() => _isAgreed = val!),
-                controlAffinity: ListTileControlAffinity.leading,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _isLoading ? null : _finalizeAndUpload,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 55),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))
               ),
-
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isAgreed ? _finalizeRequest : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                    disabledBackgroundColor: Colors.grey[300],
-                  ),
-                  child: const Text("تأكيد وإرسال الطلب الآن", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
-          ),
+              child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("تأكيد وطلب المندوب"),
+            ),
+            const SizedBox(height: 10),
+          ],
         ),
       ),
     );
   }
 
-  // دالة الحفظ الفعلي في Firestore
-  Future<void> _finalizeRequest() async {
-    try {
-      showDialog(context: context, barrierDismissible: false, builder: (context) => const Center(child: CircularProgressIndicator()));
-
-      await FirebaseFirestore.instance.collection('specialRequests').add({
-        'userId': widget.userId,
-        'address': _address,
-        'location': GeoPoint(_draggedLocation.latitude, _draggedLocation.longitude),
-        'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-        'agreedToTerms': true,
-      });
-
-      Navigator.pop(context); // إغلاق الـ Loading
-      Navigator.pop(context); // إغلاق الـ BottomSheet
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("تم إرسال طلبك بنجاح! سيتم التواصل معك قريباً."), backgroundColor: Colors.green),
-      );
-    } catch (e) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ في الإرسال: $e")));
-    }
-  }
-
-  void _showTermsDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("الشروط القانونية", textAlign: TextAlign.center),
-        content: const Text(
-          "1. التطبيق وسيط تقني يربط العميل بمقدم الخدمة.\n"
-          "2. يمنع نقل الأموال، المجوهرات، أو المواد غير القانونية.\n"
-          "3. العميل مسؤول عن صحة بيانات الموقع المحجوز.",
-          textAlign: TextAlign.right,
-          style: TextStyle(fontSize: 13),
-        ),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("إغلاق"))],
+  Widget _buildInfoRow(IconData icon, Color color, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text, maxLines: 2, style: TextStyle(fontSize: 10.sp), overflow: TextOverflow.ellipsis)),
+        ],
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        extendBody: true,
-        appBar: AppBar(
-          title: Text(widget.title),
-          centerTitle: true,
-          actions: [
-            TextButton(
-              onPressed: _showConfirmationSheet,
-              child: const Text("تأكيد", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 18)),
-            )
-          ],
-        ),
-        body: Stack(
-          children: [
-            FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: widget.initialLocation,
-                initialZoom: 16.0,
-                onPositionChanged: (position, hasGesture) {
-                  if (hasGesture) {
-                    setState(() {
-                      _draggedLocation = position.center!;
-                      _address = "جاري التحديد...";
-                    });
-                  }
-                },
-                onPointerUp: (event, point) => _reverseGeocode(_draggedLocation),
-              ),
-              children: [
-                TileLayer(urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'),
-              ],
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_currentStep == PickerStep.pickup ? "تحديد مكان الاستلام" : "تحديد وجهة التوصيل"),
+        centerTitle: true,
+      ),
+      body: Stack(
+        children: [
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              center: _currentMapCenter,
+              zoom: 15.0,
+              onPositionChanged: (pos, hasGesture) {
+                if (hasGesture) {
+                  _currentMapCenter = pos.center!;
+                  _getAddress(_currentMapCenter);
+                }
+              },
             ),
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.only(bottom: 35),
-                child: Icon(Icons.location_on, color: Colors.red, size: 50),
-              ),
-            ),
-            Positioned(
-              top: 20, left: 15, right: 15,
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.green.withOpacity(0.5)),
-                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.map, color: Colors.green),
-                    const SizedBox(width: 10),
-                    Expanded(child: Text(_address, style: const TextStyle(fontSize: 14))),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-        bottomNavigationBar: Container(
-          height: 80,
-          margin: const EdgeInsets.only(left: 20, right: 20, bottom: 25),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(30),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Container(
-                color: Colors.white.withOpacity(0.7),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildNavIcon(Icons.home_filled, "الرئيسية", () => Navigator.pushNamed(context, ConsumerHomeScreen.routeName)),
-                    _buildNavIcon(Icons.history_edu_rounded, "طلباتي", () {}),
-                    _buildNavIcon(Icons.gavel_rounded, "الشروط", _showTermsDialog),
-                    _buildNavIcon(Icons.account_balance_wallet_outlined, "محفظتي", () {}),
-                  ],
-                ),
-              ),
-            ),
+            children: [
+              TileLayer(urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", subdomains: const ['a', 'b', 'c']),
+            ],
           ),
-        ),
+          // الدبوس الثابت في منتصف الخريطة
+          Center(
+            child: Icon(Icons.location_pin, size: 40, color: _currentStep == PickerStep.pickup ? Colors.green : Colors.red),
+          ),
+          // واجهة التحكم السفلية
+          PositionImageWidget(_tempAddress, _handleNextStep, _currentStep)
+        ],
       ),
     );
   }
 
-  Widget _buildNavIcon(IconData icon, String label, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: Colors.black87),
-          Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-        ],
+  Widget PositionImageWidget(String address, VoidCallback onPressed, PickerStep step) {
+    return Positioned(
+      bottom: 20, left: 20, right: 20,
+      child: Card(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        child: Padding(
+          padding: const EdgeInsets.all(15),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(address, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w500)),
+              const SizedBox(height: 15),
+              ElevatedButton(
+                onPressed: onPressed,
+                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 45)),
+                child: Text(step == PickerStep.pickup ? "تأكيد مكان الاستلام" : "تأكيد وجهة التوصيل"),
+              )
+            ],
+          ),
+        ),
       ),
     );
   }
