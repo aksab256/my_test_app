@@ -13,14 +13,9 @@ enum PickerStep { pickup, dropoff, confirm }
 class LocationPickerScreen extends StatefulWidget {
   static const routeName = '/location-picker';
   final LatLng? initialLocation;
-  // جعلنا الـ title اختيارياً وله قيمة افتراضية لحل مشكلة فشل البناء
-  final String title;
+  final String title; // أضفناها هنا فقط لمنع خطأ الـ Build
 
-  const LocationPickerScreen({
-    super.key, 
-    this.initialLocation, 
-    this.title = "تحديد الموقع"
-  });
+  const LocationPickerScreen({super.key, this.initialLocation, this.title = "تحديد الموقع"});
 
   @override
   State<LocationPickerScreen> createState() => _LocationPickerScreenState();
@@ -30,8 +25,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   final MapController _mapController = MapController();
   final DeliveryService _deliveryService = DeliveryService();
   final TextEditingController _detailsController = TextEditingController();
-  
-  // 🔑 Mapbox Token
+
+  // 🔑 توكن Mapbox الخاص بك
   final String mapboxToken = "pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw";
 
   PickerStep _currentStep = PickerStep.pickup;
@@ -45,8 +40,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   bool _isLoading = false;
   bool _agreedToTerms = true;
   String _selectedVehicle = "motorcycle";
-  
-  bool _hasMovedMap = false; // التأمين الذي طلبته
 
   final List<Map<String, dynamic>> _vehicles = [
     {"id": "motorcycle", "name": "موتوسيكل", "icon": Icons.directions_bike},
@@ -68,10 +61,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   }
 
   Future<void> _determinePosition() async {
-    if (widget.initialLocation != null && !_hasMovedMap) {
-       _getAddress(_currentMapCenter);
-       return;
-    }
+    if (widget.initialLocation != null) return;
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -82,7 +72,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       _currentMapCenter = LatLng(position.latitude, position.longitude);
       _mapController.move(_currentMapCenter, 15);
     });
-    _getAddress(_currentMapCenter);
   }
 
   Future<void> _getAddress(LatLng position) async {
@@ -91,7 +80,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
         setState(() {
-          _tempAddress = "${place.street ?? ''}, ${place.subLocality ?? ''}, ${place.locality ?? ''}";
+          _tempAddress = "${place.street}, ${place.subLocality}, ${place.locality}";
         });
       }
     } catch (e) {
@@ -100,18 +89,12 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   }
 
   void _handleNextStep() async {
-    if (!_hasMovedMap && widget.initialLocation == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("يرجى تحريك الخريطة لتأكيد الموقع بدقة")));
-      return;
-    }
-
     if (_currentStep == PickerStep.pickup) {
       _pickupLocation = _currentMapCenter;
       _pickupAddress = _tempAddress;
       setState(() {
         _currentStep = PickerStep.dropoff;
         _tempAddress = "حدد وجهة التوصيل...";
-        _hasMovedMap = false; // إعادة التعيين للخطوة الثانية
       });
     } else if (_currentStep == PickerStep.dropoff) {
       _dropoffLocation = _currentMapCenter;
@@ -124,12 +107,12 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   Future<double> _calculatePrice(String vehicleType) async {
     if (_pickupLocation == null || _dropoffLocation == null) return 0.0;
     double distance = _deliveryService.calculateDistance(
-      _pickupLocation!.latitude, _pickupLocation!.longitude,
-      _dropoffLocation!.latitude, _dropoffLocation!.longitude
+        _pickupLocation!.latitude, _pickupLocation!.longitude,
+        _dropoffLocation!.latitude, _dropoffLocation!.longitude
     );
     return await _deliveryService.calculateTripCost(
-      distanceInKm: distance,
-      vehicleType: vehicleType
+        distanceInKm: distance,
+        vehicleType: vehicleType
     );
   }
 
@@ -150,8 +133,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
       });
-      Navigator.pop(context);
-      Navigator.pop(context);
+      
+      // التعديل هنا لضمان العودة وتنشيط الفقاعة
+      Navigator.pop(context); // إغلاق الـ BottomSheet
+      Navigator.pop(context); // العودة للشاشة الرئيسية
+      
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم إرسال طلبك بنجاح!")));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
@@ -166,10 +152,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(
-            _currentStep == PickerStep.pickup ? "تحديد مكان الاستلام" : "تحديد وجهة التوصيل",
-            style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900)
-          ),
+          title: Text(_currentStep == PickerStep.pickup ? "تحديد مكان الاستلام" : "تحديد وجهة التوصيل",
+              style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w900)),
           centerTitle: true,
         ),
         body: Stack(
@@ -182,9 +166,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 onPositionChanged: (pos, hasGesture) {
                   if (hasGesture) {
                     _currentMapCenter = pos.center!;
-                    _hasMovedMap = true;
                     _getAddress(_currentMapCenter);
-                    setState(() {});
                   }
                 },
               ),
@@ -198,13 +180,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             Center(
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 35),
-                child: Icon(
-                  Icons.location_pin, 
-                  size: 50, 
-                  color: _hasMovedMap 
-                    ? (_currentStep == PickerStep.pickup ? Colors.green[700] : Colors.red[700])
-                    : Colors.grey
-                ),
+                child: Icon(Icons.location_pin, size: 50, color: _currentStep == PickerStep.pickup ? Colors.green[700] : Colors.red[700]),
               ),
             ),
             _buildActionCard(),
@@ -234,7 +210,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                     Expanded(
                       child: Text(
                         _tempAddress,
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.sp, color: Colors.black87),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.sp, color: Colors.black87),
                       ),
                     ),
                   ],
@@ -249,7 +225,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   ),
                   child: Text(
                     _currentStep == PickerStep.pickup ? "تأكيد مكان الاستلام" : "تأكيد وجهة التوصيل",
-                    style: TextStyle(color: Colors.white, fontSize: 13.sp, fontWeight: FontWeight.w900),
+                    style: TextStyle(color: Colors.white, fontSize: 14.sp, fontWeight: FontWeight.w900),
                   ),
                 )
               ],
@@ -260,10 +236,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     );
   }
 
-  // دالة _showFinalConfirmation وباقي الـ Widgets الفرعية تبقى كما هي في كودك الأصلي...
   void _showFinalConfirmation() {
-    // (نفس الكود الخاص بك دون تغيير لضمان عمل الـ BottomSheet والـ Vehicles)
-    // سأختصرها هنا لعدم تكرار المساحة ولكنها موجودة في ملفك
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -272,12 +245,12 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         builder: (context, setModalState) {
           return Container(
             padding: EdgeInsets.only(
-              left: 20, right: 20, top: 15,
-              bottom: MediaQuery.of(context).padding.bottom + MediaQuery.of(context).viewInsets.bottom + 20
+                left: 20, right: 20, top: 15,
+                bottom: MediaQuery.of(context).padding.bottom + MediaQuery.of(context).viewInsets.bottom + 20
             ),
             decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(35))
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(35))
             ),
             child: SingleChildScrollView(
               child: Column(
@@ -285,9 +258,90 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 children: [
                   Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
                   const SizedBox(height: 20),
-                  Text("تفاصيل الطلب النهائي", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16.sp)),
+                  Text("تفاصيل الطلب النهائي", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18.sp)),
                   const Divider(height: 30),
-                  // ... باقي محتوى الـ BottomSheet الخاص بك ...
+                  Align(alignment: Alignment.centerRight, child: Text("وسيلة النقل المطلوبة:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.sp))),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 110,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _vehicles.length,
+                      itemBuilder: (context, index) {
+                        final v = _vehicles[index];
+                        bool isSelected = _selectedVehicle == v['id'];
+                        return GestureDetector(
+                          onTap: () async {
+                            setModalState(() => _selectedVehicle = v['id']);
+                            double newPrice = await _calculatePrice(v['id']);
+                            setModalState(() => _estimatedPrice = newPrice);
+                          },
+                          child: Container(
+                            width: 110,
+                            margin: const EdgeInsets.only(left: 10),
+                            decoration: BoxDecoration(
+                              color: isSelected ? Colors.orange.withOpacity(0.1) : Colors.grey[50],
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: isSelected ? Colors.orange[800]! : Colors.grey[200]!, width: 2),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(v['icon'], color: isSelected ? Colors.orange[800] : Colors.grey[600], size: 30),
+                                const SizedBox(height: 8),
+                                Text(v['name'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.sp)),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(18)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("ماذا تريد أن تنقل؟ (اختياري)",
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.sp, color: Colors.blueGrey[800])),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _detailsController,
+                          maxLines: 1,
+                          style: TextStyle(fontSize: 12.sp),
+                          decoration: InputDecoration(
+                            hintText: "مثال: كرتونة طلبات، طقم أنتريه...",
+                            hintStyle: TextStyle(fontSize: 11.sp),
+                            border: InputBorder.none,
+                            isDense: true,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 25),
+                  _buildInfoRow(Icons.circle, Colors.green[700]!, "من: $_pickupAddress"),
+                  _buildInfoRow(Icons.location_on, Colors.red[700]!, "إلى: $_dropoffAddress"),
+                  const Divider(height: 35),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("التكلفة التقديرية:", style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold)),
+                      Text("${_estimatedPrice.toStringAsFixed(2)} ج.م",
+                          style: TextStyle(color: Colors.blue[900], fontWeight: FontWeight.w900, fontSize: 20.sp)),
+                    ],
+                  ),
+                  const SizedBox(height: 15),
+                  CheckboxListTile(
+                    value: _agreedToTerms,
+                    onChanged: (val) => setModalState(() => _agreedToTerms = val!),
+                    title: Text("أوافق على الشروط. (المنصة وسيط تقني فقط)",
+                        style: TextStyle(fontSize: 10.sp, color: Colors.grey[600], fontWeight: FontWeight.bold)),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                  ),
                   ElevatedButton(
                     onPressed: _agreedToTerms ? _finalizeAndUpload : null,
                     style: ElevatedButton.styleFrom(
@@ -295,14 +349,36 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                       minimumSize: const Size(double.infinity, 70),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     ),
-                    child: Text("تأكيد وطلب الآن", style: TextStyle(color: Colors.white, fontSize: 14.sp, fontWeight: FontWeight.w900)),
+                    child: Text("تأكيد وطلب الآن", style: TextStyle(color: Colors.white, fontSize: 16.sp, fontWeight: FontWeight.w900)),
                   ),
+                  const SizedBox(height: 10),
                 ],
               ),
             ),
           );
-        }
+        },
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, Color color, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.bold, color: Colors.black87),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
+
