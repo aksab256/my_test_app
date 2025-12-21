@@ -2,7 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:sizer/sizer.dart'; // تأكد من استيراد sizer للتحكم في الأحجام
+import 'package:sizer/sizer.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'location_picker_screen.dart';
 
 class AbaatlyHadProScreen extends StatefulWidget {
@@ -12,7 +13,7 @@ class AbaatlyHadProScreen extends StatefulWidget {
   const AbaatlyHadProScreen({
     super.key,
     required this.userCurrentLocation,
-    this.isStoreOwner = false
+    this.isStoreOwner = false,
   });
 
   @override
@@ -26,6 +27,11 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
 
   LatLng? _pickupCoords;
   LatLng? _dropoffCoords;
+  
+  // متغيرات أمان للتأكد من أن المستخدم "فتح" الخريطة وأكد الموقع
+  bool _pickupConfirmed = false;
+  bool _dropoffConfirmed = false;
+  
   bool _isLoading = false;
 
   @override
@@ -35,12 +41,15 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
   }
 
   void _setupInitialLocations() {
+    // نضع الإحداثيات ولكن نترك تأكيدها (Confirmed) خطأ لإجبار المستخدم على دخول الخريطة
     if (widget.isStoreOwner) {
       _pickupController.text = "موقعي الحالي (المحل)";
       _pickupCoords = widget.userCurrentLocation;
+      _pickupConfirmed = true; // صاحب المحل غالباً موقعه ثابت ومعروف
     } else {
       _dropoffController.text = "موقعي الحالي (المنزل)";
       _dropoffCoords = widget.userCurrentLocation;
+      _dropoffConfirmed = true; // المستهلك بيطلب لنفسه فموقعه الحالي هو الوجهة غالباً
     }
   }
 
@@ -59,30 +68,35 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
       setState(() {
         if (isPickup) {
           _pickupCoords = result;
-          _pickupController.text = "تم التحديد من الخريطة ✅";
+          _pickupController.text = "تم التأكيد من الخريطة ✅";
+          _pickupConfirmed = true;
         } else {
           _dropoffCoords = result;
-          _dropoffController.text = "تم التحديد من الخريطة ✅";
+          _dropoffController.text = "تم التأكيد من الخريطة ✅";
+          _dropoffConfirmed = true;
         }
       });
     }
   }
 
   Future<void> _submitOrder() async {
-    if (_detailsController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("يرجى كتابة تفاصيل الطلب")));
+    // 1. فحص التفاصيل
+    if (_detailsController.text.trim().isEmpty) {
+      _showError("يرجى كتابة تفاصيل ما تريد نقله");
       return;
     }
 
-    if (_pickupCoords == null || _dropoffCoords == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("يرجى تحديد النقطتين من الخريطة")));
+    // 2. تأمين النقاط (إجبار المستخدم على تأكيد النقطة التي لم تؤكد)
+    if (!_pickupConfirmed || !_dropoffConfirmed) {
+      _showError("يرجى الضغط على مواقع الاستلام والتسليم للتأكيد من الخريطة أولاً");
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      await FirebaseFirestore.instance.collection('specialRequests').add({
+      // إرسال الطلب لـ Firestore
+      DocumentReference docRef = await FirebaseFirestore.instance.collection('specialRequests').add({
         'details': _detailsController.text,
         'pickupAddress': _pickupController.text,
         'dropoffAddress': _dropoffController.text,
@@ -91,14 +105,27 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
         'requestType': widget.isStoreOwner ? 'store_delivery' : 'consumer_personal',
+        'price': 0, // سيقوم المندوب أو النظام بتحديده لاحقاً
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم إرسال طلبك للمناديب 🚀")));
-      Navigator.pop(context);
+      // ✅ التعديل الأهم: حفظ معرف الطلب لتفعيل الفقاعة العائمة في MaterialApp
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('active_special_order_id', docRef.id);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("تم إرسال طلبك! ابحث عن فقاعة التتبع على الشاشة 🚀"))
+        );
+        Navigator.pop(context); // العودة للشاشة الرئيسية حيث ستظهر الفقاعة
+      }
     } catch (e) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
+      _showError("حدث خطأ أثناء إرسال الطلب: $e");
     }
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
   }
 
   @override
@@ -122,6 +149,7 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
                 controller: _pickupController,
                 icon: Icons.location_on,
                 color: Colors.green[700]!,
+                isConfirmed: _pickupConfirmed,
                 onTap: () => _pickLocation(true),
               ),
               Padding(
@@ -133,11 +161,10 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
                 controller: _dropoffController,
                 icon: Icons.flag_rounded,
                 color: Colors.red[700]!,
+                isConfirmed: _dropoffConfirmed,
                 onTap: () => _pickLocation(false),
               ),
               const SizedBox(height: 30),
-              
-              // تحسين شكل حقل التفاصيل ليكون أوضح
               Text("ماذا تريد أن تنقل؟", 
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.sp, color: Colors.black87)),
               const SizedBox(height: 10),
@@ -147,17 +174,9 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
                 style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600),
                 decoration: InputDecoration(
                   hintText: "مثال: كرتونة طلبات، طقم انتريه...",
-                  hintStyle: TextStyle(color: Colors.grey[500], fontWeight: FontWeight.normal),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(25),
-                    borderSide: BorderSide(color: Colors.grey[300]!, width: 2),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(25),
-                    borderSide: BorderSide(color: Colors.grey[200]!, width: 2),
-                  ),
                   filled: true,
                   fillColor: Colors.grey[50],
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
                 ),
               ),
               const SizedBox(height: 40),
@@ -169,7 +188,7 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
                   elevation: 8,
                 ),
-                child: _isLoading
+                child: _isLoading 
                   ? const CircularProgressIndicator(color: Colors.white)
                   : Text("تأكيد وطلب مندوب الآن", 
                       style: TextStyle(color: Colors.white, fontSize: 15.sp, fontWeight: FontWeight.w900)),
@@ -187,6 +206,7 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
     required TextEditingController controller,
     required IconData icon,
     required Color color,
+    required bool isConfirmed,
     required VoidCallback onTap,
   }) {
     return InkWell(
@@ -197,40 +217,29 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(25),
-          border: Border.all(color: Colors.grey[200]!, width: 2),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
-          ],
+          border: Border.all(color: isConfirmed ? color.withOpacity(0.5) : Colors.grey[200]!, width: 2),
         ),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-              child: Icon(icon, color: color, size: 24.sp),
-            ),
+            Icon(icon, color: color, size: 24.sp),
             const SizedBox(width: 18),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: TextStyle(color: Colors.grey[700], fontSize: 11.sp, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text(
-                    controller.text.isEmpty ? "اضغط للتحديد من الخريطة" : controller.text,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900, // خط عريض جداً للعنوان
-                      fontSize: 13.sp, 
-                      color: controller.text.isEmpty ? Colors.blueGrey : Colors.black,
-                    ),
-                  ),
+                  Text(label, style: TextStyle(color: Colors.grey[700], fontSize: 11.sp)),
+                  Text(controller.text.isEmpty ? "اضغط للتحديد من الخريطة" : controller.text,
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.sp, 
+                    color: isConfirmed ? Colors.black : Colors.red[900])),
                 ],
               ),
             ),
-            Icon(Icons.map_outlined, color: Colors.blue[800], size: 22.sp),
+            Icon(isConfirmed ? Icons.check_circle : Icons.map_outlined, 
+                 color: isConfirmed ? Colors.green : Colors.blue[800], size: 22.sp),
           ],
         ),
       ),
     );
   }
 }
+
