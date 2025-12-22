@@ -3,7 +3,6 @@ import 'package:my_test_app/screens/consumer/consumer_widgets.dart';
 import 'package:my_test_app/screens/consumer/consumer_data_models.dart';
 import 'package:my_test_app/services/consumer_data_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:sizer/sizer.dart';
 
 class ConsumerHomeScreen extends StatelessWidget {
   static const routeName = '/consumerHome';
@@ -16,14 +15,20 @@ class ConsumerHomeScreen extends StatelessWidget {
     final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA), // خلفية فاتحة تبرز العناصر
+      backgroundColor: const Color(0xFFF8F9FA), // خلفية فاتحة جداً تبرز العناصر
+      // إضافة الـ Drawer هنا ليعمل مع زر المنيو
       drawer: const ConsumerSideMenu(),
       
-      // 1. الـ AppBar ثابت وواضح بألوان الهوية
-      appBar: ConsumerCustomAppBar(
-        userName: user?.displayName ?? 'مستخدم',
-        userPoints: 1000,
-        onMenuPressed: () => Scaffold.of(context).openDrawer(),
+      // 1. الـ AppBar مع تمرير الـ Context الصحيح لفتح المنيو
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(70),
+        child: Builder(
+          builder: (context) => ConsumerCustomAppBar(
+            userName: user?.displayName ?? 'مستخدم',
+            userPoints: 0, // سيتم تحديثها تلقائياً من الـ Stream داخل الودجت
+            onMenuPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
       ),
 
       body: SafeArea(
@@ -32,21 +37,19 @@ class ConsumerHomeScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 2. شريط الرادار (تصميم بارز وواضح بدون تكدس)
-              const SizedBox(height: 15),
-              const ConsumerSearchBar(), 
-
+              // 2. شريط الرادار (اكتشف ما حولك)
               const SizedBox(height: 10),
+              const ConsumerSearchBar(),
 
-              // 3. قسم الأقسام المميزة (خطوط واضحة وأحجام مريحة)
+              // 3. قسم الأقسام المميزة (تم حذف "عرض الكل" من داخل الودجت تلقائياً)
               const ConsumerSectionTitle(title: 'الأقسام المميزة'),
               FutureBuilder<List<ConsumerCategory>>(
                 future: dataService.fetchMainCategories(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const SizedBox(
-                      height: 140,
-                      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      height: 130,
+                      child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF43A047))),
                     );
                   }
                   final categories = snapshot.data ?? [];
@@ -54,9 +57,9 @@ class ConsumerHomeScreen extends StatelessWidget {
                 },
               ),
 
-              const SizedBox(height: 15),
+              const SizedBox(height: 10),
 
-              // 4. قسم العروض (يملأ المساحة السفلية بذكاء)
+              // 4. قسم العروض الحصرية
               const ConsumerSectionTitle(title: 'أحدث العروض الحصرية'),
               FutureBuilder<List<ConsumerBanner>>(
                 future: dataService.fetchPromoBanners(),
@@ -64,21 +67,24 @@ class ConsumerHomeScreen extends StatelessWidget {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const SizedBox(
                       height: 200,
-                      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF43A047))),
                     );
                   }
                   final banners = snapshot.data ?? [];
-                  // ارتفاع 250 ليملأ الشاشة ويظهر تفاصيل المنتج
-                  return ConsumerPromoBanners(banners: banners, height: 250);
+                  // ارتفاع 220 ليناسب الشاشات المختلفة دون ضغط العناصر
+                  return ConsumerPromoBanners(banners: banners, height: 220);
                 },
               ),
 
-              const SizedBox(height: 40), // مساحة للتنفس قبل الـ NavigationBar
+              const SizedBox(height: 80), // مساحة كافية قبل الشريط السفلي
             ],
           ),
         ),
       ),
-      bottomNavigationBar: const ConsumerFooterNav(cartCount: 3, activeIndex: 0),
+
+      // 5. شريط التنقل السفلي - ثابت ومحمي بـ SafeArea
+      bottomNavigationBar: const ConsumerFooterNav(cartCount: 0, activeIndex: 0),
     );
   }
 }
+

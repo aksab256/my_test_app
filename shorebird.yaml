@@ -1,0 +1,4 @@
+app_id: my_test_app
+flutter:
+  channel: stable
+  version: 3.38.5
