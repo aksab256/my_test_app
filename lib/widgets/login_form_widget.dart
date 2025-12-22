@@ -1,14 +1,13 @@
-// lib/widgets/login_form_widget.dart
 import 'package:flutter/material.dart';
 import 'package:my_test_app/helpers/auth_service.dart';
 import 'package:my_test_app/screens/forgot_password_screen.dart';
 import 'package:sizer/sizer.dart';
-
-// --- الإضافات الجديدة للإشعارات ---
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-// --------------------------------
+// --- إضافة مكتبات الـ API ---
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class LoginFormWidget extends StatefulWidget {
   const LoginFormWidget({super.key});
@@ -19,48 +18,70 @@ class LoginFormWidget extends StatefulWidget {
 
 class _LoginFormWidgetState extends State<LoginFormWidget> {
   final _formKey = GlobalKey<FormState>();
-  String _phone = ''; 
+  String _phone = '';
   String _password = '';
   bool _isLoading = false;
   String? _errorMessage;
   bool _obscurePassword = true;
   final AuthService _authService = AuthService();
 
-  // 🎯 دالة تحديث التوكن وطلب الإذن
+  // 🎯 الدالة الجديدة لربط الموبايل بـ AWS عبر الـ API (نفس شغل الويب)
+  Future<void> _registerWithAwsApi(String userId, String fcmToken) async {
+    const String apiUrl = "https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction";
+    
+    try {
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "userId": userId,
+          "fcmToken": fcmToken,
+          "role": "buyer", // يمكنك تغييرها حسب بيانات المستخدم
+          "address": ""     // اختياري
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        print("✅ AWS Registration Success: ${response.body}");
+      } else {
+        print("❌ AWS Registration Failed: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("❌ Error calling AWS API: $e");
+    }
+  }
+
+  // 🎯 تحديث التوكن وطلب الإذن
   Future<void> _updateNotificationToken() async {
     try {
       FirebaseMessaging messaging = FirebaseMessaging.instance;
-      
-      // 1. طلب إذن الإشعارات من المستخدم
       NotificationSettings settings = await messaging.requestPermission(
         alert: true,
         badge: true,
         sound: true,
       );
-      
+
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        // 2. الحصول على الـ FCM Token الفريد للجهاز
         String? token = await messaging.getToken();
-        
         if (token != null) {
           String? uid = FirebaseAuth.instance.currentUser?.uid;
           if (uid != null) {
-            // 3. تحديث التوكن في Firestore
-            // السيرفر (EC2) سيراقب هذا التغيير ويقوم بإنشاء الـ ARN في AWS تلقائياً
+            // 1. تحديث Firestore (للتوثيق)
             await FirebaseFirestore.instance.collection('users').doc(uid).set({
               'notificationToken': token,
               'lastTokenUpdate': FieldValue.serverTimestamp(),
-              'platform': 'android', // مفيد للسيرفر لتحديد نوع الـ Platform Application
+              'platform': 'android',
             }, SetOptions(merge: true));
+
+            // 2. 🔥 استدعاء الـ API الخاص بـ AWS فوراً لإنشاء الـ ARN
+            await _registerWithAwsApi(uid, token);
             
-            print("🚀 Notification Token Updated in Firestore: $token");
+            print("🚀 Notification System Ready for User: $uid");
           }
         }
-      } else {
-        print("⚠️ User declined or has not accepted notification permissions");
       }
     } catch (e) {
-      print("❌ Error in _updateNotificationToken: $e");
+      print("❌ Error in Notification Process: $e");
     }
   }
 
@@ -74,11 +95,10 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     });
 
     try {
-      // 🎯 تسجيل الدخول بالبريد الوهمي
       String fakeEmail = "${_phone.trim()}@aswaq.com";
       await _authService.signInWithEmailAndPassword(fakeEmail, _password);
 
-      // 🔥 الخطوة المضافة: تحديث توكن الإشعارات فور نجاح تسجيل الدخول
+      // 🔥 تسجيل التوكن في Firestore و AWS API
       await _updateNotificationToken();
 
       if (!mounted) return;
@@ -90,7 +110,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         ),
       );
 
-      // الانتقال للشاشة الرئيسية
       Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
     } catch (e) {
       setState(() {
@@ -100,6 +119,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     }
   }
 
+  // ... (بقية دوال الـ Build والـ UI تظل كما هي دون تغيير)
   @override
   Widget build(BuildContext context) {
     return Form(
@@ -142,16 +162,8 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     );
   }
 
-  Widget _buildTextField({
-    required String hint,
-    required IconData icon,
-    bool isPassword = false,
-    bool obscureText = false,
-    VoidCallback? toggleVisibility,
-    TextInputType keyboardType = TextInputType.text,
-    required FormFieldSetter<String> onSaved,
-    required FormFieldValidator<String> validator,
-  }) {
+  // (دوال الـ UI المساعدة _buildTextField و _buildSubmitButton و _buildErrorBox كما هي)
+  Widget _buildTextField({required String hint, required IconData icon, bool isPassword = false, bool obscureText = false, VoidCallback? toggleVisibility, TextInputType keyboardType = TextInputType.text, required FormFieldSetter<String> onSaved, required FormFieldValidator<String> validator}) {
     return TextFormField(
       obscureText: obscureText,
       textAlign: TextAlign.right,
@@ -165,21 +177,10 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         hintText: hint,
         hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 13.sp),
         contentPadding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
-        prefixIcon: isPassword
-            ? IconButton(
-                icon: Icon(obscureText ? Icons.visibility_off : Icons.visibility, size: 24, color: Colors.grey),
-                onPressed: toggleVisibility,
-              )
-            : null,
-        suffixIcon: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 15),
-          child: Icon(icon, color: const Color(0xFF2D9E68), size: 28),
-        ),
+        prefixIcon: isPassword ? IconButton(icon: Icon(obscureText ? Icons.visibility_off : Icons.visibility, size: 24, color: Colors.grey), onPressed: toggleVisibility) : null,
+        suffixIcon: Padding(padding: const EdgeInsets.symmetric(horizontal: 15), child: Icon(icon, color: const Color(0xFF2D9E68), size: 28)),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20),
-          borderSide: const BorderSide(color: Color(0xFF2D9E68), width: 2),
-        ),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: Color(0xFF2D9E68), width: 2)),
       ),
     );
   }
@@ -187,27 +188,11 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   Widget _buildSubmitButton() {
     return Container(
       height: 75,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(colors: [Color(0xFF2D9E68), Color(0xFF38B277)]),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF2D9E68).withOpacity(0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), gradient: const LinearGradient(colors: [Color(0xFF2D9E68), Color(0xFF38B277)]), boxShadow: [BoxShadow(color: const Color(0xFF2D9E68).withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))]),
       child: ElevatedButton(
         onPressed: _isLoading ? null : _submitLogin,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        ),
-        child: _isLoading
-            ? const CircularProgressIndicator(color: Colors.white)
-            : Text('دخول', style: TextStyle(color: Colors.white, fontSize: 16.sp, fontWeight: FontWeight.bold)),
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+        child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : Text('دخول', style: TextStyle(color: Colors.white, fontSize: 16.sp, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -216,21 +201,8 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     return Container(
       margin: const EdgeInsets.only(top: 20),
       padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-          color: Colors.red.shade50,
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.red.shade200)),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.error_outline, color: Colors.red.shade800),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(_errorMessage!,
-                style: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.bold, fontSize: 11.sp)),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.red.shade200)),
+      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.error_outline, color: Colors.red.shade800), const SizedBox(width: 10), Expanded(child: Text(_errorMessage!, style: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.bold, fontSize: 11.sp)))]),
     );
   }
 }
