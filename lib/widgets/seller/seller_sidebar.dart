@@ -1,7 +1,8 @@
+// lib/widgets/seller/seller_sidebar.dart
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 // 🎯 استيراد الصفحة الصحيحة لنظرة عامة
-import 'package:my_test_app/screens/seller/seller_overview_screen.dart'; 
+import 'package:my_test_app/screens/seller/seller_overview_screen.dart';
 import 'package:my_test_app/screens/seller/add_offer_screen.dart';
 import 'package:my_test_app/screens/seller/offers_screen.dart';
 import 'package:my_test_app/screens/orders_screen.dart';
@@ -50,11 +51,15 @@ class _SidebarItem extends StatelessWidget {
           child: Container(
             padding: EdgeInsets.symmetric(horizontal: 15, vertical: 1.8.h),
             decoration: BoxDecoration(
-              border: isActive ? const Border(right: BorderSide(color: primaryColor, width: 5)) : null,
+              border: isActive
+                  ? const Border(right: BorderSide(color: primaryColor, width: 5))
+                  : null,
             ),
             child: Row(
               children: [
-                Icon(icon, size: 24.sp, color: isActive ? primaryColor : sidebarTextColor),
+                Icon(icon,
+                    size: 24.sp,
+                    color: isActive ? primaryColor : sidebarTextColor),
                 const SizedBox(width: 15),
                 Expanded(
                   child: Text(
@@ -69,10 +74,14 @@ class _SidebarItem extends StatelessWidget {
                 if (notificationCount > 0)
                   Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                    decoration: const BoxDecoration(
+                        color: Colors.red, shape: BoxShape.circle),
                     child: Text(
                       notificationCount.toString(),
-                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold),
                     ),
                   ),
               ],
@@ -108,7 +117,8 @@ class SellerSidebar extends StatefulWidget {
   State<SellerSidebar> createState() => _SellerSidebarState();
 }
 
-class _SidebarState extends State<SellerSidebar> {
+// 🎯 تم تصحيح الاسم هنا من _SidebarState إلى _SellerSidebarState ليتطابق مع الـ Widget
+class _SellerSidebarState extends State<SellerSidebar> {
   late List<Map<String, dynamic>> _menuItems;
 
   @override
@@ -126,16 +136,62 @@ class _SidebarState extends State<SellerSidebar> {
   void _initializeMenu() {
     final currentSellerId = widget.sellerId;
     _menuItems = [
-      // 🎯 تعديل هنا: تم تغيير SellerDummyScreen إلى SellerOverviewScreen
-      {'title': 'نظرة عامة', 'icon': Icons.dashboard_rounded, 'screen': const SellerOverviewScreen(), 'route': 'نظرة عامة'},
-      {'title': 'إضافة عرض', 'icon': Icons.add_box_rounded, 'screen': const AddOfferScreen(), 'route': 'إضافة عرض'},
-      {'title': 'العروض المتاحة', 'icon': Icons.local_offer_rounded, 'screen': const OffersScreen(), 'route': 'العروض المتاحة'},
-      {'title': 'الطلبات', 'icon': Icons.assignment_rounded, 'screen': OrdersScreen(userId: currentSellerId, userRole: 'seller'), 'route': 'الطلبات'},
-      {'title': 'التقارير', 'icon': Icons.pie_chart_rounded, 'screen': ReportsScreen(sellerId: currentSellerId), 'route': 'التقارير'},
-      {'title': 'الهدايا الترويجية', 'icon': Icons.card_giftcard_rounded, 'screen': CreateGiftPromoScreen(currentSellerId: currentSellerId), 'route': 'الهدايا الترويجية'},
-      {'title': 'تحديد مناطق التوصيل', 'icon': Icons.map_rounded, 'screen': DeliveryAreaScreen(currentSellerId: currentSellerId, hasWriteAccess: widget.hasWriteAccess), 'route': 'تحديد مناطق التوصيل'},
-      {'title': 'حساب المنصة', 'icon': Icons.account_balance_rounded, 'screen': const PlatformBalanceScreen(), 'route': 'حساب المنصة'},
-      {'title': 'حسابي', 'icon': Icons.manage_accounts_rounded, 'screen': SellerSettingsScreen(currentSellerId: currentSellerId), 'route': 'حسابي'},
+      {
+        'title': 'نظرة عامة',
+        'icon': Icons.dashboard_rounded,
+        'screen': const SellerOverviewScreen(),
+        'route': 'نظرة عامة'
+      },
+      {
+        'title': 'إضافة عرض',
+        'icon': Icons.add_box_rounded,
+        'screen': const AddOfferScreen(),
+        'route': 'إضافة عرض'
+      },
+      {
+        'title': 'العروض المتاحة',
+        'icon': Icons.local_offer_rounded,
+        'screen': const OffersScreen(),
+        'route': 'العروض المتاحة'
+      },
+      {
+        'title': 'الطلبات',
+        'icon': Icons.assignment_rounded,
+        'screen': OrdersScreen(userId: currentSellerId, userRole: 'seller'),
+        'route': 'الطلبات'
+      },
+      {
+        'title': 'التقارير',
+        'icon': Icons.pie_chart_rounded,
+        'screen': ReportsScreen(sellerId: currentSellerId),
+        'route': 'التقارير'
+      },
+      {
+        'title': 'الهدايا الترويجية',
+        'icon': Icons.card_giftcard_rounded,
+        'screen': CreateGiftPromoScreen(currentSellerId: currentSellerId),
+        'route': 'الهدايا الترويجية'
+      },
+      {
+        'title': 'تحديد مناطق التوصيل',
+        'icon': Icons.map_rounded,
+        'screen': DeliveryAreaScreen(
+            currentSellerId: currentSellerId,
+            hasWriteAccess: widget.hasWriteAccess),
+        'route': 'تحديد مناطق التوصيل'
+      },
+      {
+        'title': 'حساب المنصة',
+        'icon': Icons.account_balance_rounded,
+        'screen': const PlatformBalanceScreen(),
+        'route': 'حساب المنصة'
+      },
+      {
+        'title': 'حسابي',
+        'icon': Icons.manage_accounts_rounded,
+        'screen': SellerSettingsScreen(currentSellerId: currentSellerId),
+        'route': 'حسابي'
+      },
     ];
   }
 
@@ -154,14 +210,21 @@ class _SidebarState extends State<SellerSidebar> {
               backgroundColor: primaryColor,
               child: Text(
                 widget.userData.fullname?.substring(0, 1).toUpperCase() ?? "S",
-                style: TextStyle(fontSize: 22.sp, color: Colors.white, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                    fontSize: 22.sp,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold),
               ),
             ),
             accountName: Text(
               widget.userData.fullname ?? "مورد أكساب",
-              style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w900, color: Colors.white),
+              style: TextStyle(
+                  fontSize: 16.sp,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white),
             ),
-            accountEmail: const Text("لوحة التحكم الإدارية", style: TextStyle(color: Colors.white70)),
+            accountEmail: const Text("لوحة التحكم الإدارية",
+                style: TextStyle(color: Colors.white70)),
           ),
           Expanded(
             child: ListView(
@@ -176,23 +239,27 @@ class _SidebarState extends State<SellerSidebar> {
                     widget.onMenuSelected(item['route'] as String, screen);
                   },
                   isActive: widget.activeRoute == item['route'],
-                  notificationCount: item['route'] == 'الطلبات' ? widget.newOrdersCount : 0,
+                  notificationCount:
+                      item['route'] == 'الطلبات' ? widget.newOrdersCount : 0,
                 );
               }).toList(),
             ),
           ),
           const Divider(color: Colors.white10),
-          // 🎯 تأمين زر تسجيل الخروج في المساحة الآمنة (SafeArea)
           SafeArea(
             top: false,
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 2.h, vertical: 1.h),
               child: TextButton.icon(
                 onPressed: widget.onLogout,
-                icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+                icon:
+                    const Icon(Icons.logout_rounded, color: Colors.redAccent),
                 label: Text(
                   'تسجيل الخروج',
-                  style: TextStyle(color: Colors.redAccent, fontSize: 14.sp, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.bold),
                 ),
                 style: TextButton.styleFrom(
                   minimumSize: Size(double.infinity, 6.h),
