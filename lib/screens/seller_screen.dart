@@ -7,7 +7,6 @@ import 'package:my_test_app/widgets/seller/seller_sidebar.dart';
 import 'package:my_test_app/models/seller_dashboard_data.dart';
 import 'package:my_test_app/screens/seller/seller_overview_screen.dart';
 import 'package:sizer/sizer.dart';
-
 // 🎯 استيرادات الإشعارات
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -51,7 +50,7 @@ class _SellerScreenState extends State<SellerScreen> {
 
     // 2. إعداد Firebase Messaging
     FirebaseMessaging messaging = FirebaseMessaging.instance;
-    
+
     // طلب الإذن من Firebase (إضافي للتأكيد)
     await messaging.requestPermission(
       alert: true,
@@ -101,7 +100,7 @@ class _SellerScreenState extends State<SellerScreen> {
   @override
   void initState() {
     super.initState();
-    
+
     // 🎯 طلب الإذن بعد ثانية واحدة من استقرار الشاشة
     Future.delayed(const Duration(seconds: 1), () {
       if (mounted) _setupNotifications();
@@ -140,19 +139,21 @@ class _SellerScreenState extends State<SellerScreen> {
               IconButton(
                 icon: const Icon(Icons.notifications_none_rounded, size: 28),
                 onPressed: () {
-                  // يمكن عرض تاريخ التنبيهات هنا
+                  // 🎯 التحسين: إعادة توجيه المستخدم لصفحة "نظرة عامة" لتحديث البيانات أو رؤية التنبيهات
+                  _selectMenuItem('نظرة عامة', const SellerOverviewScreen());
                 },
               ),
               if (controller.data.newOrdersCount > 0)
                 Positioned(
-                  top: 12,
-                  right: 12,
+                  top: 15,
+                  right: 15,
                   child: Container(
                     width: 10,
                     height: 10,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: Colors.redAccent,
                       shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
                     ),
                   ),
                 )

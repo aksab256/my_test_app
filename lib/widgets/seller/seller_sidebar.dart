@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
-import 'package:my_test_app/screens/dummy_screen.dart';
+// 🎯 استيراد الصفحة الصحيحة لنظرة عامة
+import 'package:my_test_app/screens/seller/seller_overview_screen.dart'; 
 import 'package:my_test_app/screens/seller/add_offer_screen.dart';
 import 'package:my_test_app/screens/seller/offers_screen.dart';
 import 'package:my_test_app/screens/orders_screen.dart';
@@ -35,7 +36,6 @@ class _SidebarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const darkSidebarBg = Color(0xff212529);
     const sidebarTextColor = Color(0xffdee2e6);
     const primaryColor = Color(0xff28a745);
 
@@ -55,13 +55,13 @@ class _SidebarItem extends StatelessWidget {
             child: Row(
               children: [
                 Icon(icon, size: 24.sp, color: isActive ? primaryColor : sidebarTextColor),
-                SizedBox(width: 15),
+                const SizedBox(width: 15),
                 Expanded(
                   child: Text(
                     title,
                     style: TextStyle(
                       color: isActive ? Colors.white : sidebarTextColor,
-                      fontSize: 14.sp, // تكبير الخط بناءً على طلبك
+                      fontSize: 14.sp,
                       fontWeight: isActive ? FontWeight.w900 : FontWeight.w600,
                     ),
                   ),
@@ -108,7 +108,7 @@ class SellerSidebar extends StatefulWidget {
   State<SellerSidebar> createState() => _SellerSidebarState();
 }
 
-class _SellerSidebarState extends State<SellerSidebar> {
+class _SidebarState extends State<SellerSidebar> {
   late List<Map<String, dynamic>> _menuItems;
 
   @override
@@ -126,7 +126,8 @@ class _SellerSidebarState extends State<SellerSidebar> {
   void _initializeMenu() {
     final currentSellerId = widget.sellerId;
     _menuItems = [
-      {'title': 'نظرة عامة', 'icon': Icons.dashboard_rounded, 'screen': const SellerDummyScreen(title: 'نظرة عامة'), 'route': 'نظرة عامة'},
+      // 🎯 تعديل هنا: تم تغيير SellerDummyScreen إلى SellerOverviewScreen
+      {'title': 'نظرة عامة', 'icon': Icons.dashboard_rounded, 'screen': const SellerOverviewScreen(), 'route': 'نظرة عامة'},
       {'title': 'إضافة عرض', 'icon': Icons.add_box_rounded, 'screen': const AddOfferScreen(), 'route': 'إضافة عرض'},
       {'title': 'العروض المتاحة', 'icon': Icons.local_offer_rounded, 'screen': const OffersScreen(), 'route': 'العروض المتاحة'},
       {'title': 'الطلبات', 'icon': Icons.assignment_rounded, 'screen': OrdersScreen(userId: currentSellerId, userRole: 'seller'), 'route': 'الطلبات'},
@@ -181,13 +182,23 @@ class _SellerSidebarState extends State<SellerSidebar> {
             ),
           ),
           const Divider(color: Colors.white10),
-          Padding(
-            padding: EdgeInsets.all(2.h),
-            child: TextButton.icon(
-              onPressed: widget.onLogout,
-              icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-              label: Text('تسجيل الخروج', style: TextStyle(color: Colors.redAccent, fontSize: 14.sp, fontWeight: FontWeight.bold)),
-              style: TextButton.styleFrom(minimumSize: Size(double.infinity, 6.h), alignment: Alignment.centerRight),
+          // 🎯 تأمين زر تسجيل الخروج في المساحة الآمنة (SafeArea)
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 2.h, vertical: 1.h),
+              child: TextButton.icon(
+                onPressed: widget.onLogout,
+                icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+                label: Text(
+                  'تسجيل الخروج',
+                  style: TextStyle(color: Colors.redAccent, fontSize: 14.sp, fontWeight: FontWeight.bold),
+                ),
+                style: TextButton.styleFrom(
+                  minimumSize: Size(double.infinity, 6.h),
+                  alignment: Alignment.centerRight,
+                ),
+              ),
             ),
           ),
         ],
@@ -195,3 +206,4 @@ class _SellerSidebarState extends State<SellerSidebar> {
     );
   }
 }
+

@@ -1,5 +1,4 @@
 // lib/helpers/auth_service.dart
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -24,22 +23,29 @@ class AuthService {
         email: email,
         password: password,
       );
+      
       final User? user = userCredential.user;
       if (user == null) throw Exception("user-null");
 
-      // البحث عن بيانات المستخدم كاملة
+      // البحث عن بيانات المستخدم كاملة في كل المجموعات بما فيها الانتظار
       final userData = await _getUserDataByEmail(email);
-
       final String userRole = userData['role'];
+
+      // 🎯 منطق التحقق من الحساب المعلق (Pending)
+      if (userRole == 'pending') {
+        await _auth.signOut(); // طرده فوراً من النظام
+        throw 'auth/account-not-active'; // إرسال كود خطأ مخصص للـ UI
+      }
+
       final String userAddress = userData['address'] ?? '';
       final String? userFullName = userData['fullname'] ?? userData['fullName'];
       final String? merchantName = userData['merchantName'];
       final String phoneToShow = userData['phone'] ?? email.split('@')[0];
       
-      // 🎯 جلب اللوكيشن {lat, lng} من الفايرستور
+      // جلب اللوكيشن {lat, lng} من الفايرستور
       final dynamic userLocation = userData['location'];
 
-      // حفظ كل البيانات بما فيها اللوكيشن في الذاكرة المحلية
+      // حفظ البيانات في الذاكرة المحلية (فقط إذا كان الحساب مفعل)
       await _saveUserToLocalStorage(
         id: user.uid,
         role: userRole,
@@ -47,13 +53,15 @@ class AuthService {
         address: userAddress,
         merchantName: merchantName,
         phone: phoneToShow,
-        location: userLocation, // تمرير اللوكيشن هنا
+        location: userLocation,
       );
 
       return userRole;
     } on FirebaseAuthException catch (e) {
       throw e.code;
     } catch (e) {
+      // إذا كان الخطأ هو عدم تفعيل الحساب، نمرره كما هو
+      if (e == 'auth/account-not-active') throw e;
       throw 'auth/unknown-error';
     }
   }
@@ -70,7 +78,9 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> _getUserDataByEmail(String email) async {
-    final collections = ['sellers', 'consumers', 'users'];
+    // 🎯 أضفنا pendingSellers هنا لتكون ضمن نطاق البحث
+    final collections = ['sellers', 'consumers', 'users', 'pendingSellers'];
+    
     for (var colName in collections) {
       try {
         final snap = await _db.collection(colName).where('email', isEqualTo: email).limit(1).get();
@@ -78,12 +88,15 @@ class AuthService {
           final data = snap.docs.first.data();
           String role = 'buyer';
 
+          // تحويل اسم المجموعة إلى "دور" (Role) برمي
           if (colName == 'sellers') {
             role = 'seller';
           } else if (colName == 'consumers') {
             role = 'consumer';
           } else if (colName == 'users') {
             role = 'buyer';
+          } else if (colName == 'pendingSellers') {
+            role = 'pending'; // 🎯 وسم الحساب كـ "معلق"
           }
 
           return {...data, 'role': role};
@@ -102,7 +115,7 @@ class AuthService {
     String? address,
     String? merchantName,
     String? phone,
-    dynamic location, // 📍 إضافة اللوكيشن هنا
+    dynamic location,
   }) async {
     final data = {
       'id': id,
@@ -112,19 +125,38 @@ class AuthService {
       'address': address,
       'merchantName': merchantName,
       'phone': phone,
-      'location': location, // 🎯 سيتم حفظه داخل الـ JSON
+      'location': location,
     };
     final prefs = await SharedPreferences.getInstance();
+    // 🎯 استخدام Key 'loggedUser' كما اتفقنا لضمان الثبات [2025-11-02]
     await prefs.setString('loggedUser', json.encode(data));
     debugPrint("✅ تم حفظ بيانات المستخدم واللوكيشن بنجاح");
   }
 
-  // الدوال الإضافية (FCM) تبقى كما هي...
-  Future<String?> _requestFCMToken() async { try { return await FirebaseMessaging.instance.getToken(); } catch (e) { return null; } }
+  Future<String?> _requestFCMToken() async { 
+    try { 
+      return await FirebaseMessaging.instance.getToken(); 
+    } catch (e) { 
+      return null; 
+    } 
+  }
+
   Future<void> _registerFcmEndpoint(String userId, String fcmToken, String userRole, String userAddress) async {
     try {
-      final apiData = { 'userId': userId, 'fcmToken': fcmToken, 'role': userRole, 'address': userAddress };
-      await http.post(Uri.parse(_notificationApiEndpoint), headers: {'Content-Type': 'application/json'}, body: json.encode(apiData));
-    } catch (e) { debugPrint("⚠️ AWS Error: $e"); }
+      final apiData = { 
+        'userId': userId, 
+        'fcmToken': fcmToken, 
+        'role': userRole, 
+        'address': userAddress 
+      };
+      await http.post(
+        Uri.parse(_notificationApiEndpoint), 
+        headers: {'Content-Type': 'application/json'}, 
+        body: json.encode(apiData)
+      );
+    } catch (e) { 
+      debugPrint("⚠️ AWS Error: $e"); 
+    }
   }
 }
+
