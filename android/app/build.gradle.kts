@@ -41,8 +41,8 @@ android {
 }
 
 dependencies {
-    // 🎯 المكتبة المطلوبة لتشغيل خصائص لغة جافا الحديثة في الإشعارات
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.3")
+    // 🎯 تم تحديث النسخة إلى 2.1.4 لحل مشكلة التوافق مع مكتبة الإشعارات
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 
     // التبعيات الأساسية
     implementation("androidx.multidex:multidex:2.0.1")
@@ -54,4 +54,3 @@ dependencies {
 flutter {
     source = "../.."
 }
-
