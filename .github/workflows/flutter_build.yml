@@ -28,7 +28,6 @@ jobs:
       - name: 📦 Install Dependencies
         run: flutter pub get
 
-      # 🎯 الخطوة المعدلة: إعطاء صلاحية التنفيذ واستخراج البصمات
       - name: 🔑 Get SHA Fingerprints
         run: |
           cd android
@@ -36,12 +35,12 @@ jobs:
           ./gradlew signingReport
 
       - name: 🏗️ Build Release APK
-        # نبني نسخة debug لأن الـ gradle مهيأ حالياً لتوقيع الـ debug فقط
-        run: flutter build apk --debug
+        # تحويل البناء إلى وضع الـ Release النهائي
+        run: flutter build apk --release
 
       - name: 📤 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: Aksabeg-Release
+          path: build/app/outputs/flutter-apk/app-release.apk
 
