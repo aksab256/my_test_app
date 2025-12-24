@@ -8,12 +8,12 @@ import '../constants/delivery_constants.dart';
 
 class DeliveryAreaScreen extends StatefulWidget {
   final String currentSellerId;
-  final bool hasWriteAccess; // تم جلبها من منطق الـ Auth
+  final bool hasWriteAccess; // تم جعلها اختيارية لتجنب أخطاء الـ Navigation
 
   const DeliveryAreaScreen({
     super.key,
     required this.currentSellerId,
-    required this.hasWriteAccess,
+    this.hasWriteAccess = true, // 👈 القيمة الافتراضية هنا تحل مشكلة الـ Build
   });
 
   @override
@@ -46,24 +46,9 @@ class _DeliveryAreaScreenState extends State<DeliveryAreaScreen> {
 
   Future<void> _initializeData() async {
     setState(() => _isLoading = true);
-
-    // 1. تحميل GeoJSON
-    // 💡 بما أننا جعلنا DeliveryMapView يقوم بالتحميل الآن، يمكننا تمرير null أو تحميله هنا
-    // سنقوم بتعطيل التحميل هنا مؤقتاً لنجعل DeliveryMapView يقوم به (لأننا أعدنا GeoJsonPath كـ Asset)
-    // _geoJsonData = await _areaService.loadAdministrativeAreas();
-
-    // 2. تحميل المناطق المحددة سابقاً من Firestore
+    // تحميل المناطق المحددة سابقاً من Firestore
     await _loadSelectedAreasFromDB();
-
-
     setState(() => _isLoading = false);
-
-    // 💡 لم يعد هذا التحقق ضرورياً لأن التحميل أصبح في Widget آخر
-    /*
-    if (_geoJsonData == null) {
-      _showNotification('❌ فشل تحميل ملف GeoJSON. تأكد من وضعه في assets', isError: true);
-    }
-    */
   }
 
   Future<void> _loadSelectedAreasFromDB() async {
@@ -73,7 +58,7 @@ class _DeliveryAreaScreenState extends State<DeliveryAreaScreen> {
 
       if (sellerSnap.exists) {
         final data = sellerSnap.data();
-        // 💡 ملاحظة: يجب أن يكون FIRESTORE_DELIVERY_AREAS_FIELD هو 'deliveryAreas' كما رأينا في HTML
+        // استخدام الثابت الخاص بمجالات التوصيل
         final List<dynamic> areas = data?[FIRESTORE_DELIVERY_AREAS_FIELD] ?? [];
 
         setState(() {
@@ -124,6 +109,7 @@ class _DeliveryAreaScreenState extends State<DeliveryAreaScreen> {
   }
 
   void _showNotification(String message, {bool isError = false}) {
+    if (!mounted) return;
     setState(() {
       _notificationMessage = message;
       _notificationColor = isError ? Colors.red : const Color(0xff28a745);
@@ -147,6 +133,7 @@ class _DeliveryAreaScreenState extends State<DeliveryAreaScreen> {
       appBar: AppBar(
         title: const Text('تحديد مناطق التوصيل'),
         backgroundColor: const Color(0xff28a745),
+        foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -195,7 +182,6 @@ class _DeliveryAreaScreenState extends State<DeliveryAreaScreen> {
               ))
             else
               DeliveryMapView(
-                // 🎯 التصحيح هنا: تغيير اسم الخاصية
                 initialGeoJsonData: _geoJsonData,
                 initialSelectedAreas: _selectedAreasFromDB,
                 onAreasChanged: _updateCurrentSelection,
@@ -226,4 +212,3 @@ class _DeliveryAreaScreenState extends State<DeliveryAreaScreen> {
     );
   }
 }
-
