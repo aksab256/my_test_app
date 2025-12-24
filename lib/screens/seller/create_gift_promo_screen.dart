@@ -17,7 +17,6 @@ class CreateGiftPromoScreen extends StatefulWidget {
 class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controllers
   final TextEditingController _promoNameController = TextEditingController();
   final TextEditingController _minOrderController = TextEditingController();
   final TextEditingController _triggerQtyBaseController = TextEditingController();
@@ -42,12 +41,13 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('productOffers')
-          .where('sellerId', isEqualTo: widget.currentSellerId) // ✅ تم التصحيح هنا
+          .where('sellerId', isEqualTo: widget.currentSellerId)
           .get();
 
       final offers = snapshot.docs.map((doc) {
         final data = doc.data();
-        final unit = (data['units'] as List?)?.first ?? {};
+        final List units = data['units'] as List? ?? [];
+        final unit = units.isNotEmpty ? units.first : {};
         return {
           'id': doc.id,
           'productName': data['productName'] ?? 'بدون اسم',
@@ -56,7 +56,6 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
           'availableStock': unit['availableStock'] ?? 0,
           'price': unit['price'] ?? 0,
           'unitName': unit['unitName'] ?? 'الوحدة الرئيسية',
-          'fullData': data,
         };
       }).toList();
 
@@ -78,11 +77,10 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
 
     setState(() => _isLoading = true);
     
-    // ✅ جلب بيانات الهدية المختارة بشكل صحيح لاستخدامها في الـ Transaction
-    final giftOffer = _availableOffers.firstWhere((o) => o['id'] == _selectedGiftOfferId);
-    final int requestedQty = int.parse(_maxPromoQtyController.text);
-
     try {
+      final giftOffer = _availableOffers.firstWhere((o) => o['id'] == _selectedGiftOfferId);
+      final int requestedQty = int.parse(_maxPromoQtyController.text);
+
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final giftRef = FirebaseFirestore.instance.collection('productOffers').doc(_selectedGiftOfferId);
         final giftDoc = await transaction.get(giftRef);
@@ -99,27 +97,24 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
           throw "الرصيد غير كافٍ! المتاح: $currentStock";
         }
 
-        // تحديث الرصيد
         unit0['availableStock'] = currentStock - requestedQty;
         unit0['reservedForPromos'] = (unit0['reservedForPromos'] ?? 0) + requestedQty;
         unit0['updatedAt'] = DateTime.now().toIso8601String();
         units[0] = unit0;
 
-        // 1. تحديث عرض المنتج (حجز المخزون)
         transaction.update(giftRef, {'units': units});
 
-        // 2. إنشاء وثيقة الـ Promo الجديدة (استخدام giftOffer بدلاً من gift غير المعرفة)
         final promoRef = FirebaseFirestore.instance.collection('giftPromos').doc();
         transaction.set(promoRef, {
           'sellerId': widget.currentSellerId,
           'promoName': _promoNameController.text,
           'giftOfferId': _selectedGiftOfferId,
-          'giftProductName': giftOffer['productName'], // ✅ تم التصحيح
-          'giftUnitName': giftOffer['unitName'],       // ✅ تم التصحيح
+          'giftProductName': giftOffer['productName'],
+          'giftUnitName': giftOffer['unitName'],
           'giftQuantityPerBase': int.parse(_giftQtyPerBaseController.text),
-          'giftOfferPriceSnapshot': giftOffer['price'],// ✅ تم التصحيح
-          'giftProductId': giftOffer['productId'],     // ✅ تم التصحيح
-          'giftProductImage': giftOffer['imageUrl'],   // ✅ تم التصحيح
+          'giftOfferPriceSnapshot': giftOffer['price'],
+          'giftProductId': giftOffer['productId'],
+          'giftProductImage': giftOffer['imageUrl'],
           'trigger': _triggerType == 'min_order'
               ? {'type': 'min_order', 'value': double.parse(_minOrderController.text)}
               : {
@@ -127,21 +122,21 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
                   'offerId': _selectedTriggerOfferId,
                   'triggerQuantityBase': int.parse(_triggerQtyBaseController.text)
                 },
-          'expiryDate': DateTime.parse(_expiryDateController.text).toIso8601String(),
+          'expiryDate': _expiryDateController.text,
           'maxQuantity': requestedQty,
           'usedQuantity': 0,
           'reservedQuantity': 0,
           'status': 'active',
-          'createdAt': FieldValue.serverTimestamp(), // استخدام توقيت السيرفر الرسمي
+          'createdAt': FieldValue.serverTimestamp(),
         });
       });
 
       _showSnackBar("تم إنشاء عرض الهدية وحجز الرصيد بنجاح ✅");
-      Navigator.pop(context);
+      if (mounted) Navigator.pop(context);
     } catch (e) {
       _showSnackBar(e.toString(), isError: true);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -188,15 +183,14 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
     );
   }
 
-  // --- Widgets Helpers ---
   Widget _buildTextField(TextEditingController controller, String label, {bool isNumber = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: TextFormField(
         controller: controller,
-        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+        keyboardType: isNumber ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
         decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
-        validator: (v) => v!.isEmpty ? "مطلوب" : null,
+        validator: (v) => v == null || v.isEmpty ? "مطلوب" : null,
       ),
     );
   }
@@ -209,6 +203,7 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: DropdownButtonFormField<String>(
+        isExpanded: true,
         decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
         items: items.map((id) {
           String text = id;
@@ -218,9 +213,10 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
           } else {
             text = id == 'min_order' ? "عند الوصول لحد أدنى للمبلغ" : "عند شراء منتج محدد";
           }
-          return DropdownMenuItem(value: id, child: Text(text));
+          return DropdownMenuItem(value: id, child: Text(text, overflow: TextOverflow.ellipsis));
         }).toList(),
         onChanged: onSelected,
+        validator: (v) => v == null ? "مطلوب" : null,
       ),
     );
   }
@@ -234,13 +230,19 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
         decoration: const InputDecoration(labelText: "تاريخ انتهاء الصلاحية", border: OutlineInputBorder(), suffixIcon: Icon(Icons.calendar_today)),
         onTap: () async {
           DateTime? picked = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime.now(), lastDate: DateTime(2030));
-          if (picked != null) _expiryDateController.text = picked.toIso8601String().split('T')[0];
+          if (picked != null) {
+            setState(() {
+              _expiryDateController.text = picked.toIso8601String().split('T')[0];
+            });
+          }
         },
+        validator: (v) => v == null || v.isEmpty ? "مطلوب" : null,
       ),
     );
   }
 
   void _showSnackBar(String msg, {bool isError = false}) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: isError ? Colors.red : Colors.green));
   }
 }
