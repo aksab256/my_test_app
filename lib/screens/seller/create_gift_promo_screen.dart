@@ -79,7 +79,6 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
       final int requestedQty = int.parse(_maxPromoQtyController.text);
       final String promoName = _promoNameController.text;
 
-      // تنفيذ الـ Transaction لحجز الرصيد
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final giftRef = FirebaseFirestore.instance.collection('productOffers').doc(_selectedGiftOfferId);
         final giftDoc = await transaction.get(giftRef);
@@ -87,14 +86,10 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
         if (!giftDoc.exists) throw "وثيقة الهدية غير موجودة";
 
         List units = List.from(giftDoc.data()?['units'] ?? []);
-        if (units.isEmpty) throw "لا توجد وحدات لهذا العرض";
-
         Map unit0 = Map.from(units[0]);
         int currentStock = (unit0['availableStock'] ?? 0).toInt();
 
-        if (currentStock < requestedQty) {
-          throw "الرصيد غير كافٍ! المتاح: $currentStock";
-        }
+        if (currentStock < requestedQty) throw "الرصيد غير كافٍ!";
 
         unit0['availableStock'] = currentStock - requestedQty;
         unit0['reservedForPromos'] = (unit0['reservedForPromos'] ?? 0) + requestedQty;
@@ -103,12 +98,6 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
         transaction.update(giftRef, {'units': units});
 
         final promoRef = FirebaseFirestore.instance.collection('giftPromos').doc();
-        
-        String triggerProdName = "";
-        if (_triggerType == 'specific_item' && _selectedTriggerOfferId != null) {
-          triggerProdName = _availableOffers.firstWhere((o) => o['id'] == _selectedTriggerOfferId)['productName'];
-        }
-
         transaction.set(promoRef, {
           'sellerId': widget.currentSellerId,
           'promoName': promoName,
@@ -124,7 +113,7 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
               : {
                   'type': 'specific_item',
                   'offerId': _selectedTriggerOfferId,
-                  'productName': triggerProdName,
+                  'productName': _availableOffers.firstWhere((o) => o['id'] == _selectedTriggerOfferId)['productName'],
                   'triggerQuantityBase': int.parse(_triggerQtyBaseController.text)
                 },
           'expiryDate': Timestamp.fromDate(DateTime.parse(_expiryDateController.text)),
@@ -135,30 +124,30 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
         });
       });
 
-      // 🚀 إرسال الإشعارات بشكل منفصل وآمن
-      _startNotificationBroadcast(promoName);
-
       if (mounted) {
-        _showSnackBar("تم إنشاء عرض الهدية بنجاح ✅");
-        Navigator.pop(context); 
+        _showSnackBar("تم إنشاء العرض بنجاح ✅");
+        // نوقف اللودينج قبل الخروج لضمان استقرار الواجهة
+        setState(() => _isLoading = false);
+        Navigator.pop(context);
+        // الإشعارات في الخلفية
+        _startNotificationBroadcast(promoName);
       }
-
     } catch (e) {
-      if (mounted) _showSnackBar(e.toString(), isError: true);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showSnackBar(e.toString(), isError: true);
+      }
     }
   }
 
   void _startNotificationBroadcast(String promoName) async {
     try {
-      // إرسال البيانات للمدا مع معرف المنتج لتفعيل القفل
       await NotificationService.broadcastPromoNotification(
         sellerId: widget.currentSellerId,
         sellerName: "موردك في اكسب",
         promoName: promoName,
-        deliveryAreas: [], // اللمدا ستستهدف كل المشترين افتراضياً
-        productId: _selectedTriggerOfferId ?? "min_order_promo", 
+        deliveryAreas: [],
+        productId: _selectedTriggerOfferId ?? "min_order_promo",
       );
     } catch (e) {
       debugPrint("Notification silent fail: $e");
@@ -170,14 +159,22 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text('إنشاء عرض هدايا ترويجي'),
+        title: Text('إنشاء عرض هدايا', style: TextStyle(fontSize: 14.sp)),
         backgroundColor: const Color(0xFF1B5E20),
         centerTitle: true,
+        actions: [
+          // زر إدارة الهدايا في الـ AppBar
+          IconButton(
+            icon: const Icon(Icons.settings_suggest),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ManageGiftPromosScreen(currentSellerId: widget.currentSellerId))),
+            tooltip: "إدارة الهدايا",
+          )
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Colors.green))
           : SingleChildScrollView(
-              padding: EdgeInsets.all(16.sp),
+              padding: EdgeInsets.all(12.sp),
               child: Form(
                 key: _formKey,
                 child: Column(
@@ -187,9 +184,7 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
                       _buildDatePicker(),
                     ]),
                     _buildSectionCard([
-                      _buildDropdown("متى تُمنح الهدية؟", ['min_order', 'specific_item'], (val) {
-                        setState(() => _triggerType = val!);
-                      }),
+                      _buildDropdown("متى تُمنح الهدية؟", ['min_order', 'specific_item'], (val) => setState(() => _triggerType = val!)),
                       if (_triggerType == 'min_order')
                         _buildTextField(_minOrderController, "الحد الأدنى للطلب (ج.م)", Icons.payments, isNumber: true),
                       if (_triggerType == 'specific_item') ...[
@@ -200,19 +195,25 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
                     _buildSectionCard([
                       _buildOfferPicker("اختر الهدية الممنوحة", (id) => _selectedGiftOfferId = id),
                       _buildTextField(_giftQtyPerBaseController, "كمية الهدية لكل عملية", Icons.card_giftcard, isNumber: true),
-                      _buildTextField(_maxPromoQtyController, "إجمالي الهدايا المتاحة (للحجز)", Icons.inventory, isNumber: true),
+                      _buildTextField(_maxPromoQtyController, "إجمالي الهدايا المتاحة للحجز", Icons.inventory, isNumber: true),
                     ]),
-                    SizedBox(height: 20.sp),
-                    ElevatedButton(
-                      onPressed: _isLoading ? null : _createGiftPromo,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2E7D32),
-                        minimumSize: Size(double.infinity, 55.sp),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    SizedBox(height: 10.sp),
+                    // زر الحفظ بحجم أصغر وأكثر أناقة
+                    SizedBox(
+                      width: 80.w,
+                      height: 45.sp,
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _createGiftPromo,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2E7D32),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                          elevation: 2,
+                        ),
+                        child: Text(_isLoading ? "جاري الحفظ..." : "تفعيل العرض وحجز المخزن", 
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.sp)),
                       ),
-                      child: Text(_isLoading ? "جاري الحفظ..." : "إنشاء العرض وحجز المخزن", 
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.sp)),
                     ),
+                    SizedBox(height: 10.sp),
                   ],
                 ),
               ),
@@ -222,22 +223,25 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
 
   Widget _buildSectionCard(List<Widget> children) {
     return Card(
-      margin: EdgeInsets.only(bottom: 15.sp),
+      margin: EdgeInsets.only(bottom: 12.sp),
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
-      child: Padding(padding: EdgeInsets.all(12.sp), child: Column(children: children)),
+      child: Padding(padding: EdgeInsets.all(10.sp), child: Column(children: children)),
     );
   }
 
   Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool isNumber = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: TextFormField(
         controller: controller,
+        style: TextStyle(fontSize: 11.sp),
         keyboardType: isNumber ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
         decoration: InputDecoration(
           labelText: label,
-          prefixIcon: Icon(icon, size: 18.sp),
+          labelStyle: TextStyle(fontSize: 10.sp),
+          prefixIcon: Icon(icon, size: 16.sp),
+          contentPadding: EdgeInsets.symmetric(horizontal: 10.sp, vertical: 8.sp),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         ),
         validator: (v) => v == null || v.isEmpty ? "مطلوب" : null,
@@ -247,18 +251,21 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
 
   Widget _buildDropdown(String label, List<String> items, Function(String?) onSelected, {bool isOffer = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: DropdownButtonFormField<String>(
         isExpanded: true,
+        style: TextStyle(fontSize: 11.sp, color: Colors.black),
         decoration: InputDecoration(
           labelText: label,
+          labelStyle: TextStyle(fontSize: 10.sp),
+          contentPadding: EdgeInsets.symmetric(horizontal: 10.sp, vertical: 8.sp),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         ),
         items: items.map((id) {
           String text = id;
           if (isOffer) {
             final offer = _availableOffers.firstWhere((o) => o['id'] == id);
-            text = "${offer['productName']} (المتاح: ${offer['availableStock']})";
+            text = "${offer['productName']} (${offer['availableStock']})";
           } else {
             text = id == 'min_order' ? "عند الوصول لمبلغ محدد" : "عند شراء منتج معين";
           }
@@ -270,31 +277,24 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
     );
   }
 
-  Widget _buildOfferPicker(String label, Function(String?) onSelected) {
-    return _buildDropdown(label, _availableOffers.map((e) => e['id'] as String).toList(), onSelected, isOffer: true);
-  }
+  Widget _buildOfferPicker(String label, Function(String?) onSelected) => _buildDropdown(label, _availableOffers.map((e) => e['id'] as String).toList(), onSelected, isOffer: true);
 
   Widget _buildDatePicker() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: TextFormField(
         controller: _expiryDateController,
         readOnly: true,
+        style: TextStyle(fontSize: 11.sp),
         decoration: InputDecoration(
           labelText: "تاريخ انتهاء العرض",
-          prefixIcon: const Icon(Icons.calendar_today),
+          labelStyle: TextStyle(fontSize: 10.sp),
+          prefixIcon: Icon(Icons.calendar_today, size: 16.sp),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         ),
         onTap: () async {
-          DateTime? picked = await showDatePicker(
-            context: context, 
-            initialDate: DateTime.now().add(const Duration(days: 7)), 
-            firstDate: DateTime.now(), 
-            lastDate: DateTime(2030)
-          );
-          if (picked != null) {
-            setState(() => _expiryDateController.text = picked.toIso8601String().split('T')[0]);
-          }
+          DateTime? picked = await showDatePicker(context: context, initialDate: DateTime.now().add(const Duration(days: 7)), firstDate: DateTime.now(), lastDate: DateTime(2030));
+          if (picked != null) setState(() => _expiryDateController.text = picked.toIso8601String().split('T')[0]);
         },
         validator: (v) => v == null || v.isEmpty ? "مطلوب" : null,
       ),
@@ -303,9 +303,7 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
 
   void _showSnackBar(String msg, {bool isError = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: isError ? Colors.red : Colors.green)
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: isError ? Colors.red : Colors.green, duration: const Duration(seconds: 2)));
   }
 }
 
