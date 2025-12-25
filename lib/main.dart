@@ -134,13 +134,15 @@ class MyApp extends StatelessWidget {
             brightness: Brightness.light,
             primaryColor: AppTheme.primaryGreen,
             colorScheme: ColorScheme.light(primary: AppTheme.primaryGreen),
-            textTheme: GoogleFonts.notoSansArabicTextTheme(),
+            // ✅ تم التغيير لخط Cairo لضمان الوضوح والسمك المطلوب
+            textTheme: GoogleFonts.cairoTextTheme(ThemeData.light().textTheme),
           ),
           darkTheme: ThemeData(
             brightness: Brightness.dark,
             primaryColor: AppTheme.primaryGreen,
             colorScheme: ColorScheme.dark(primary: AppTheme.primaryGreen),
-            textTheme: GoogleFonts.notoSansArabicTextTheme(ThemeData.dark().textTheme),
+            // ✅ تم التغيير لخط Cairo في الوضع الليلي أيضاً
+            textTheme: GoogleFonts.cairoTextTheme(ThemeData.dark().textTheme),
           ),
           initialRoute: '/',
           routes: {
@@ -168,8 +170,8 @@ class MyApp extends StatelessWidget {
             '/updatsupermarket': (context) => const UpdateDeliverySettingsScreen(),
             '/con-orders': (context) => const ConsumerOrdersScreen(),
             '/constore': (context) => const BuyerHomeScreen(),
-            
-            // إضافة المسارات الخاصة بالمورد لضمان عمل الـ Navigation
+
+            // إضافة المسارات الخاصة بالمورد
             '/add-offer': (context) => const AddOfferScreen(),
             '/create-gift': (context) => const CreateGiftPromoScreen(currentSellerId: ''),
             '/delivery-areas': (context) => const DeliveryAreaScreen(currentSellerId: ''),
