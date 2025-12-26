@@ -1,6 +1,7 @@
 // lib/screens/seller/seller_settings_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // 🎯 لإدارة بوابة الدخول
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -20,6 +21,7 @@ class SellerSettingsScreen extends StatefulWidget {
 
 class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
   final _firestore = FirebaseFirestore.instance;
+  final _auth = FirebaseAuth.instance;
   bool _isLoading = true;
   bool _isUploading = false;
 
@@ -54,7 +56,7 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
     }
   }
 
-  // 🎯 دالة تحديث الحد الأدنى ومصاريف التوصيل واسم النشاط
+  // 🎯 تحديث الحد الأدنى ومصاريف التوصيل
   Future<void> _updateSettings() async {
     setState(() => _isLoading = true);
     try {
@@ -71,7 +73,7 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
     }
   }
 
-  // 🗑️ حذف الموظف نهائياً (Hard Delete)
+  // 🗑️ حذف الموظف من القائمة
   Future<void> _removeSubUser(Map u) async {
     try {
       await _firestore.collection("sellers").doc(widget.currentSellerId).update({
@@ -84,27 +86,45 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
     }
   }
 
-  // ➕ إضافة موظف جديد
+  // ➕ إضافة موظف جديد + إنشاء حساب Auth تلقائياً
   Future<void> _addSubUser() async {
     final phone = _subUserPhoneController.text.trim();
     if (phone.isEmpty) {
       _showFloatingAlert("⚠️ يرجى إدخال رقم هاتف الموظف", isError: true);
       return;
     }
+
     setState(() => _isLoading = true);
     try {
+      // 1. 🔑 الخطوة الأهم: إنشاء الإيميل الوهمي والحساب في بوابة الدخول
+      String fakeEmail = "$phone@aswaq.com";
+      try {
+        await _auth.createUserWithEmailAndPassword(
+          email: fakeEmail,
+          password: "123456", // كلمة المرور الافتراضية
+        );
+      } catch (authError) {
+        // إذا كان الحساب موجوداً مسبقاً لا نتوقف، فقط نحدث بياناته في Firestore
+        debugPrint("Auth Error (User might exist): $authError");
+      }
+
+      // 2. 📝 إضافة الموظف في Firestore
       final newSub = {
         'phone': phone,
         'role': _selectedSubUserRole,
         'mustChangePassword': true,
         'addedAt': DateTime.now().toIso8601String(),
       };
+
       await _firestore.collection("sellers").doc(widget.currentSellerId).update({
         'subUsers': FieldValue.arrayUnion([newSub])
       });
+
       _subUserPhoneController.clear();
       _loadSellerData();
-      _showFloatingAlert("✅ تمت إضافة الموظف.\nكلمة المرور الافتراضية: 123456");
+      _showFloatingAlert("✅ تمت إضافة الموظف وتفعيل حسابه.\nكلمة المرور: 123456");
+    } catch (e) {
+      _showFloatingAlert("❌ فشل في إضافة الموظف: $e", isError: true);
     } finally {
       setState(() => _isLoading = false);
     }
@@ -120,10 +140,10 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(isError ? Icons.error_outline : Icons.check_circle_outline, 
+              Icon(isError ? Icons.error_outline : Icons.check_circle_outline,
                    color: isError ? Colors.red : primaryColor, size: 60),
               const SizedBox(height: 20),
-              Text(message, textAlign: TextAlign.center, 
+              Text(message, textAlign: TextAlign.center,
                    style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.bold, height: 1.5)),
               const SizedBox(height: 25),
               SizedBox(
@@ -158,19 +178,17 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
           foregroundColor: Colors.white,
           centerTitle: true,
         ),
-        body: _isLoading 
-          ? const Center(child: CircularProgressIndicator(color: primaryColor)) 
+        body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: primaryColor))
           : SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
               child: Column(
                 children: [
                   _buildLogoHeader(),
                   const SizedBox(height: 30),
-                  
                   _buildSectionTitle("بيانات العمل"),
                   _buildModernField("اسم النشاط", _merchantNameController, Icons.storefront),
                   _buildReadOnlyField("نوع النشاط", sellerDataCache['businessType'] ?? 'فلاتر', Icons.category),
-                  
                   Row(
                     children: [
                       Expanded(child: _buildModernField("الحد الأدنى للطلب", _minOrderTotalController, Icons.shopping_basket, isNum: true)),
@@ -178,17 +196,13 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
                       Expanded(child: _buildModernField("مصاريف الشحن", _deliveryFeeController, Icons.local_shipping, isNum: true)),
                     ],
                   ),
-
                   _buildMainButton("حفظ الإعدادات", Icons.check_circle, _updateSettings),
-
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 25),
                     child: Divider(color: Color(0xfff1f1f1)),
                   ),
-
                   _buildSectionTitle("الموظفين (الصلاحيات)"),
                   _buildModernField("رقم هاتف الموظف", _subUserPhoneController, Icons.phone_android, isNum: true),
-                  
                   Container(
                     margin: const EdgeInsets.only(bottom: 15),
                     padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 4),
@@ -209,9 +223,7 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
                       ),
                     ),
                   ),
-                  
                   _buildMainButton("إضافة موظف", Icons.person_add, _addSubUser, color: Colors.blueGrey[700]!),
-
                   const SizedBox(height: 25),
                   _buildSubUsersList(),
                   const SizedBox(height: 40),
@@ -222,8 +234,7 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
     );
   }
 
-  // --- Components ---
-
+  // --- UI Components ---
   Widget _buildModernField(String label, TextEditingController ctrl, IconData icon, {bool isNum = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 15),

@@ -4,6 +4,7 @@ import 'package:my_test_app/data_sources/order_data_source.dart';
 import 'package:my_test_app/models/order_model.dart';
 import 'package:my_test_app/services/excel_exporter.dart';
 import 'package:my_test_app/screens/invoice_screen.dart';
+import 'package:my_test_app/services/user_session.dart'; // 🎯 استيراد الجلسة لفحص الصلاحية
 import 'package:sizer/sizer.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -59,13 +60,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
       appBar: AppBar(
+        // 🎯 تكبير خط العنوان
         title: Text('إدارة الطلبات الواردة',
-            style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w900, color: Colors.white)),
+            style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.white)),
         backgroundColor: const Color(0xFF1B5E20),
         centerTitle: true,
         actions: [
           IconButton(
-            icon: Icon(Icons.file_download_outlined, color: Colors.white, size: 22.sp),
+            icon: Icon(Icons.file_download_outlined, color: Colors.white, size: 24.sp),
             onPressed: _exportToExcel,
           ),
         ],
@@ -82,7 +84,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 }
                 if (snapshot.hasError) return _buildErrorState(snapshot.error.toString());
 
-                // ✅ تم إضافة الترتيب هنا: الأحدث أولاً
                 _loadedOrders = snapshot.data ?? [];
                 _loadedOrders.sort((a, b) => b.orderDate.compareTo(a.orderDate));
 
@@ -110,7 +111,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   Widget _buildFilterBar() {
     return Container(
-      height: 8.h,
+      height: 9.h, // زيادة الارتفاع قليلاً لتناسب الخط الكبير
       decoration: const BoxDecoration(
         color: Colors.white,
         boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
@@ -137,7 +138,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       child: ChoiceChip(
         label: Text(label,
             style: TextStyle(
-                fontSize: 11.sp,
+                fontSize: 13.sp, // 🎯 تكبير الخط
                 fontWeight: FontWeight.w900,
                 color: isSelected ? Colors.white : Colors.black87)),
         selected: isSelected,
@@ -155,7 +156,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        border: Border(right: BorderSide(color: statusColor, width: 6)),
+        border: Border(right: BorderSide(color: statusColor, width: 8)), // جعل الحافة اعرض
         boxShadow: [
           BoxShadow(
               color: Colors.black.withOpacity(0.08),
@@ -165,26 +166,26 @@ class _OrdersScreenState extends State<OrdersScreen> {
       ),
       child: ExpansionTile(
         shape: const RoundedRectangleBorder(side: BorderSide.none),
-        leading: Icon(_getStatusIcon(order.status), color: statusColor, size: 26.sp),
+        leading: Icon(_getStatusIcon(order.status), color: statusColor, size: 28.sp),
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // ✅ تكبير اسم المشتري وجعله عريضاً جداً
+            // 🎯 تكبير اسم العميل بشكل واضح جداً
             Text(order.buyerDetails.name,
-                style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w900, color: Colors.black)),
+                style: TextStyle(fontSize: 17.sp, fontWeight: FontWeight.w900, color: Colors.black)),
             Text("#${order.id.substring(0, 5).toUpperCase()}",
-                style: TextStyle(fontSize: 10.sp, color: Colors.grey.shade700, fontWeight: FontWeight.bold)),
+                style: TextStyle(fontSize: 11.sp, color: Colors.grey.shade700, fontWeight: FontWeight.bold)),
           ],
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(height: 0.5.h),
-            // ✅ السعر بوزن عريض جداً
+            // 🎯 تكبير سعر الطلب
             Text("المطلوب: ${order.totalAmount} ج.م",
-                style: TextStyle(color: statusColor, fontWeight: FontWeight.w900, fontSize: 14.sp)),
+                style: TextStyle(color: statusColor, fontWeight: FontWeight.w900, fontSize: 16.sp)),
             Text(DateFormat('MMM dd, hh:mm a').format(order.orderDate),
-                style: TextStyle(fontSize: 10.sp, color: Colors.black54, fontWeight: FontWeight.w700)),
+                style: TextStyle(fontSize: 11.sp, color: Colors.black54, fontWeight: FontWeight.w700)),
           ],
         ),
         children: [
@@ -199,7 +200,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 Row(
                   children: [
                     Expanded(child: _buildInfoItem(Icons.phone, order.buyerDetails.phone, Colors.blue)),
-                    IconButton(onPressed: () {}, icon: Icon(Icons.call, color: Colors.green, size: 20.sp)),
+                    IconButton(onPressed: () {}, icon: Icon(Icons.call, color: Colors.green, size: 22.sp)),
                   ],
                 ),
                 _buildInfoItem(Icons.location_on, order.buyerDetails.address, Colors.redAccent),
@@ -217,12 +218,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           elevation: 0,
                           padding: EdgeInsets.symmetric(vertical: 1.5.h),
                         ),
-                        icon: const Icon(Icons.inventory_2_outlined),
+                        icon: Icon(Icons.inventory_2_outlined, size: 18.sp),
                         label: Text("📦 الأصناف",
-                            style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w900)),
+                            style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900)),
                       ),
                     ),
-                    if (order.status != 'delivered' && order.status != 'cancelled') ...[
+                    // 🎯 شرط الصلاحية: تظهر القائمة المنسدلة فقط إذا كان الدور 'full' (مدير)
+                    if (UserSession.role == 'full' && order.status != 'delivered' && order.status != 'cancelled') ...[
                       SizedBox(width: 3.w),
                       Expanded(flex: 3, child: _buildStatusDropdown(order)),
                     ]
@@ -240,13 +242,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 0.5.h),
       child: Row(children: [
-        Icon(icon, size: 14.sp, color: col),
+        Icon(icon, size: 16.sp, color: col),
         SizedBox(width: 2.w),
         Expanded(
             child: Text(text,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w800, color: Colors.black87))),
+                style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w800, color: Colors.black87))),
       ]),
     );
   }
@@ -257,12 +259,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
       decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.grey.shade400, width: 2)),
+          border: Border.all(color: Colors.grey.shade400, width: 2.5)),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: order.status,
           isExpanded: true,
-          style: TextStyle(fontSize: 11.sp, color: Colors.black, fontWeight: FontWeight.w900),
+          // 🎯 تكبير خط عناصر القائمة
+          style: TextStyle(fontSize: 13.sp, color: Colors.black, fontWeight: FontWeight.w900),
           items: const [
             DropdownMenuItem(value: 'new-order', child: Text('طلب جديد')),
             DropdownMenuItem(value: 'processing', child: Text('قيد التجهيز')),
@@ -278,23 +281,22 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   void _handleStatusChange(OrderModel order, String? newVal) async {
     if (newVal == null || newVal == order.status) return;
-
     bool confirm = true;
     if (newVal == 'delivered' || newVal == 'cancelled') {
       confirm = await showDialog(
             context: context,
             builder: (context) => AlertDialog(
-              title: Text("تأكيد الحالة", style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w900)),
+              title: Text("تأكيد الحالة", style: TextStyle(fontSize: 17.sp, fontWeight: FontWeight.w900)),
               content: Text(
                 newVal == 'delivered'
                     ? "هل تم تسليم الطلب وتحصيل المبلغ فعلاً؟"
                     : "هل تريد إلغاء الطلب؟ سيتم استرداد الكاش باك للعميل.",
-                style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700),
+                style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w700),
               ),
               actions: [
                 TextButton(
                     onPressed: () => Navigator.pop(context, false),
-                    child: Text("تراجع", style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.bold))),
+                    child: Text("تراجع", style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.bold))),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                       backgroundColor: newVal == 'delivered' ? Colors.green : Colors.red),
@@ -323,14 +325,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
         padding: EdgeInsets.all(5.w),
         child: Column(
           children: [
-            Container(
-                width: 40,
-                height: 5,
-                decoration:
-                    BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
+            Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
             SizedBox(height: 2.h),
             Text("أصناف الطلب #${order.id.substring(0, 5)}",
-                style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w900)),
+                style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900)),
             const Divider(thickness: 2),
             Expanded(
               child: ListView.builder(
@@ -339,28 +337,28 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   leading: CircleAvatar(
                       backgroundColor: Colors.green.shade50,
                       child: Text("${i + 1}",
-                          style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.bold))),
+                          style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.bold, fontSize: 13.sp))),
                   title: Text(order.items[i].name,
-                      style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w900)),
+                      style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w900)),
                   subtitle: Text("الكمية: ${order.items[i].quantity}",
-                      style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w700)),
+                      style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700)),
                   trailing: Text(
                       "${(order.items[i].unitPrice * order.items[i].quantity).toStringAsFixed(2)} ج.م",
                       style: TextStyle(
-                          fontSize: 12.sp, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
+                          fontSize: 14.sp, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
                 ),
               ),
             ),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                  minimumSize: Size(double.infinity, 7.h),
+                  minimumSize: Size(double.infinity, 8.h),
                   backgroundColor: const Color(0xFF1B5E20),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
               onPressed: () =>
                   Navigator.push(context, MaterialPageRoute(builder: (_) => InvoiceScreen(order: order))),
-              icon: const Icon(Icons.print, color: Colors.white),
+              icon: Icon(Icons.print, color: Colors.white, size: 18.sp),
               label: Text("معاينة الفاتورة والطباعة",
-                  style: TextStyle(fontSize: 14.sp, color: Colors.white, fontWeight: FontWeight.w900)),
+                  style: TextStyle(fontSize: 16.sp, color: Colors.white, fontWeight: FontWeight.w900)),
             )
           ],
         ),
@@ -371,10 +369,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
   void _exportToExcel() async {
     try {
       await ExcelExporter.exportOrders(_loadedOrders, 'seller');
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("تم تصدير ملف الإكسيل بنجاح ✅")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("تم تصدير ملف الإكسيل بنجاح ✅", style: TextStyle(fontSize: 13.sp))));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("حدث خطأ: $e ❌")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("حدث خطأ: $e ❌", style: TextStyle(fontSize: 13.sp))));
     }
   }
 
@@ -393,13 +392,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
           child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.inbox_outlined, size: 60.sp, color: Colors.grey),
+          Icon(Icons.inbox_outlined, size: 65.sp, color: Colors.grey),
           Text("لا توجد طلبات في قسم ${_getStatusText(_selectedFilter)}",
-              style: TextStyle(fontSize: 15.sp, color: Colors.grey, fontWeight: FontWeight.w900)),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 17.sp, color: Colors.grey, fontWeight: FontWeight.w900)),
         ],
       ));
 
   Widget _buildErrorState(String error) =>
-      Center(child: Text("خطأ في الاتصال: $error", style: TextStyle(fontSize: 14.sp, color: Colors.red)));
+      Center(child: Text("خطأ في الاتصال: $error", style: TextStyle(fontSize: 16.sp, color: Colors.red, fontWeight: FontWeight.bold)));
 }
 
