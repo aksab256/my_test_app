@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:sizer/sizer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'location_picker_screen.dart';
 
@@ -27,12 +26,11 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
 
   LatLng? _pickupCoords;
   LatLng? _dropoffCoords;
-  
-  // متغيرات أمان للتأكد من أن المستخدم "فتح" الخريطة وأكد الموقع
   bool _pickupConfirmed = false;
   bool _dropoffConfirmed = false;
-  
   bool _isLoading = false;
+
+  final Color accentOrange = const Color(0xFFE65100); // برتقالي قوي للعمليات
 
   @override
   void initState() {
@@ -41,15 +39,14 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
   }
 
   void _setupInitialLocations() {
-    // نضع الإحداثيات ولكن نترك تأكيدها (Confirmed) خطأ لإجبار المستخدم على دخول الخريطة
     if (widget.isStoreOwner) {
-      _pickupController.text = "موقعي الحالي (المحل)";
+      _pickupController.text = "موقعي الحالي (المحل) ✅";
       _pickupCoords = widget.userCurrentLocation;
-      _pickupConfirmed = true; // صاحب المحل غالباً موقعه ثابت ومعروف
+      _pickupConfirmed = true;
     } else {
-      _dropoffController.text = "موقعي الحالي (المنزل)";
+      _dropoffController.text = "موقعي الحالي (المنزل) ✅";
       _dropoffCoords = widget.userCurrentLocation;
-      _dropoffConfirmed = true; // المستهلك بيطلب لنفسه فموقعه الحالي هو الوجهة غالباً
+      _dropoffConfirmed = true;
     }
   }
 
@@ -80,22 +77,17 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
   }
 
   Future<void> _submitOrder() async {
-    // 1. فحص التفاصيل
     if (_detailsController.text.trim().isEmpty) {
       _showError("يرجى كتابة تفاصيل ما تريد نقله");
       return;
     }
-
-    // 2. تأمين النقاط (إجبار المستخدم على تأكيد النقطة التي لم تؤكد)
     if (!_pickupConfirmed || !_dropoffConfirmed) {
-      _showError("يرجى الضغط على مواقع الاستلام والتسليم للتأكيد من الخريطة أولاً");
+      _showError("يرجى تأكيد مواقع الاستلام والتسليم");
       return;
     }
 
     setState(() => _isLoading = true);
-
     try {
-      // إرسال الطلب لـ Firestore
       DocumentReference docRef = await FirebaseFirestore.instance.collection('specialRequests').add({
         'details': _detailsController.text,
         'pickupAddress': _pickupController.text,
@@ -105,27 +97,26 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
         'requestType': widget.isStoreOwner ? 'store_delivery' : 'consumer_personal',
-        'price': 0, // سيقوم المندوب أو النظام بتحديده لاحقاً
+        'price': 0,
       });
 
-      // ✅ التعديل الأهم: حفظ معرف الطلب لتفعيل الفقاعة العائمة في MaterialApp
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('active_special_order_id', docRef.id);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("تم إرسال طلبك! ابحث عن فقاعة التتبع على الشاشة 🚀"))
+          const SnackBar(content: Text("تم إرسال طلبك! ابحث عن فقاعة التتبع 🚀"))
         );
-        Navigator.pop(context); // العودة للشاشة الرئيسية حيث ستظهر الفقاعة
+        Navigator.pop(context);
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      _showError("حدث خطأ أثناء إرسال الطلب: $e");
+      _showError("حدث خطأ: $e");
     }
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg, style: const TextStyle(fontSize: 16)), backgroundColor: Colors.red));
   }
 
   @override
@@ -133,67 +124,72 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
+        backgroundColor: const Color(0xFFFBFBFB),
         appBar: AppBar(
-          title: Text("ابعتلي حد (توصيل خاص)", 
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16.sp, color: Colors.black87)),
+          title: const Text("طلب توصيل خاص", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
           centerTitle: true,
+          backgroundColor: Colors.white,
           elevation: 0,
-          backgroundColor: Colors.transparent,
+          leading: IconButton(icon: const Icon(Icons.close, color: Colors.black), onPressed: () => Navigator.pop(context)),
         ),
         body: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          padding: const EdgeInsets.all(20),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildLocationInput(
-                label: "منين؟ (مكان الاستلام)",
+              _buildLocationCard(
+                label: "مكان الاستلام",
                 controller: _pickupController,
                 icon: Icons.location_on,
                 color: Colors.green[700]!,
                 isConfirmed: _pickupConfirmed,
                 onTap: () => _pickLocation(true),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Icon(Icons.arrow_downward_rounded, color: Colors.orange[800], size: 35),
-              ),
-              _buildLocationInput(
-                label: "لفين؟ (مكان التسليم)",
+              const Center(child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Icon(Icons.keyboard_double_arrow_down_rounded, color: Colors.grey, size: 40),
+              )),
+              _buildLocationCard(
+                label: "وجهة التسليم",
                 controller: _dropoffController,
                 icon: Icons.flag_rounded,
                 color: Colors.red[700]!,
                 isConfirmed: _dropoffConfirmed,
                 onTap: () => _pickLocation(false),
               ),
-              const SizedBox(height: 30),
-              Text("ماذا تريد أن تنقل؟", 
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.sp, color: Colors.black87)),
-              const SizedBox(height: 10),
+              const SizedBox(height: 35),
+              const Text("تفاصيل الحمولة", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 19)),
+              const SizedBox(height: 12),
               TextField(
                 controller: _detailsController,
                 maxLines: 4,
-                style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 decoration: InputDecoration(
-                  hintText: "مثال: كرتونة طلبات، طقم انتريه...",
+                  hintText: "مثال: شنطة ملابس، كرتونة طلبات...",
+                  hintStyle: TextStyle(fontSize: 16, color: Colors.grey[400]),
                   filled: true,
-                  fillColor: Colors.grey[50],
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide(color: Colors.grey[200]!)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide(color: Colors.grey[200]!)),
                 ),
               ),
               const SizedBox(height: 40),
-              ElevatedButton(
-                onPressed: _isLoading ? null : _submitOrder,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange[900],
-                  minimumSize: const Size(double.infinity, 70),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                  elevation: 8,
+              SizedBox(
+                width: double.infinity,
+                height: 70,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _submitOrder,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accentOrange,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    elevation: 10,
+                    shadowColor: accentOrange.withOpacity(0.4),
+                  ),
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text("تأكيد وطلب مندوب الآن", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
                 ),
-                child: _isLoading 
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : Text("تأكيد وطلب مندوب الآن", 
-                      style: TextStyle(color: Colors.white, fontSize: 15.sp, fontWeight: FontWeight.w900)),
               ),
-              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -201,7 +197,7 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
     );
   }
 
-  Widget _buildLocationInput({
+  Widget _buildLocationCard({
     required String label,
     required TextEditingController controller,
     required IconData icon,
@@ -218,24 +214,23 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(25),
           border: Border.all(color: isConfirmed ? color.withOpacity(0.5) : Colors.grey[200]!, width: 2),
+          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))],
         ),
         child: Row(
           children: [
-            Icon(icon, color: color, size: 24.sp),
+            CircleAvatar(backgroundColor: color.withOpacity(0.1), child: Icon(icon, color: color, size: 28)),
             const SizedBox(width: 18),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: TextStyle(color: Colors.grey[700], fontSize: 11.sp)),
+                  Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 15, fontWeight: FontWeight.bold)),
                   Text(controller.text.isEmpty ? "اضغط للتحديد من الخريطة" : controller.text,
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.sp, 
-                    color: isConfirmed ? Colors.black : Colors.red[900])),
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: isConfirmed ? Colors.black : Colors.red[900])),
                 ],
               ),
             ),
-            Icon(isConfirmed ? Icons.check_circle : Icons.map_outlined, 
-                 color: isConfirmed ? Colors.green : Colors.blue[800], size: 22.sp),
+            Icon(isConfirmed ? Icons.check_circle : Icons.map_outlined, color: isConfirmed ? Colors.green : Colors.grey, size: 28),
           ],
         ),
       ),
