@@ -64,16 +64,12 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            // 1. المحتوى القابل للتمرير
             SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // مساحة فارغة علوية لترك مكان لزر الرادار العائم
                   const SizedBox(height: 100),
-
-                  // 2. قسم الأقسام المميزة
                   const ConsumerSectionTitle(title: 'الأقسام المميزة'),
                   FutureBuilder<List<ConsumerCategory>>(
                     future: dataService.fetchMainCategories(),
@@ -88,10 +84,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> {
                       return ConsumerCategoriesBanner(categories: categories);
                     },
                   ),
-
                   const SizedBox(height: 10),
-
-                  // 3. قسم العروض الحصرية
                   const ConsumerSectionTitle(title: 'أحدث العروض الحصرية'),
                   FutureBuilder<List<ConsumerBanner>>(
                     future: dataService.fetchPromoBanners(),
@@ -106,13 +99,10 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> {
                       return ConsumerPromoBanners(banners: banners, height: 220);
                     },
                   ),
-                  
-                  const SizedBox(height: 100), // مساحة أمان سفلية
+                  const SizedBox(height: 100),
                 ],
               ),
             ),
-
-            // 🎯 4. زر الرادار الذكي (اكتشف المحلات القريبة) - بديل شريط البحث
             Positioned(
               top: 15,
               left: 15,
@@ -139,7 +129,6 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> {
     );
   }
 
-  // 🛠️ ودجت "الرادار الذكي" بتصميم كبسولة فخمة
   Widget _buildSmartRadarButton() {
     return Container(
       height: 75,
@@ -163,15 +152,13 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(40),
-          onPressed: () {
-            // هنا يتم استدعاء خريطة المحلات أو البحث الجغرافي
+          onTap: () { // 🎯 تم التصحيح هنا من onPressed إلى onTap
             debugPrint("📡 تشغيل رادار البحث عن الأقرب...");
           },
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                // أيقونة الرادار مع خلفية مضيئة
                 Container(
                   width: 50,
                   height: 50,
@@ -182,7 +169,6 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> {
                   child: const Icon(Icons.radar, color: Colors.white, size: 30),
                 ),
                 const SizedBox(width: 15),
-                // نصوص التوضيح
                 const Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -190,23 +176,15 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> {
                     children: [
                       Text(
                         "اكتشف المحلات القريبة",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
                       ),
                       Text(
                         "اضغط لتفعيل رادار البحث الذكي",
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                        ),
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
                       ),
                     ],
                   ),
                 ),
-                // سهم الإرشاد
                 const Icon(Icons.location_on_outlined, color: Colors.white, size: 28),
               ],
             ),
