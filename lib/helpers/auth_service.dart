@@ -27,11 +27,9 @@ class AuthService {
       final User? user = userCredential.user;
       if (user == null) throw Exception("user-null");
 
-      // البحث عن بيانات المستخدم في كل المجموعات بما فيها الموظفين الجدد
       final userData = await _getUserDataByEmail(email);
       final String userRole = userData['role'];
 
-      // منطق التحقق من الحساب المعلق
       if (userRole == 'pending') {
         await _auth.signOut();
         throw 'auth/account-not-active';
@@ -43,22 +41,20 @@ class AuthService {
       final String phoneToShow = userData['phone'] ?? email.split('@')[0];
       final dynamic userLocation = userData['location'];
 
-      // 🎯 تحديد الـ ownerId: إذا كان موظف نأخذ parentSellerId، وإذا كان تاجر نأخذ الـ UID الخاص به
-      final String effectiveOwnerId = (userData['parentSellerId'] != null) 
-          ? userData['parentSellerId'] 
+      final String effectiveOwnerId = (userData['parentSellerId'] != null)
+          ? userData['parentSellerId']
           : user.uid;
 
-      // حفظ البيانات في الذاكرة المحلية
       await _saveUserToLocalStorage(
         id: user.uid,
-        ownerId: effectiveOwnerId, // 🎯 حفظ الـ ownerId الصحيح للموظف
+        ownerId: effectiveOwnerId,
         role: userRole,
         fullname: userFullName,
         address: userAddress,
         merchantName: merchantName,
         phone: phoneToShow,
         location: userLocation,
-        isSubUser: userData['isSubUser'] ?? false, // 🎯 حفظ هل هو موظف أم لا
+        isSubUser: userData['isSubUser'] ?? false,
       );
 
       return userRole;
@@ -82,29 +78,32 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> _getUserDataByEmail(String email) async {
-    // 🎯 أضفنا 'subUsers' لمصفوفة المجموعات للبحث فيها
     final collections = ['sellers', 'consumers', 'users', 'pendingSellers', 'subUsers'];
 
     for (var colName in collections) {
       try {
-        // ملحوظة: في subUsers الإيميل هو (رقم الهاتف + @aswaq.com)
-        final snap = await _db.collection(colName).where('phone', isEqualTo: email.split('@')[0]).limit(1).get();
-        
-        // إذا لم نجد بالهاتف (للحسابات العادية) نبحث بالإيميل
+        final snap = await _db
+            .collection(colName)
+            .where('phone', isEqualTo: email.split('@')[0])
+            .limit(1)
+            .get();
+
         QuerySnapshot snapToUse = snap;
         if (snapToUse.docs.isEmpty) {
           snapToUse = await _db.collection(colName).where('email', isEqualTo: email).limit(1).get();
         }
 
         if (snapToUse.docs.isNotEmpty) {
-          final data = snapToUse.docs.first.data();
+          // 🎯 التصحيح هنا: تحويل البيانات صراحة إلى Map<String, dynamic>
+          final Map<String, dynamic> data = snapToUse.docs.first.data() as Map<String, dynamic>;
+          
           String role = 'buyer';
           bool isSubUser = false;
 
           if (colName == 'sellers') {
             role = 'seller';
           } else if (colName == 'subUsers') {
-            role = 'seller'; // 🎯 الموظف يعامل كـ "seller" في الواجهة لكن بصلاحيات محددة
+            role = 'seller';
             isSubUser = true;
           } else if (colName == 'consumers') {
             role = 'consumer';
@@ -114,6 +113,7 @@ class AuthService {
             role = 'pending';
           }
 
+          // الآن الـ spread سيعمل بدون مشاكل لأن النوع أصبح معروفاً
           return {...data, 'role': role, 'isSubUser': isSubUser};
         }
       } catch (e) {
@@ -125,18 +125,18 @@ class AuthService {
 
   Future<void> _saveUserToLocalStorage({
     required String id,
-    required String ownerId, // 🎯 تم التحديث
+    required String ownerId,
     required String role,
     String? fullname,
     String? address,
     String? merchantName,
     String? phone,
     dynamic location,
-    bool isSubUser = false, // 🎯 تم التحديث
+    bool isSubUser = false,
   }) async {
     final data = {
       'id': id,
-      'ownerId': ownerId, // الآن الـ ownerId سليم للموظف والمدير
+      'ownerId': ownerId,
       'role': role,
       'fullname': fullname,
       'address': address,
