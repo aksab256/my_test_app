@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:my_test_app/services/user_session.dart'; // تأكد من استيراد جلسة المستخدم
+import 'package:my_test_app/services/user_session.dart';
 
 class AuthService {
   final String _notificationApiEndpoint = "https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction";
@@ -42,8 +42,6 @@ class AuthService {
       final String phoneToShow = userData['phone'] ?? email.split('@')[0];
       final dynamic userLocation = userData['location'];
 
-      // 🎯 التصحيح بناءً على بيانات Firestore الخاصة بك:
-      // نتحقق من وجود 'parentSellerId' أولاً ثم 'sellerId'
       final String effectiveOwnerId = (userData['parentSellerId'] != null)
           ? userData['parentSellerId']
           : (userData['sellerId'] != null ? userData['sellerId'] : user.uid);
@@ -74,7 +72,7 @@ class AuthService {
       await _auth.signOut();
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
-      UserSession.clear(); // تنظيف الجلسة برمجياً أيضاً
+      UserSession.clear();
       debugPrint("🧹 الذاكرة نظيفة تماماً");
     } catch (e) {
       debugPrint("🚨 فشل الخروج: $e");
@@ -89,7 +87,6 @@ class AuthService {
       try {
         DocumentSnapshot? docSnap;
         if (colName == 'subUsers') {
-          // محاولة جلب الموظف بالـ Document ID (رقم الهاتف) كما في بياناتك
           docSnap = await _db.collection(colName).doc(phoneFromEmail).get();
         }
 
@@ -98,12 +95,7 @@ class AuthService {
           return {...data, 'role': 'seller', 'isSubUser': true};
         }
 
-        final snap = await _db
-            .collection(colName)
-            .where('phone', isEqualTo: phoneFromEmail)
-            .limit(1)
-            .get();
-
+        final snap = await _db.collection(colName).where('phone', isEqualTo: phoneFromEmail).limit(1).get();
         QuerySnapshot snapToUse = snap;
         if (snapToUse.docs.isEmpty) {
           snapToUse = await _db.collection(colName).where('email', isEqualTo: email).limit(1).get();
@@ -111,7 +103,6 @@ class AuthService {
 
         if (snapToUse.docs.isNotEmpty) {
           final Map<String, dynamic> data = snapToUse.docs.first.data() as Map<String, dynamic>;
-
           String role = 'buyer';
           bool isSubUser = false;
 
@@ -127,7 +118,6 @@ class AuthService {
           } else if (colName == 'pendingSellers') {
             role = 'pending';
           }
-
           return {...data, 'role': role, 'isSubUser': isSubUser};
         }
       } catch (e) {
@@ -149,8 +139,8 @@ class AuthService {
     bool isSubUser = false,
   }) async {
     final data = {
-      'id': id, // 🎯 نترك الـ id الحقيقي للموظف لضمان استقرار الدخول وعدم تعطل الحساب
-      'ownerId': ownerId, // 🎯 تخزين ID التاجر الأب (من حقل parentSellerId)
+      'id': id,
+      'ownerId': ownerId,
       'role': role,
       'fullname': fullname,
       'address': address,
@@ -162,17 +152,16 @@ class AuthService {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('loggedUser', json.encode(data));
-
-    // تحديث بيانات الجلسة الحالية في الـ RAM لتعمل الصفحات فوراً
-    // 🎯 تم التعديل هنا ليكون userId بدلاً من id ليطابق كلاس UserSession
-    UserSession.userId = id; 
+    
+    // 🎯 تم التصحيح هنا ليتوافق مع UserSession
+    UserSession.userId = id;
     UserSession.ownerId = ownerId;
     UserSession.role = role;
     UserSession.isSubUser = isSubUser;
     UserSession.merchantName = merchantName;
     UserSession.phoneNumber = phone;
 
-    debugPrint("✅ تم حفظ الجلسة: الموظف ($id) يتبع المحل ($ownerId)");
+    debugPrint("✅ تم تحديث الجلسة بنجاح: $id");
   }
 }
 
