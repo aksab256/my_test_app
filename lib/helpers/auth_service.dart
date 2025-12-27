@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:my_test_app/services/user_session.dart'; // تأكد من استيراد جلسة المستخدم
 
 class AuthService {
   final String _notificationApiEndpoint = "https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction";
@@ -41,10 +42,11 @@ class AuthService {
       final String phoneToShow = userData['phone'] ?? email.split('@')[0];
       final dynamic userLocation = userData['location'];
 
-      // 🎯 تحديد الـ OwnerId: إذا كان موظفاً نأخذ sellerId، وإذا كان تاجراً نأخذ uid الخاص به
-      final String effectiveOwnerId = (userData['sellerId'] != null)
-          ? userData['sellerId']
-          : user.uid;
+      // 🎯 التصحيح بناءً على بيانات Firestore الخاصة بك:
+      // نتحقق من وجود 'parentSellerId' أولاً ثم 'sellerId'
+      final String effectiveOwnerId = (userData['parentSellerId'] != null)
+          ? userData['parentSellerId']
+          : (userData['sellerId'] != null ? userData['sellerId'] : user.uid);
 
       await _saveUserToLocalStorage(
         id: user.uid,
@@ -72,6 +74,7 @@ class AuthService {
       await _auth.signOut();
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
+      UserSession.clear(); // تنظيف الجلسة برمجياً أيضاً
       debugPrint("🧹 الذاكرة نظيفة تماماً");
     } catch (e) {
       debugPrint("🚨 فشل الخروج: $e");
@@ -86,6 +89,7 @@ class AuthService {
       try {
         DocumentSnapshot? docSnap;
         if (colName == 'subUsers') {
+          // محاولة جلب الموظف بالـ Document ID (رقم الهاتف) كما في بياناتك
           docSnap = await _db.collection(colName).doc(phoneFromEmail).get();
         }
 
@@ -145,11 +149,8 @@ class AuthService {
     bool isSubUser = false,
   }) async {
     final data = {
-      // 🎯 توحيد الهوية: نضع ID المحل في خانة الـ ID الأساسية لجلب البيانات
-      'id': isSubUser ? ownerId : id,
-      // الاحتفاظ بـ ID الموظف الحقيقي للعمليات التي تتطلب معرفة الشخص
-      'realUserId': id,
-      'ownerId': ownerId,
+      'id': id, // 🎯 نترك الـ id الحقيقي للموظف لضمان استقرار الدخول وعدم تعطل الحساب
+      'ownerId': ownerId, // 🎯 تخزين ID التاجر الأب (من حقل parentSellerId)
       'role': role,
       'fullname': fullname,
       'address': address,
@@ -161,8 +162,15 @@ class AuthService {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('loggedUser', json.encode(data));
-    debugPrint("✅ تم توحيد الهوية للمحل (OwnerId: $ownerId)");
-    if (isSubUser) debugPrint("👤 الهوية الحقيقية للموظف محفوظة بـ realUserId");
+    
+    // تحديث بيانات الجلسة الحالية في الـ RAM لتعمل الصفحات فوراً
+    UserSession.id = id;
+    UserSession.ownerId = ownerId;
+    UserSession.role = role;
+    UserSession.isSubUser = isSubUser;
+    UserSession.merchantName = merchantName;
+
+    debugPrint("✅ تم حفظ الجلسة: الموظف ($id) يتبع المحر ($ownerId)");
   }
 }
 

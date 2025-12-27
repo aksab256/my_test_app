@@ -7,33 +7,52 @@ class InvoiceDetailsScreen extends StatelessWidget {
   final Map<String, dynamic> invoiceData;
 
   const InvoiceDetailsScreen({
-    super.key, 
-    required this.invoiceId, 
+    super.key,
+    required this.invoiceId,
     required this.invoiceData
   });
 
   @override
   Widget build(BuildContext context) {
-    // تم حذف Directionality للاعتماد على الثيم العام في main.dart
     return Scaffold(
       appBar: AppBar(
         title: const Text('تفاصيل الفاتورة'),
         backgroundColor: const Color(0xFF007bff),
         foregroundColor: Colors.white,
+        centerTitle: true,
       ),
-      body: Padding(
+      body: SingleChildScrollView( // أضفنا سكرول لضمان عدم حدوث Overflow
         padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildInfoCard(),
-            const SizedBox(height: 30),
+            const SizedBox(height: 25),
+            
+            // بيانات أساسية
+            _buildSectionTitle("البيانات الأساسية"),
             _buildInfoTile("رقم الفاتورة المرجعي", invoiceId.substring(0, 8).toUpperCase()),
-            _buildInfoTile("إجمالي العمولة", "${invoiceData['totalCommission'] ?? 0} ج.م"),
-            _buildInfoTile("صافي المبلغ المطلوب", "${invoiceData['finalAmount'] ?? 0} ج.م"),
+            _buildInfoTile("تاريخ الإصدار", _formatDate(invoiceData['creationDate'])),
+            if (invoiceData['paymentDate'] != null)
+              _buildInfoTile("تاريخ السداد", _formatDate(invoiceData['paymentDate'])),
+            
             const Divider(height: 40),
+            
+            // التفاصيل المالية
+            _buildSectionTitle("التفاصيل المالية"),
+            _buildInfoTile("إجمالي العمولة", "${invoiceData['totalCommission'] ?? 0} ج.م"),
+            _buildInfoTile("الضريبة المضافة", "${invoiceData['vatAmount'] ?? 0} ج.م"),
+            _buildInfoTile("صافي المبلغ المطلوب", "${invoiceData['finalAmount'] ?? 0} ج.م", isBold: true),
+            
+            const Divider(height: 40),
+            
+            // حالة الدفع
             _buildStatusRow(),
-            const Spacer(),
+            if (invoiceData['paymentMethod'] != null)
+              _buildInfoTile("طريقة السداد", "${invoiceData['paymentMethod']}"),
+
+            const SizedBox(height: 40),
+
             if (invoiceData['status'] != 'paid')
               SizedBox(
                 width: double.infinity,
@@ -43,11 +62,11 @@ class InvoiceDetailsScreen extends StatelessWidget {
                     backgroundColor: Colors.green,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: () { 
+                  onPressed: () {
                     // منطق بوابة الدفع سيضاف هنا لاحقاً
                   },
                   child: const Text(
-                    "سداد الفاتورة الآن", 
+                    "سداد الفاتورة الآن",
                     style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)
                   ),
                 ),
@@ -55,6 +74,13 @@ class InvoiceDetailsScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
     );
   }
 
@@ -69,13 +95,16 @@ class InvoiceDetailsScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(isPaid ? Icons.check_circle : Icons.pending_actions, color: isPaid ? Colors.green : Colors.orange),
+          Icon(isPaid ? Icons.check_circle : Icons.pending_actions, 
+               color: isPaid ? Colors.green : Colors.orange),
           const SizedBox(width: 10),
-          Text(
-            isPaid ? "هذه الفاتورة مسددة بالكامل" : "هذه الفاتورة بانتظار السداد",
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: isPaid ? Colors.green.shade900 : Colors.orange.shade900,
+          Expanded(
+            child: Text(
+              isPaid ? "هذه الفاتورة مسددة بالكامل" : "هذه الفاتورة بانتظار السداد",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: isPaid ? Colors.green.shade900 : Colors.orange.shade900,
+              ),
             ),
           ),
         ],
@@ -104,17 +133,35 @@ class InvoiceDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoTile(String label, String value) {
+  Widget _buildInfoTile(String label, String value, {bool isBold = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.grey, fontSize: 14)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+          Text(label, style: const TextStyle(color: Colors.black54, fontSize: 14)),
+          Text(value, style: TextStyle(
+            fontWeight: isBold ? FontWeight.bold : FontWeight.w600, 
+            fontSize: isBold ? 16 : 15,
+            color: isBold ? Colors.green.shade700 : Colors.black87
+          )),
         ],
       ),
     );
+  }
+
+  String _formatDate(dynamic dateVal) {
+    if (dateVal == null) return "غير متوفر";
+    try {
+      if (dateVal is String) {
+        DateTime dt = DateTime.parse(dateVal);
+        return DateFormat('yyyy/MM/dd').format(dt);
+      }
+      // إذا كان Timestamp من فايربيز
+      return DateFormat('yyyy/MM/dd').format(dateVal.toDate());
+    } catch (e) {
+      return dateVal.toString();
+    }
   }
 }
 
