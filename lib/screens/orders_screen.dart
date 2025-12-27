@@ -1,10 +1,11 @@
+// lib/screens/orders_screen.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:my_test_app/data_sources/order_data_source.dart';
 import 'package:my_test_app/models/order_model.dart';
 import 'package:my_test_app/services/excel_exporter.dart';
 import 'package:my_test_app/screens/invoice_screen.dart';
-import 'package:my_test_app/services/user_session.dart'; // 🎯 استيراد الجلسة لفحص الصلاحية
+import 'package:my_test_app/services/user_session.dart'; 
 import 'package:sizer/sizer.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -60,7 +61,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
       appBar: AppBar(
-        // 🎯 تكبير خط العنوان
         title: Text('إدارة الطلبات الواردة',
             style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.white)),
         backgroundColor: const Color(0xFF1B5E20),
@@ -111,7 +111,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   Widget _buildFilterBar() {
     return Container(
-      height: 9.h, // زيادة الارتفاع قليلاً لتناسب الخط الكبير
+      height: 9.h,
       decoration: const BoxDecoration(
         color: Colors.white,
         boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
@@ -138,7 +138,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       child: ChoiceChip(
         label: Text(label,
             style: TextStyle(
-                fontSize: 13.sp, // 🎯 تكبير الخط
+                fontSize: 13.sp,
                 fontWeight: FontWeight.w900,
                 color: isSelected ? Colors.white : Colors.black87)),
         selected: isSelected,
@@ -156,7 +156,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        border: Border(right: BorderSide(color: statusColor, width: 8)), // جعل الحافة اعرض
+        border: Border(right: BorderSide(color: statusColor, width: 8)),
         boxShadow: [
           BoxShadow(
               color: Colors.black.withOpacity(0.08),
@@ -170,7 +170,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // 🎯 تكبير اسم العميل بشكل واضح جداً
             Text(order.buyerDetails.name,
                 style: TextStyle(fontSize: 17.sp, fontWeight: FontWeight.w900, color: Colors.black)),
             Text("#${order.id.substring(0, 5).toUpperCase()}",
@@ -181,7 +180,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(height: 0.5.h),
-            // 🎯 تكبير سعر الطلب
             Text("المطلوب: ${order.totalAmount} ج.م",
                 style: TextStyle(color: statusColor, fontWeight: FontWeight.w900, fontSize: 16.sp)),
             Text(DateFormat('MMM dd, hh:mm a').format(order.orderDate),
@@ -223,8 +221,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900)),
                       ),
                     ),
-                    // 🎯 شرط الصلاحية: تظهر القائمة المنسدلة فقط إذا كان الدور 'full' (مدير)
-                    if (UserSession.role == 'full' && order.status != 'delivered' && order.status != 'cancelled') ...[
+                    // 🎯 التعديل الجوهري: نستخدم UserSession.canEdit لضمان ظهور القائمة للمالك
+                    if (UserSession.canEdit && order.status != 'delivered' && order.status != 'cancelled') ...[
                       SizedBox(width: 3.w),
                       Expanded(flex: 3, child: _buildStatusDropdown(order)),
                     ]
@@ -264,7 +262,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
         child: DropdownButton<String>(
           value: order.status,
           isExpanded: true,
-          // 🎯 تكبير خط عناصر القائمة
           style: TextStyle(fontSize: 13.sp, color: Colors.black, fontWeight: FontWeight.w900),
           items: const [
             DropdownMenuItem(value: 'new-order', child: Text('طلب جديد')),
@@ -281,11 +278,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   void _handleStatusChange(OrderModel order, String? newVal) async {
     if (newVal == null || newVal == order.status) return;
+    
+    // تأكيد إضافي للصلاحية برمجياً
+    if (!UserSession.canEdit) return;
+
     bool confirm = true;
     if (newVal == 'delivered' || newVal == 'cancelled') {
       confirm = await showDialog(
             context: context,
             builder: (context) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: Text("تأكيد الحالة", style: TextStyle(fontSize: 17.sp, fontWeight: FontWeight.w900)),
               content: Text(
                 newVal == 'delivered'
@@ -305,8 +307,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 ),
               ],
             ),
-          ) ??
-          false;
+          ) ?? false;
     }
 
     if (confirm) {
@@ -370,7 +371,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     try {
       await ExcelExporter.exportOrders(_loadedOrders, 'seller');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("تم تصدير ملف الإكسيل بنجاح ✅", style: TextStyle(fontSize: 13.sp))));
+          content: Text("تم تصدير ملف الإكسيل بنجاح  ✅", style: TextStyle(fontSize: 13.sp))));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("حدث خطأ: $e ❌", style: TextStyle(fontSize: 13.sp))));
