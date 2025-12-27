@@ -25,48 +25,48 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   final AuthService _authService = AuthService();
   final Color primaryGreen = const Color(0xff28a745);
 
-  // 🎯 1. الدالة المعدلة: تبحث في المجموعات المستقلة وتفحص تغيير الباسورد
-  Future<void> _setupSellerSession(String phone, String uid) async {
+  // 1. دالة تهيئة الجلسة: أصبحت تعيد true إذا كان هناك تغيير كلمة سر مطلوب
+  Future<bool> _setupSellerSession(String phone, String uid) async {
     final firestore = FirebaseFirestore.instance;
 
-    // أولاً: هل هو التاجر الأساسي؟
+    // أولاً: التاجر الأساسي
     var adminDoc = await firestore.collection("sellers").doc(uid).get();
     if (adminDoc.exists && adminDoc.data()?['phone'] == phone) {
       UserSession.role = 'full';
       UserSession.ownerId = uid;
       UserSession.userId = uid;
-      return;
+      return false; 
     }
 
-    // ثانياً: البحث في المجموعة المستقلة للموظفين (أسرع وأدق)
+    // ثانياً: الموظف (SubUser)
     var subUserDoc = await firestore.collection("subUsers").doc(phone).get();
     if (subUserDoc.exists) {
       var data = subUserDoc.data()!;
       UserSession.role = data['role'];
-      UserSession.ownerId = data['parentSellerId']; // ربطه بالتاجر الأساسي
+      UserSession.ownerId = data['parentSellerId']; 
       UserSession.userId = uid;
 
-      // 🚨 فحص هل يحتاج تغيير كلمة السر؟
       if (data['mustChangePassword'] == true) {
         _showChangePasswordDialog(phone);
+        return true; // يجب الانتظار لتغيير كلمة السر
       }
-      return;
     }
+    return false;
   }
 
-  // 🔐 2. المربع الحواري لإجبار الموظف على تغيير كلمة السر
+  // 2. المربع الحواري المحدث مع ربط الـ AWS
   void _showChangePasswordDialog(String phone) {
     final TextEditingController newPassController = TextEditingController();
     showDialog(
       context: context,
-      barrierDismissible: false, // لا يمكن إغلاقه إلا بالتغيير
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text("تأمين الحساب", textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("هذه أول مرة تدخل فيها، يرجى تعيين كلمة سر جديدة لحماية حسابك."),
+            const Text("يرجى تعيين كلمة سر جديدة لحماية حسابك الموظف."),
             const SizedBox(height: 15),
             TextField(
               controller: newPassController,
@@ -86,13 +86,21 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
             onPressed: () async {
               if (newPassController.text.length < 6) return;
               
-              // تحديث الباسورد في Auth
-              await FirebaseAuth.instance.currentUser?.updatePassword(newPassController.text.trim());
-              // تحديث الحالة في Firestore
-              await FirebaseFirestore.instance.collection("subUsers").doc(phone).update({
-                'mustChangePassword': false,
-              });
-              Navigator.pop(context); // إغلاق المربع
+              try {
+                // تحديث الباسورد و Firestore
+                await FirebaseAuth.instance.currentUser?.updatePassword(newPassController.text.trim());
+                await FirebaseFirestore.instance.collection("subUsers").doc(phone).update({
+                  'mustChangePassword': false,
+                });
+
+                // إرسال الإشعار للـ AWS فور التحديث
+                await _sendNotificationDataToAWS();
+
+                if (!mounted) return;
+                Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+              } catch (e) {
+                debugPrint("Error updating password: $e");
+              }
             },
             child: const Text("حفظ ودخول", style: TextStyle(color: Colors.white)),
           )
@@ -101,36 +109,32 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     );
   }
 
-  void _showPendingDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Column(
-          children: [
-            Icon(Icons.hourglass_top_rounded, size: 50, color: Colors.orange.shade400),
-            const SizedBox(height: 15),
-            const Text('طلبك قيد المراجعة', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          ],
-        ),
-        content: const Text('أهلاً بك في عائلة أكسب! تم استلام طلب انضمامك بنجاح، وجاري مراجعته من قبل الإدارة لتفعيل حسابك في أقرب وقت.', textAlign: TextAlign.center, style: TextStyle(height: 1.5)),
-        actions: [
-          Center(
-            child: TextButton(onPressed: () => Navigator.pop(context), child: Text('حسناً، سأنتظر', style: TextStyle(color: primaryGreen, fontWeight: FontWeight.bold))),
-          ),
-        ],
-      ),
-    );
+  // دالة مساعدة لإرسال بيانات الـ AWS
+  Future<void> _sendNotificationDataToAWS() async {
+    try {
+      String? token = await FirebaseMessaging.instance.getToken();
+      String? uid = FirebaseAuth.instance.currentUser?.uid;
+      if (token != null && uid != null) {
+        const String apiUrl = "https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction";
+        await http.post(
+          Uri.parse(apiUrl),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({
+            "userId": uid, // UID الموظف
+            "fcmToken": token,
+            "role": "seller"
+          })
+        );
+      }
+    } catch (e) {
+      debugPrint("AWS Notification Error: $e");
+    }
   }
 
   Future<void> _submitLogin() async {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    setState(() { _isLoading = true; _errorMessage = null; });
 
     try {
       String fakeEmail = "${_phone.trim()}@aswaq.com";
@@ -139,64 +143,36 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       if (userRole == 'seller') {
         User? currentUser = FirebaseAuth.instance.currentUser;
         if (currentUser != null) {
-          await _setupSellerSession(_phone.trim(), currentUser.uid);
+          bool shouldWait = await _setupSellerSession(_phone.trim(), currentUser.uid);
+          
+          if (shouldWait) {
+            setState(() => _isLoading = false);
+            return; // 🛑 التوقف هنا للسماح للموظف بتغيير الباسورد
+          }
         }
       }
 
-      // --- جزء الإشعارات المتوافق مع الموظفين ---
-      try {
-        String? token = await FirebaseMessaging.instance.getToken();
-        String? uid = FirebaseAuth.instance.currentUser?.uid;
-
-        if (token != null && uid != null) {
-          // الموظف يتم معاملته كـ "seller" في الإشعارات لضمان وصول طلبات المحل له
-          String collection = (userRole == 'seller') ? 'sellers' : (userRole == 'consumer' ? 'consumers' : 'users');
-
-          await FirebaseFirestore.instance.collection(collection).doc(uid).set({
-            'notificationToken': token,
-            'fcmToken': token,
-            'platform': 'android',
-          }, SetOptions(merge: true));
-
-          String targetIdForApi = (userRole == 'seller' && UserSession.ownerId != null)
-              ? UserSession.ownerId!
-              : uid;
-
-          const String apiUrl = "https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction";
-          await http.post(
-            Uri.parse(apiUrl),
-            headers: {"Content-Type": "application/json"},
-            body: jsonEncode({
-              "userId": targetIdForApi,
-              "fcmToken": token,
-              "role": userRole
-            })
-          );
-        }
-      } catch (e) {
-        debugPrint("Notification Setup Error: $e");
-      }
+      // إذا وصلنا هنا، يعني المستخدم لا يحتاج لتغيير باسورد
+      await _sendNotificationDataToAWS();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Text('✅ تم تسجيل الدخول بنجاح!', textAlign: TextAlign.center), backgroundColor: primaryGreen),
+        SnackBar(content: const Text('✅ تم تسجيل الدخول بنجاح!'), backgroundColor: primaryGreen),
       );
 
       await Future.delayed(const Duration(milliseconds: 1500));
       if (!mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+
     } catch (e) {
       setState(() {
         _isLoading = false;
-        if (e == 'auth/account-not-active') {
-          _showPendingDialog();
-        } else {
-          _errorMessage = 'بيانات الدخول غير صحيحة';
-        }
+        _errorMessage = 'بيانات الدخول غير صحيحة';
       });
     }
   }
 
+  // ... باقي كود الـ UI (Build, InputGroup, الخ) كما هو لديك ...
   @override
   Widget build(BuildContext context) {
     return Form(
@@ -272,6 +248,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   }
 }
 
+// كود الـ _InputGroup يبقى كما هو في ملفك الأصلي
 class _InputGroup extends StatelessWidget {
   final IconData icon;
   final String hintText;

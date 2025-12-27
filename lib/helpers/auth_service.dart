@@ -41,8 +41,9 @@ class AuthService {
       final String phoneToShow = userData['phone'] ?? email.split('@')[0];
       final dynamic userLocation = userData['location'];
 
-      final String effectiveOwnerId = (userData['parentSellerId'] != null)
-          ? userData['parentSellerId']
+      // 🎯 التصحيح هنا: استخدام sellerId بدلاً من parentSellerId للربط مع التاجر الأب
+      final String effectiveOwnerId = (userData['sellerId'] != null)
+          ? userData['sellerId']
           : user.uid;
 
       await _saveUserToLocalStorage(
@@ -79,12 +80,25 @@ class AuthService {
 
   Future<Map<String, dynamic>> _getUserDataByEmail(String email) async {
     final collections = ['sellers', 'consumers', 'users', 'pendingSellers', 'subUsers'];
+    final phoneFromEmail = email.split('@')[0];
 
     for (var colName in collections) {
       try {
+        // محاولة البحث بالـ Document ID أولاً (أسرع للموظفين) ثم بـ field phone
+        DocumentSnapshot? docSnap;
+        if (colName == 'subUsers') {
+          docSnap = await _db.collection(colName).doc(phoneFromEmail).get();
+        }
+
+        if (docSnap != null && docSnap.exists) {
+           final Map<String, dynamic> data = docSnap.data() as Map<String, dynamic>;
+           return {...data, 'role': 'seller', 'isSubUser': true};
+        }
+
+        // البحث التقليدي بالـ Query
         final snap = await _db
             .collection(colName)
-            .where('phone', isEqualTo: email.split('@')[0])
+            .where('phone', isEqualTo: phoneFromEmail)
             .limit(1)
             .get();
 
@@ -94,7 +108,6 @@ class AuthService {
         }
 
         if (snapToUse.docs.isNotEmpty) {
-          // 🎯 التصحيح هنا: تحويل البيانات صراحة إلى Map<String, dynamic>
           final Map<String, dynamic> data = snapToUse.docs.first.data() as Map<String, dynamic>;
           
           String role = 'buyer';
@@ -113,7 +126,6 @@ class AuthService {
             role = 'pending';
           }
 
-          // الآن الـ spread سيعمل بدون مشاكل لأن النوع أصبح معروفاً
           return {...data, 'role': role, 'isSubUser': isSubUser};
         }
       } catch (e) {
@@ -147,7 +159,7 @@ class AuthService {
     };
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('loggedUser', json.encode(data));
-    debugPrint("✅ تم حفظ بيانات المستخدم والـ ownerId بنجاح");
+    debugPrint("✅ تم حفظ البيانات (OwnerId: $ownerId, isSubUser: $isSubUser)");
   }
 }
 
