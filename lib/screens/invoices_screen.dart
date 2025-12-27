@@ -1,9 +1,9 @@
-// lib/screens/invoices_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:my_test_app/screens/invoice_details_screen.dart';
+import 'package:sizer/sizer.dart';
 
 class InvoiceScreen extends StatefulWidget {
   final String? sellerId;
@@ -14,33 +14,35 @@ class InvoiceScreen extends StatefulWidget {
 }
 
 class _InvoiceScreenState extends State<InvoiceScreen> {
-  // جلب الفواتير عبر الـ Stream لضمان التحديث اللحظي
+  
   Stream<QuerySnapshot> _fetchInvoices() {
     final uid = widget.sellerId ?? FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) {
-      return const Stream.empty();
-    }
+    if (uid == null) return const Stream.empty();
+
+    // ملاحظة: إذا استمر الاختفاء، احذف .orderBy مؤقتاً لحين عمل Index في Firestore
     return FirebaseFirestore.instance
         .collection('invoices')
         .where('sellerId', isEqualTo: uid)
-        .orderBy('creationDate', descending: true)
+        .orderBy('creationDate', descending: true) 
         .snapshots();
   }
 
   @override
   Widget build(BuildContext context) {
-    // تم إزالة Directionality والاعتماد على الثيم العام للتطبيق
     return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FB),
       appBar: AppBar(
-        title: const Text('كشف الفواتير الشهرية'),
+        title: Text('كشف الفواتير الشهرية', 
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16.sp)),
         backgroundColor: const Color(0xFF007bff),
         foregroundColor: Colors.white,
+        centerTitle: true,
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _fetchInvoices(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return Center(child: Text("حدث خطأ أثناء جلب البيانات: ${snapshot.error}"));
+            return Center(child: Text("حدث خطأ: ${snapshot.error}", style: const TextStyle(fontFamily: 'Cairo')));
           }
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -48,33 +50,46 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
           final docs = snapshot.data?.docs ?? [];
           if (docs.isEmpty) {
-            return const Center(child: Text("لا توجد فواتير سابقة لعرضها."));
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.receipt_long_outlined, size: 50.sp, color: Colors.grey),
+                  SizedBox(height: 2.h),
+                  Text("لا توجد فواتير سابقة لهذا الحساب", 
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 13.sp, color: Colors.grey)),
+                ],
+              ),
+            );
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 10),
+            padding: EdgeInsets.symmetric(vertical: 2.h, horizontal: 4.w),
             itemCount: docs.length,
             itemBuilder: (context, index) {
               final data = docs[index].data() as Map<String, dynamic>;
               final String docId = docs[index].id;
 
               return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-                elevation: 2,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                elevation: 0.5,
+                margin: EdgeInsets.only(bottom: 1.5.h),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
-                  leading: const Icon(Icons.receipt_long, color: Color(0xFF007bff)),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 0.5.h),
+                  leading: CircleAvatar(
+                    backgroundColor: const Color(0xFF007bff).withOpacity(0.1),
+                    child: const Icon(Icons.receipt_outlined, color: Color(0xFF007bff)),
+                  ),
                   title: Text(
-                    "فاتورة شهر ${_formatDate(data['creationDate'])}",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    "فاتورة ${_formatDate(data['creationDate'])}",
+                    style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13.sp),
                   ),
                   subtitle: Text(
-                    "إجمالي المبلغ: ${_formatCurrency(data['finalAmount'])}",
-                    style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600),
+                    "المبلغ: ${_formatCurrency(data['finalAmount'])}",
+                    style: TextStyle(fontFamily: 'Cairo', color: Colors.green.shade700, fontWeight: FontWeight.w600, fontSize: 11.sp),
                   ),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 14),
                   onTap: () {
-                    // الانتقال لصفحة التفاصيل وتمرير البيانات
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -94,18 +109,23 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     );
   }
 
-  // تنسيق العملة
   String _formatCurrency(dynamic amount) {
-    final formatter = NumberFormat.currency(locale: 'ar_EG', symbol: 'ج.م');
-    return formatter.format((amount as num? ?? 0).toDouble());
+    return "${(amount as num? ?? 0).toStringAsFixed(2)} ج.م";
   }
 
-  // تنسيق التاريخ
-  String _formatDate(dynamic ts) {
-    if (ts is Timestamp) {
-      return DateFormat.yMMMM('ar_EG').format(ts.toDate());
+  String _formatDate(dynamic dateVal) {
+    try {
+      if (dateVal is Timestamp) {
+        return DateFormat('yyyy/MM', 'ar_EG').format(dateVal.toDate());
+      } else if (dateVal is String) {
+        // تحويل النص (ISO String) إلى DateTime
+        DateTime dt = DateTime.parse(dateVal);
+        return DateFormat('yyyy/MM', 'ar_EG').format(dt);
+      }
+    } catch (e) {
+      return dateVal.toString();
     }
-    return ts.toString();
+    return dateVal.toString();
   }
 }
 
