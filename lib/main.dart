@@ -22,6 +22,8 @@ import 'package:my_test_app/providers/product_offer_provider.dart';
 import 'package:my_test_app/providers/cashback_provider.dart';
 import 'package:my_test_app/controllers/seller_dashboard_controller.dart';
 import 'package:my_test_app/models/logged_user.dart';
+// 🎯 استيراد الـ UserSession لضمان عمل التحميل
+import 'package:my_test_app/services/user_session.dart';
 
 // استيراد الشاشات
 import 'package:my_test_app/screens/login_screen.dart';
@@ -52,12 +54,9 @@ import 'package:my_test_app/screens/update_delivery_settings_screen.dart';
 import 'package:my_test_app/screens/consumer_orders_screen.dart';
 import 'package:my_test_app/screens/delivery/product_offer_screen.dart';
 import 'package:my_test_app/screens/delivery/delivery_offers_screen.dart';
-
-// استيراد شاشات المورد المفقودة
 import 'package:my_test_app/screens/seller/add_offer_screen.dart';
 import 'package:my_test_app/screens/seller/create_gift_promo_screen.dart';
 import 'package:my_test_app/screens/delivery_area_screen.dart';
-
 import 'package:my_test_app/services/bubble_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -69,14 +68,8 @@ void main() async {
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
-  // 🎯 إعداد أيقونة الإشعارات المفرغة (الفصل بين أيقونة التطبيق والإشعار)
-  const AndroidInitializationSettings initializationSettingsAndroid =
-      AndroidInitializationSettings('notif_icon'); 
-
-  const InitializationSettings initializationSettings = InitializationSettings(
-    android: initializationSettingsAndroid,
-  );
-
+  const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
+  const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
@@ -155,6 +148,7 @@ class MyApp extends StatelessWidget {
           initialRoute: '/',
           routes: {
             '/': (context) => const AuthWrapper(),
+            '/sellerhome': (context) => const SellerScreen(), // مسار مضاف للربط الصريح
             LoginScreen.routeName: (context) => const LoginScreen(),
             SellerScreen.routeName: (context) => const SellerScreen(),
             BuyerHomeScreen.routeName: (context) => const BuyerHomeScreen(),
@@ -249,6 +243,7 @@ class MyApp extends StatelessWidget {
 
 class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
+
   @override
   State<AuthWrapper> createState() => _AuthWrapperState();
 }
@@ -278,6 +273,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
     final userJson = prefs.getString('loggedUser');
     if (userJson != null) {
       try {
+        // 🎯 التعديل الوحيد: تحميل الجلسة للذاكرة الحية فور اكتشاف مستخدم مسجل
+        await UserSession.loadSession();
+
         final user = LoggedInUser.fromJson(jsonDecode(userJson));
         await Provider.of<BuyerDataProvider>(context, listen: false)
             .initializeData(user.id, user.id, user.fullname);
@@ -312,6 +310,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
 class PostRegistrationMessageScreen extends StatelessWidget {
   const PostRegistrationMessageScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
