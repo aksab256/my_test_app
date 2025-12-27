@@ -17,7 +17,7 @@ class UserSession {
   static bool get isReadOnly => role == 'read_only';
   static bool get canEdit => role == 'full' || !isSubUser;
 
-  // 🎯 دالة جديدة لتحميل البيانات من الذاكرة الدائمة للذاكرة الحية
+  // 🎯 هذه هي الدالة التي يطلبها الـ Build
   static Future<void> loadSession() async {
     final prefs = await SharedPreferences.getInstance();
     final userData = prefs.getString('loggedUser');
@@ -31,16 +31,6 @@ class UserSession {
       merchantName = data['merchantName'];
       isSubUser = data['isSubUser'] ?? false;
     }
-  }
-
-  // 🎯 دالة لتحديث البيانات يدوياً عند الحاجة
-  static void updateFromMap(Map<String, dynamic> data) {
-    userId = data['id'];
-    ownerId = data['ownerId'];
-    role = data['role'];
-    phoneNumber = data['phone'];
-    merchantName = data['merchantName'];
-    isSubUser = data['isSubUser'] ?? false;
   }
 
   static void clear() {

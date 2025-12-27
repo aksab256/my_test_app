@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:my_test_app/screens/invoice_details_screen.dart';
-import 'package:my_test_app/services/user_session.dart'; // تأكد من استيراد الجلسة
+import 'package:my_test_app/services/user_session.dart'; 
 import 'package:sizer/sizer.dart';
 
 class InvoiceScreen extends StatefulWidget {
@@ -16,12 +16,12 @@ class InvoiceScreen extends StatefulWidget {
 }
 
 class _InvoiceScreenState extends State<InvoiceScreen> {
-  
   Stream<QuerySnapshot> _fetchInvoices() {
-    // 🎯 استخدام ownerId من الجلسة لضمان جلب فواتير التاجر الأب للموظفين
-    // وإذا لم يتوفر نستخدم ID المستخدم الحالي
-    final String? uid = widget.sellerId ?? 
-                        (UserSession.ownerId.isNotEmpty ? UserSession.ownerId : FirebaseAuth.instance.currentUser?.uid);
+    // 🎯 تم تصحيح الفحص هنا ليكون آمناً (Null Safe)
+    final String? uid = widget.sellerId ??
+        ((UserSession.ownerId != null && UserSession.ownerId!.isNotEmpty)
+            ? UserSession.ownerId
+            : FirebaseAuth.instance.currentUser?.uid);
 
     if (uid == null) {
       debugPrint("🚨 Error: No valid sellerId found for fetching invoices");
@@ -30,8 +30,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
     debugPrint("🔍 Fetching invoices for sellerId: $uid");
 
-    // 🎯 تم إلغاء .orderBy لتجنب طلب إنشاء فهرس (Index)
-    // ستظهر الفواتير بترتيب Firestore الافتراضي (غالباً حسب وقت الإضافة)
     return FirebaseFirestore.instance
         .collection('invoices')
         .where('sellerId', isEqualTo: uid)

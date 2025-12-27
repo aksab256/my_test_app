@@ -29,10 +29,10 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   Future<void> _submitLogin() async {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
-    
-    setState(() { 
-      _isLoading = true; 
-      _errorMessage = null; 
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
     });
 
     try {
@@ -41,7 +41,8 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       final String userRole = await _authService.signInWithEmailAndPassword(fakeEmail, _password);
 
       // ب- تحديث الجلسة الحية من البيانات المحفوظة
-      await UserSession.init();
+      // 🎯 تم التعديل هنا من init إلى loadSession
+      await UserSession.loadSession();
 
       // ج- فحص خاص للموظفين (تغيير كلمة السر الإجباري)
       if (UserSession.isSubUser) {
@@ -64,7 +65,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
       // هـ- التوجيه الصريح بناءً على الدور
       _navigateToHome(userRole);
-
     } catch (e) {
       debugPrint("Login Error: $e");
       setState(() {
@@ -93,13 +93,15 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   // 3. ديالوج تغيير كلمة السر للموظف
   void _showChangePasswordDialog(String phone) {
     final TextEditingController newPassController = TextEditingController();
-    
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("تأمين الحساب", textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("تأمين الحساب",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -125,16 +127,21 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
               try {
                 // تحديث الباسورد في Auth وفي Firestore
-                await FirebaseAuth.instance.currentUser?.updatePassword(newPassController.text.trim());
-                await FirebaseFirestore.instance.collection("subUsers").doc(phone).update({
+                await FirebaseAuth.instance.currentUser
+                    ?.updatePassword(newPassController.text.trim());
+                await FirebaseFirestore.instance
+                    .collection("subUsers")
+                    .doc(phone)
+                    .update({
                   'mustChangePassword': false,
                 });
 
                 await _sendNotificationDataToAWS();
-                
+
                 if (!mounted) return;
                 // بعد التغيير نتوجه لصفحة التاجر مباشرة
-                Navigator.of(context).pushNamedAndRemoveUntil('/sellerhome', (route) => false);
+                Navigator.of(context)
+                    .pushNamedAndRemoveUntil('/sellerhome', (route) => false);
               } catch (e) {
                 debugPrint("Error updating password: $e");
               }
@@ -152,16 +159,12 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       String? token = await FirebaseMessaging.instance.getToken();
       String? uid = FirebaseAuth.instance.currentUser?.uid;
       if (token != null && uid != null) {
-        const String apiUrl = "https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction";
-        await http.post(
-          Uri.parse(apiUrl),
-          headers: {"Content-Type": "application/json"},
-          body: jsonEncode({
-            "userId": uid,
-            "fcmToken": token,
-            "role": "seller"
-          })
-        );
+        const String apiUrl =
+            "https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction";
+        await http.post(Uri.parse(apiUrl),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode(
+                {"userId": uid, "fcmToken": token, "role": "seller"}));
       }
     } catch (e) {
       debugPrint("AWS Notification Error: $e");
@@ -178,7 +181,8 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
             icon: Icons.phone_android,
             hintText: 'رقم الهاتف',
             keyboardType: TextInputType.phone,
-            validator: (value) => (value == null || value.isEmpty) ? 'مطلوب' : null,
+            validator: (value) =>
+                (value == null || value.isEmpty) ? 'مطلوب' : null,
             onSaved: (value) => _phone = value!,
           ),
           const SizedBox(height: 18),
@@ -186,14 +190,17 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
             icon: Icons.lock_outline,
             hintText: 'كلمة المرور',
             isPassword: true,
-            validator: (value) => (value == null || value.length < 6) ? 'قصيرة جداً' : null,
+            validator: (value) =>
+                (value == null || value.length < 6) ? 'قصيرة جداً' : null,
             onSaved: (value) => _password = value!,
           ),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (context) => const ForgotPasswordScreen())),
-              child: Text('نسيت كلمة المرور؟', style: TextStyle(color: primaryGreen)),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) => const ForgotPasswordScreen())),
+              child: Text('نسيت كلمة المرور؟',
+                  style: TextStyle(color: primaryGreen)),
             ),
           ),
           const SizedBox(height: 10),
@@ -203,7 +210,9 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           if (_errorMessage != null)
             Padding(
               padding: const EdgeInsets.only(top: 10),
-              child: Text(_errorMessage!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              child: Text(_errorMessage!,
+                  style: const TextStyle(
+                      color: Colors.red, fontWeight: FontWeight.bold)),
             ),
         ],
       ),
@@ -216,7 +225,8 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       height: 55,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(15),
-        gradient: LinearGradient(colors: [primaryGreen, const Color(0xff1e7e34)]),
+        gradient: LinearGradient(
+            colors: [primaryGreen, const Color(0xff1e7e34)]),
       ),
       child: ElevatedButton(
         onPressed: _isLoading ? null : _submitLogin,
@@ -227,7 +237,11 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         ),
         child: _isLoading
             ? const CircularProgressIndicator(color: Colors.white)
-            : const Text('تسجيل الدخول', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            : const Text('تسجيل الدخول',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -237,7 +251,8 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       const Text('ليس لديك حساب؟'),
       TextButton(
         onPressed: () => Navigator.of(context).pushNamed('/register'),
-        child: Text('إنشاء حساب', style: TextStyle(color: primaryGreen, fontWeight: FontWeight.bold)),
+        child: Text('إنشاء حساب',
+            style: TextStyle(color: primaryGreen, fontWeight: FontWeight.bold)),
       ),
     ]);
   }
@@ -271,10 +286,17 @@ class _InputGroup extends StatelessWidget {
         hintText: hintText,
         filled: true,
         fillColor: Colors.grey.shade50,
-        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.grey.shade300)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.grey.shade200)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: const BorderSide(color: Color(0xff28a745), width: 2)),
+        contentPadding:
+            const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide(color: Colors.grey.shade300)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide(color: Colors.grey.shade200)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: const BorderSide(color: Color(0xff28a745), width: 2)),
       ),
       validator: validator,
       onSaved: onSaved,
