@@ -9,7 +9,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_test_app/services/user_session.dart';
 
 class AuthService {
-  final String _notificationApiEndpoint = "https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction";
+  final String _notificationApiEndpoint =
+      "https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction";
   late final FirebaseAuth _auth;
   late final FirebaseFirestore _db;
 
@@ -20,6 +21,7 @@ class AuthService {
 
   Future<String> signInWithEmailAndPassword(String email, String password) async {
     try {
+      // 1. محاولة تسجيل الدخول في Firebase Auth
       final userCredential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
@@ -28,14 +30,25 @@ class AuthService {
       final User? user = userCredential.user;
       if (user == null) throw Exception("user-null");
 
-      final userData = await _getUserDataByEmail(email);
+      // 2. جلب بيانات المستخدم من Firestore
+      // تم وضعها في بلوك مستقل لضمان أن أي خطأ في القراءة لا يظهر كخطأ كلمة مرور
+      Map<String, dynamic> userData;
+      try {
+        userData = await _getUserDataByEmail(email);
+      } catch (e) {
+        debugPrint("⚠️ تحذير: فشل جلب البيانات الإضافية، سيتم استخدام دور افتراضي: $e");
+        userData = {'role': 'buyer'};
+      }
+
       final String userRole = userData['role'];
 
+      // التحقق من حالة الحساب المعلق
       if (userRole == 'pending') {
         await _auth.signOut();
         throw 'auth/account-not-active';
       }
 
+      // تجهيز البيانات للحفظ
       final String userAddress = userData['address'] ?? '';
       final String? userFullName = userData['fullname'] ?? userData['fullName'];
       final String? merchantName = userData['merchantName'];
@@ -46,6 +59,7 @@ class AuthService {
           ? userData['parentSellerId']
           : (userData['sellerId'] != null ? userData['sellerId'] : user.uid);
 
+      // 3. حفظ البيانات محلياً وتحديث الجلسة
       await _saveUserToLocalStorage(
         id: user.uid,
         ownerId: effectiveOwnerId,
@@ -60,9 +74,12 @@ class AuthService {
 
       return userRole;
     } on FirebaseAuthException catch (e) {
+      // إرسال كود الخطأ الصريح من Firebase (مثل wrong-password)
       throw e.code;
     } catch (e) {
-      if (e == 'auth/account-not-active') throw e;
+      // معالجة الأخطاء الخاصة (مثل الحساب غير النشط) أو الأخطاء غير المتوقعة
+      if (e == 'auth/account-not-active') rethrow;
+      debugPrint("🚨 Error in AuthService: $e");
       throw 'auth/unknown-error';
     }
   }
@@ -92,28 +109,36 @@ class AuthService {
 
         if (docSnap != null && docSnap.exists) {
           final Map<String, dynamic> data = docSnap.data() as Map<String, dynamic>;
-          // 🎯 التعديل 1: نأخذ الـ role الفعلي من الداتا (مثل full) بدلاً من كلمة 'seller' الثابتة
-          String actualRole = data['role'] ?? 'seller'; 
+          String actualRole = data['role'] ?? 'seller';
           return {...data, 'role': actualRole, 'isSubUser': true};
         }
 
-        final snap = await _db.collection(colName).where('phone', isEqualTo: phoneFromEmail).limit(1).get();
+        final snap = await _db
+            .collection(colName)
+            .where('phone', isEqualTo: phoneFromEmail)
+            .limit(1)
+            .get();
+
         QuerySnapshot snapToUse = snap;
         if (snapToUse.docs.isEmpty) {
-          snapToUse = await _db.collection(colName).where('email', isEqualTo: email).limit(1).get();
+          snapToUse = await _db
+              .collection(colName)
+              .where('email', isEqualTo: email)
+              .limit(1)
+              .get();
         }
 
         if (snapToUse.docs.isNotEmpty) {
-          final Map<String, dynamic> data = snapToUse.docs.first.data() as Map<String, dynamic>;
-          
-          // 🎯 التعديل 2: نعتمد على الـ role المخزن في Firestore أولاً
-          String role = data['role'] ?? 'buyer'; 
+          final Map<String, dynamic> data =
+              snapToUse.docs.first.data() as Map<String, dynamic>;
+
+          String role = data['role'] ?? 'buyer';
           bool isSubUser = false;
 
+          // الحفاظ على منطق تحديد الأدوار الأصلي
           if (colName == 'sellers') {
             role = 'seller';
           } else if (colName == 'subUsers') {
-            // نترك الـ role كما هو (full أو read_only) ونحدد فقط أنه موظف
             isSubUser = true;
           } else if (colName == 'consumers') {
             role = 'consumer';
@@ -122,6 +147,7 @@ class AuthService {
           } else if (colName == 'pendingSellers') {
             role = 'pending';
           }
+
           return {...data, 'role': role, 'isSubUser': isSubUser};
         }
       } catch (e) {
@@ -156,7 +182,7 @@ class AuthService {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('loggedUser', json.encode(data));
-    
+
     UserSession.userId = id;
     UserSession.ownerId = ownerId;
     UserSession.role = role;
