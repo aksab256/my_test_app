@@ -57,7 +57,7 @@ class CustomerTrackingScreen extends StatelessWidget {
                   backgroundColor: Colors.white.withOpacity(0.9),
                   elevation: 0,
                   iconTheme: const IconThemeData(color: Colors.black),
-                  title: Text("تتبع رحلة Aksab", // تحديث الاسم
+                  title: Text("تتبع رحلة Aksab", 
                       style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16.sp, color: Colors.black)),
                   centerTitle: true,
                 ),
@@ -105,7 +105,6 @@ class CustomerTrackingScreen extends StatelessWidget {
     );
   }
 
-  // 🛠️ البار الموحد الجديد مع كود الأمان
   Widget _buildUnifiedBottomPanel(String status, Map<String, dynamic> order, Map<String, dynamic>? driver, String code) {
     double progress = 0.1;
     String statusDesc = "بانتظار قبول مندوب...";
@@ -141,7 +140,6 @@ class CustomerTrackingScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // شريط التقدم الموحد
             Row(
               children: [
                 Expanded(
@@ -163,7 +161,6 @@ class CustomerTrackingScreen extends StatelessWidget {
             Text(statusDesc, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.sp, color: progressColor)),
             const Divider(height: 30),
 
-            // كود الأمان (يظهر فقط إذا لم يتم الاستلام بعد)
             if (status == 'accepted' || status == 'at_pickup')
               Container(
                 padding: const EdgeInsets.all(12),
@@ -175,12 +172,12 @@ class CustomerTrackingScreen extends StatelessWidget {
                     const Icon(Icons.security, color: Colors.amber),
                     const SizedBox(width: 10),
                     Text("كود تسليم الشحنة للمندوب: ", style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.bold)),
-                    Text(code, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.black, letterSpacing: 2, color: Colors.red[900])),
+                    // 🛠️ تم تصحيح الخطأ هنا بتغيير FontWeight.black إلى FontWeight.w900
+                    Text(code, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900, letterSpacing: 2, color: Colors.red[900])),
                   ],
                 ),
               ),
 
-            // معلومات المندوب
             Row(
               children: [
                 CircleAvatar(radius: 30, backgroundColor: Colors.grey[100], child: const Icon(Icons.person, size: 35)),
