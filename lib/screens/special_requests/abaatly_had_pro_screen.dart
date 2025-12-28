@@ -69,8 +69,6 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
           _dropoffConfirmed = true;
         }
       });
-      
-      // 💡 تنبيه: إذا اكتمل تحديد الموقعين، التسلسل الخاص بك سيفتح المنبثقة تلقائياً
     }
   }
 
@@ -135,7 +133,6 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
               ),
               const SizedBox(height: 30),
               
-              // 🛡️ قسم شروط التأمين والتنبيهات (بدلاً من الزر المحذوف)
               _buildTermsSection(),
               
               const SizedBox(height: 20),
@@ -166,9 +163,9 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          _buildTermItem("AMR هو وسيط تقني يربطك بالمناديب المستقلين فقط."),
+          _buildTermItem("Aksab هو وسيط تقني يربطك بالمناديب المستقلين فقط."),
           _buildTermItem("يُمنع منعاً باتاً نقل مقتنيات ثمينة (ذهب، مبالغ مالية كبيرة، أجهزة غالية)."),
-          _buildTermItem("التطبيق غير مسؤول عن فقدان الأشياء غير المفصح عن قيمتها الحقيقية."),
+          _buildTermItem("المنصة غير مسؤولة عن فقدان الأشياء غير المفصح عن قيمتها الحقيقية."),
           _buildTermItem("يرجى التأكد من هوية المندوب عبر الكود المظهر في الفقاعة قبل التسليم."),
         ],
       ),
@@ -182,7 +179,7 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Padding(
-            padding: EdgeInsets.top(6),
+            padding: EdgeInsets.only(top: 6), // 🛠️ تم تصحيح الخطأ هنا
             child: Icon(Icons.circle, size: 6, color: Colors.grey),
           ),
           const SizedBox(width: 10),
