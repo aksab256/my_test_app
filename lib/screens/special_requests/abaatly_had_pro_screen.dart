@@ -145,28 +145,28 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
 
   Widget _buildTermsSection() {
     return Container(
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.all(20), // زيادة الحشو الداخلي
       decoration: BoxDecoration(
-        color: Colors.amber.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.amber.withOpacity(0.2)),
+        color: Colors.amber.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.amber.withOpacity(0.3), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.security_outlined, color: Colors.amber, size: 20),
-              const SizedBox(width: 8),
-              Text("تنبيهات أمان النقل", 
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.sp, color: Colors.black87)),
+              const Icon(Icons.gavel_rounded, color: Colors.amber, size: 24), // أيقونة أوضح للمسؤولية القانونية
+              const SizedBox(width: 10),
+              Text("تنبيهات أمان وهامة", 
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15.sp, color: Colors.black87)),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 15),
           _buildTermItem("Aksab هو وسيط تقني يربطك بالمناديب المستقلين فقط."),
           _buildTermItem("يُمنع منعاً باتاً نقل مقتنيات ثمينة (ذهب، مبالغ مالية كبيرة، أجهزة غالية)."),
-          _buildTermItem("المنصة غير مسؤولة عن فقدان الأشياء غير المفصح عن قيمتها الحقيقية."),
-          _buildTermItem("يرجى التأكد من هوية المندوب عبر الكود المظهر في الفقاعة قبل التسليم."),
+          _buildTermItem("المنصة غير مسؤولة قانونياً عن محتوى الشحنة؛ المسؤولية تقع بالكامل على المستخدم والمندوب."),
+          _buildTermItem("يرجى التأكد من مطابقة بيانات المندوب قبل تسليمه الأغراض."),
         ],
       ),
     );
@@ -174,18 +174,25 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
 
   Widget _buildTermItem(String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 10), // زيادة المسافة بين العناصر
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 6), // 🛠️ تم تصحيح الخطأ هنا
-            child: Icon(Icons.circle, size: 6, color: Colors.grey),
+          Padding(
+            padding: const EdgeInsets.only(top: 8), 
+            child: Icon(Icons.circle, size: 7, color: Colors.amber[800]), // تكبير النقطة وتغيير لونها لتبرز
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
-            child: Text(text, 
-              style: TextStyle(fontSize: 10.5.sp, color: Colors.grey[700], height: 1.4)),
+            child: Text(
+              text, 
+              style: TextStyle(
+                fontSize: 12.5.sp, // 👈 تكبير خط الشروط كما طلبت
+                fontWeight: FontWeight.w700, // جعل الخط أكثر سمكاً للوضوح
+                color: Colors.black87, 
+                height: 1.5
+              ),
+            ),
           ),
         ],
       ),

@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sizer/sizer.dart';
 import '../../services/bubble_service.dart';
 import '../../services/delivery_service.dart';
+import 'dart:math'; // 👈 إضافة المكتبة لتوليد الأرقام العشوائية
 
 enum PickerStep { pickup, dropoff, confirm }
 
@@ -61,10 +62,16 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     super.dispose();
   }
 
+  // 🛠️ دالة توليد كود الأمان المكون من 4 أرقام
+  String _generateOTP() {
+    var rng = Random();
+    return (1000 + rng.nextInt(9000)).toString();
+  }
+
   Future<void> _determinePosition() async {
     if (widget.initialLocation != null) {
-       _getAddress(widget.initialLocation!);
-       return;
+      _getAddress(widget.initialLocation!);
+      return;
     }
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
@@ -112,12 +119,12 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   Future<double> _calculatePrice(String vehicleType) async {
     if (_pickupLocation == null || _dropoffLocation == null) return 0.0;
     double distance = _deliveryService.calculateDistance(
-      _pickupLocation!.latitude, _pickupLocation!.longitude,
-      _dropoffLocation!.latitude, _dropoffLocation!.longitude
+        _pickupLocation!.latitude, _pickupLocation!.longitude,
+        _dropoffLocation!.latitude, _dropoffLocation!.longitude
     );
     return await _deliveryService.calculateTripCost(
-      distanceInKm: distance,
-      vehicleType: vehicleType
+        distanceInKm: distance,
+        vehicleType: vehicleType
     );
   }
 
@@ -125,6 +132,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     setState(() => _isLoading = true);
     try {
       final user = FirebaseAuth.instance.currentUser;
+      final String securityCode = _generateOTP(); // 👈 توليد الكود هنا
+
       final docRef = await FirebaseFirestore.instance.collection('specialRequests').add({
         'userId': user?.uid ?? 'anonymous',
         'pickupLocation': GeoPoint(_pickupLocation!.latitude, _pickupLocation!.longitude),
@@ -135,6 +144,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         'vehicleType': _selectedVehicle,
         'details': _detailsController.text,
         'status': 'pending',
+        'verificationCode': securityCode, // 👈 حفظ كود الأمان في قاعدة البيانات
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -188,7 +198,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ),
               ],
             ),
-            // Pin الخريطة
             Center(
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 35),

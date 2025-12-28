@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 class CustomerTrackingScreen extends StatelessWidget {
   static const routeName = '/customerTracking';
   final String orderId;
+
   const CustomerTrackingScreen({super.key, required this.orderId});
 
   final String mapboxToken = "pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw";
@@ -25,6 +26,8 @@ class CustomerTrackingScreen extends StatelessWidget {
         var orderData = orderSnapshot.data!.data() as Map<String, dynamic>;
         String status = orderData['status'] ?? "pending";
         String? driverId = orderData['driverId'];
+        String verificationCode = orderData['verificationCode'] ?? "----"; // جلب كود الأمان
+
         GeoPoint pickup = orderData['pickupLocation'];
         GeoPoint dropoff = orderData['dropoffLocation'];
         LatLng pickupLatLng = LatLng(pickup.latitude, pickup.longitude);
@@ -51,21 +54,15 @@ class CustomerTrackingScreen extends StatelessWidget {
               child: Scaffold(
                 extendBodyBehindAppBar: true,
                 appBar: AppBar(
-                  backgroundColor: Colors.white.withOpacity(0.8),
+                  backgroundColor: Colors.white.withOpacity(0.9),
                   elevation: 0,
-                  iconTheme: const IconThemeData(color: Colors.black, size: 30),
-                  title: Text(
-                    "تتبع الرحلة",
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18.sp, color: Colors.black),
-                  ),
+                  iconTheme: const IconThemeData(color: Colors.black),
+                  title: Text("تتبع رحلة Aksab", // تحديث الاسم
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16.sp, color: Colors.black)),
                   centerTitle: true,
-                  shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
-                  ),
                 ),
                 body: Stack(
                   children: [
-                    // 🗺️ الخريطة بمفتاح Mapbox
                     FlutterMap(
                       options: MapOptions(
                         initialCenter: driverLatLng ?? pickupLatLng,
@@ -74,23 +71,19 @@ class CustomerTrackingScreen extends StatelessWidget {
                       children: [
                         TileLayer(
                           urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
-                          additionalOptions: {'accessToken': mapboxToken},
                         ),
                         MarkerLayer(
                           markers: [
-                            // نقطة الاستلام
                             Marker(
                               point: pickupLatLng,
                               width: 50, height: 50,
                               child: const Icon(Icons.location_on, color: Colors.green, size: 45),
                             ),
-                            // نقطة التسليم
                             Marker(
                               point: dropoffLatLng,
                               width: 50, height: 50,
                               child: const Icon(Icons.flag_circle, color: Colors.red, size: 45),
                             ),
-                            // المندوب (المتحرك)
                             if (driverLatLng != null)
                               Marker(
                                 point: driverLatLng,
@@ -101,9 +94,7 @@ class CustomerTrackingScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    
-                    // 🏷️ لوحة المعلومات السفلية
-                    _buildBottomPanel(status, orderData, driverData),
+                    _buildUnifiedBottomPanel(status, orderData, driverData, verificationCode),
                   ],
                 ),
               ),
@@ -111,6 +102,108 @@ class CustomerTrackingScreen extends StatelessWidget {
           },
         );
       },
+    );
+  }
+
+  // 🛠️ البار الموحد الجديد مع كود الأمان
+  Widget _buildUnifiedBottomPanel(String status, Map<String, dynamic> order, Map<String, dynamic>? driver, String code) {
+    double progress = 0.1;
+    String statusDesc = "بانتظار قبول مندوب...";
+    Color progressColor = Colors.orange;
+
+    if (status == 'accepted') {
+      progress = 0.4;
+      statusDesc = "المندوب في طريقه لموقع الاستلام";
+      progressColor = Colors.blue;
+    } else if (status == 'at_pickup') {
+      progress = 0.5;
+      statusDesc = "المندوب وصل لموقع الاستلام";
+      progressColor = Colors.blueAccent;
+    } else if (status == 'picked_up') {
+      progress = 0.8;
+      statusDesc = "تم استلام الشحنة.. جاري التوصيل";
+      progressColor = Colors.green;
+    } else if (status == 'delivered') {
+      progress = 1.0;
+      statusDesc = "تم التسليم بنجاح ✅";
+      progressColor = Colors.green[800]!;
+    }
+
+    return Positioned(
+      bottom: 20, left: 15, right: 15,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(25),
+          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 20)],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // شريط التقدم الموحد
+            Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 10,
+                      backgroundColor: Colors.grey[200],
+                      color: progressColor,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 15),
+                Text("${(progress * 100).toInt()}%", style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(statusDesc, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.sp, color: progressColor)),
+            const Divider(height: 30),
+
+            // كود الأمان (يظهر فقط إذا لم يتم الاستلام بعد)
+            if (status == 'accepted' || status == 'at_pickup')
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 15),
+                decoration: BoxDecoration(color: Colors.amber[50], borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.amber)),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.security, color: Colors.amber),
+                    const SizedBox(width: 10),
+                    Text("كود تسليم الشحنة للمندوب: ", style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.bold)),
+                    Text(code, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.black, letterSpacing: 2, color: Colors.red[900])),
+                  ],
+                ),
+              ),
+
+            // معلومات المندوب
+            Row(
+              children: [
+                CircleAvatar(radius: 30, backgroundColor: Colors.grey[100], child: const Icon(Icons.person, size: 35)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(driver != null ? driver['fullname'] : "بحث عن مندوب...", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14.sp)),
+                      Text("Aksab Delivery", style: TextStyle(color: Colors.grey, fontSize: 10.sp)),
+                    ],
+                  ),
+                ),
+                if (driver != null)
+                  IconButton(
+                    onPressed: () => _makePhoneCall(driver['phone']),
+                    icon: const Icon(Icons.phone_in_talk, color: Colors.green, size: 35),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -126,123 +219,15 @@ class CustomerTrackingScreen extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.blue[900],
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 3),
-            boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 10)],
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 5)],
           ),
-          child: Icon(icon, color: Colors.white, size: 30),
+          child: Icon(icon, color: Colors.white, size: 25),
         ),
         const Icon(Icons.arrow_drop_down, color: Colors.blue, size: 20),
       ],
     );
   }
-
-  Widget _buildBottomPanel(String status, Map<String, dynamic> order, Map<String, dynamic>? driver) {
-    return Positioned(
-      bottom: 25, left: 15, right: 15,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 25, spreadRadius: 5)],
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // مؤشر الحالة (Stepper)
-            _statusStepper(status),
-            const SizedBox(height: 20),
-            const Divider(thickness: 1),
-            const SizedBox(height: 10),
-            
-            // معلومات المندوب والسعر
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 35,
-                  backgroundColor: Colors.blue[100],
-                  child: Icon(Icons.person, color: Colors.blue[900], size: 40),
-                ),
-                const SizedBox(width: 15),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        driver != null ? driver['fullname'] : "جاري تعيين مندوب...",
-                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16.sp),
-                      ),
-                      Text(
-                        "التكلفة النهائية: ${order['price']} ج.م",
-                        style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.w900, fontSize: 13.sp),
-                      ),
-                    ],
-                  ),
-                ),
-                if (driver != null)
-                  GestureDetector(
-                    onTap: () => _makePhoneCall(driver['phone']),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
-                      child: const Icon(Icons.phone_in_talk, color: Colors.white, size: 30),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _statusStepper(String status) {
-    bool isAccepted = status == 'accepted' || status == 'delivered';
-    bool isDelivered = status == 'delivered';
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        _stepItem("تم الطلب", true),
-        _stepLine(isAccepted),
-        _stepItem("في الطريق", isAccepted),
-        _stepLine(isDelivered),
-        _stepItem("وصلنا", isDelivered),
-      ],
-    );
-  }
-
-  Widget _stepItem(String title, bool active) {
-    return Column(
-      children: [
-        Icon(
-          active ? Icons.check_circle : Icons.radio_button_off,
-          color: active ? Colors.blue[900] : Colors.grey[300],
-          size: 24.sp,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 10.sp, 
-            fontWeight: active ? FontWeight.w900 : FontWeight.normal,
-            color: active ? Colors.black : Colors.grey
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _stepLine(bool active) => Expanded(
-    child: Container(
-      height: 4, 
-      margin: EdgeInsets.only(bottom: 25.sp, left: 5, right: 5),
-      decoration: BoxDecoration(
-        color: active ? Colors.blue[900] : Colors.grey[200],
-        borderRadius: BorderRadius.circular(10)
-      ),
-    ),
-  );
 
   Future<void> _makePhoneCall(String phoneNumber) async {
     final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
