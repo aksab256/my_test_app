@@ -1,10 +1,7 @@
 // lib/screens/special_requests/abaatly_had_pro_screen.dart
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sizer/sizer.dart'; // أضفتها لضمان تناسق المقاسات
-import 'package:my_test_app/services/bubble_service.dart'; // 🎯 ضروري لتشغيل الفقاعة فوراً
+import 'package:sizer/sizer.dart';
 import 'location_picker_screen.dart';
 
 class AbaatlyHadProScreen extends StatefulWidget {
@@ -30,9 +27,6 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
   LatLng? _dropoffCoords;
   bool _pickupConfirmed = false;
   bool _dropoffConfirmed = false;
-  bool _isLoading = false;
-
-  final Color accentOrange = const Color(0xFFE65100);
 
   @override
   void initState() {
@@ -41,7 +35,6 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
   }
 
   void _setupInitialLocations() {
-    // 🎯 هنا نضمن استلام الموقع الممرر من الصفحة الرئيسية واستخدامه فوراً
     if (widget.isStoreOwner) {
       _pickupController.text = "موقعي الحالي (المحل) ✅";
       _pickupCoords = widget.userCurrentLocation;
@@ -76,58 +69,9 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
           _dropoffConfirmed = true;
         }
       });
-    }
-  }
-
-  Future<void> _submitOrder() async {
-    if (_detailsController.text.trim().isEmpty) {
-      _showError("يرجى كتابة تفاصيل ما تريد نقله");
-      return;
-    }
-    if (!_pickupConfirmed || !_dropoffConfirmed) {
-      _showError("يرجى تأكيد مواقع الاستلام والتسليم");
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    try {
-      // 🎯 إرسال البيانات كاملة لـ Firestore
-      DocumentReference docRef = await FirebaseFirestore.instance.collection('specialRequests').add({
-        'details': _detailsController.text,
-        'pickupAddress': _pickupController.text,
-        'dropoffAddress': _dropoffController.text,
-        'pickupLocation': GeoPoint(_pickupCoords!.latitude, _pickupCoords!.longitude),
-        'dropoffLocation': GeoPoint(_dropoffCoords!.latitude, _dropoffCoords!.longitude),
-        'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-        'requestType': widget.isStoreOwner ? 'store_delivery' : 'consumer_personal',
-        'price': 0,
-        'isStoreOwner': widget.isStoreOwner, // حفظ صفة صاحب الطلب
-      });
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('active_special_order_id', docRef.id);
       
-      // 🎯 تفعيل الفقاعة فوراً قبل الخروج من الصفحة
-      BubbleService.show(docRef.id);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("🚀 تم إرسال طلبك! ابحث عن فقاعة التتبع الآن"))
-        );
-        Navigator.pop(context); // العودة للرئيسية حيث تظهر الفقاعة
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      _showError("حدث خطأ: $e");
+      // 💡 تنبيه: إذا اكتمل تحديد الموقعين، التسلسل الخاص بك سيفتح المنبثقة تلقائياً
     }
-  }
-
-  void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: TextStyle(fontSize: 14.sp)),
-      backgroundColor: Colors.red,
-    ));
   }
 
   @override
@@ -178,38 +122,75 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: _detailsController,
-                maxLines: 4,
-                style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600),
+                maxLines: 3,
+                style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600),
                 decoration: InputDecoration(
                   hintText: "مثال: شنطة ملابس، كرتونة طلبات...",
-                  hintStyle: TextStyle(fontSize: 13.sp, color: Colors.grey[400]),
+                  hintStyle: TextStyle(fontSize: 12.sp, color: Colors.grey[400]),
                   filled: true,
                   fillColor: Colors.white,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide(color: Colors.grey[200]!)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide(color: Colors.grey[200]!)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: Colors.grey[200]!)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: Colors.grey[200]!)),
                 ),
               ),
-              const SizedBox(height: 40),
-              SizedBox(
-                width: double.infinity,
-                height: 70,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _submitOrder,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: accentOrange,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    elevation: 10,
-                    shadowColor: accentOrange.withOpacity(0.4),
-                  ),
-                  child: _isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : Text("تأكيد وطلب مندوب الآن", 
-                        style: TextStyle(color: Colors.white, fontSize: 17.sp, fontWeight: FontWeight.w900)),
-                ),
-              ),
+              const SizedBox(height: 30),
+              
+              // 🛡️ قسم شروط التأمين والتنبيهات (بدلاً من الزر المحذوف)
+              _buildTermsSection(),
+              
+              const SizedBox(height: 20),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTermsSection() {
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.amber.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.amber.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.security_outlined, color: Colors.amber, size: 20),
+              const SizedBox(width: 8),
+              Text("تنبيهات أمان النقل", 
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.sp, color: Colors.black87)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _buildTermItem("AMR هو وسيط تقني يربطك بالمناديب المستقلين فقط."),
+          _buildTermItem("يُمنع منعاً باتاً نقل مقتنيات ثمينة (ذهب، مبالغ مالية كبيرة، أجهزة غالية)."),
+          _buildTermItem("التطبيق غير مسؤول عن فقدان الأشياء غير المفصح عن قيمتها الحقيقية."),
+          _buildTermItem("يرجى التأكد من هوية المندوب عبر الكود المظهر في الفقاعة قبل التسليم."),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTermItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.top(6),
+            child: Icon(Icons.circle, size: 6, color: Colors.grey),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(text, 
+              style: TextStyle(fontSize: 10.5.sp, color: Colors.grey[700], height: 1.4)),
+          ),
+        ],
       ),
     );
   }
@@ -244,11 +225,7 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
                   Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 11.sp, fontWeight: FontWeight.bold)),
                   Text(
                     controller.text.isEmpty ? "اضغط للتحديد من الخريطة" : controller.text,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900, 
-                      fontSize: 14.sp, 
-                      color: isConfirmed ? Colors.black : Colors.red[900]
-                    )
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14.sp, color: isConfirmed ? Colors.black : Colors.red[900])
                   ),
                 ],
               ),
