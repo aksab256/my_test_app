@@ -22,7 +22,6 @@ import 'package:my_test_app/providers/product_offer_provider.dart';
 import 'package:my_test_app/providers/cashback_provider.dart';
 import 'package:my_test_app/controllers/seller_dashboard_controller.dart';
 import 'package:my_test_app/models/logged_user.dart';
-// 🎯 استيراد الـ UserSession لضمان عمل التحميل
 import 'package:my_test_app/services/user_session.dart';
 
 // استيراد الشاشات
@@ -49,7 +48,7 @@ import 'package:my_test_app/screens/consumer/MarketplaceHomeScreen.dart';
 import 'package:my_test_app/screens/consumer/consumer_purchase_history_screen.dart';
 import 'package:my_test_app/screens/consumer/points_loyalty_screen.dart';
 import 'package:my_test_app/screens/delivery_merchant_dashboard_screen.dart';
-import 'package:my_test_app/screens/delivery_settings_screen.dart';
+import 'package:my_test_app/screens/delivery_settings_screen.dart'; // 🎯 الصفحة الجديدة
 import 'package:my_test_app/screens/update_delivery_settings_screen.dart';
 import 'package:my_test_app/screens/consumer_orders_screen.dart';
 import 'package:my_test_app/screens/delivery/product_offer_screen.dart';
@@ -67,7 +66,6 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
@@ -148,7 +146,7 @@ class MyApp extends StatelessWidget {
           initialRoute: '/',
           routes: {
             '/': (context) => const AuthWrapper(),
-            '/sellerhome': (context) => const SellerScreen(), // مسار مضاف للربط الصريح
+            '/sellerhome': (context) => const SellerScreen(),
             LoginScreen.routeName: (context) => const LoginScreen(),
             SellerScreen.routeName: (context) => const SellerScreen(),
             BuyerHomeScreen.routeName: (context) => const BuyerHomeScreen(),
@@ -165,6 +163,10 @@ class MyApp extends StatelessWidget {
             ConsumerStoreSearchScreen.routeName: (context) => const ConsumerStoreSearchScreen(),
             '/consumer-purchases': (context) => const ConsumerPurchaseHistoryScreen(),
             PointsLoyaltyScreen.routeName: (context) => const PointsLoyaltyScreen(),
+            
+            // 🎯 الربط الصحيح لصفحة الإعدادات الجديدة
+            '/deliverySettings': (context) => const DeliverySettingsScreen(),
+            
             '/deliveryPrices': (context) => const DeliveryMerchantDashboardScreen(),
             '/deliveryMerchantDashboard': (context) => const DeliveryMerchantDashboardScreen(),
             '/product_management': (context) => const ProductOfferScreen(),
@@ -273,9 +275,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
     final userJson = prefs.getString('loggedUser');
     if (userJson != null) {
       try {
-        // 🎯 التعديل الوحيد: تحميل الجلسة للذاكرة الحية فور اكتشاف مستخدم مسجل
         await UserSession.loadSession();
-
         final user = LoggedInUser.fromJson(jsonDecode(userJson));
         await Provider.of<BuyerDataProvider>(context, listen: false)
             .initializeData(user.id, user.id, user.fullname);
