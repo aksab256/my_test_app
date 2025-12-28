@@ -10,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:latlong2/latlong.dart'; // تأكد من وجودها للتعامل مع الإحداثيات في المسارات
 
 import 'package:my_test_app/firebase_options.dart';
 import 'package:my_test_app/theme/app_theme.dart';
@@ -48,7 +49,7 @@ import 'package:my_test_app/screens/consumer/MarketplaceHomeScreen.dart';
 import 'package:my_test_app/screens/consumer/consumer_purchase_history_screen.dart';
 import 'package:my_test_app/screens/consumer/points_loyalty_screen.dart';
 import 'package:my_test_app/screens/delivery_merchant_dashboard_screen.dart';
-import 'package:my_test_app/screens/delivery_settings_screen.dart'; // 🎯 الصفحة الجديدة
+import 'package:my_test_app/screens/delivery_settings_screen.dart';
 import 'package:my_test_app/screens/update_delivery_settings_screen.dart';
 import 'package:my_test_app/screens/consumer_orders_screen.dart';
 import 'package:my_test_app/screens/delivery/product_offer_screen.dart';
@@ -57,6 +58,10 @@ import 'package:my_test_app/screens/seller/add_offer_screen.dart';
 import 'package:my_test_app/screens/seller/create_gift_promo_screen.dart';
 import 'package:my_test_app/screens/delivery_area_screen.dart';
 import 'package:my_test_app/services/bubble_service.dart';
+
+// استيراد الصفحات الجديدة لخدمة "ابعتلي حد" والتتبع
+import 'package:my_test_app/screens/special_requests/abaatly_had_pro_screen.dart';
+import 'package:my_test_app/screens/customer_tracking_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -163,10 +168,7 @@ class MyApp extends StatelessWidget {
             ConsumerStoreSearchScreen.routeName: (context) => const ConsumerStoreSearchScreen(),
             '/consumer-purchases': (context) => const ConsumerPurchaseHistoryScreen(),
             PointsLoyaltyScreen.routeName: (context) => const PointsLoyaltyScreen(),
-            
-            // 🎯 الربط الصحيح لصفحة الإعدادات الجديدة
             '/deliverySettings': (context) => const DeliverySettingsScreen(),
-            
             '/deliveryPrices': (context) => const DeliveryMerchantDashboardScreen(),
             '/deliveryMerchantDashboard': (context) => const DeliveryMerchantDashboardScreen(),
             '/product_management': (context) => const ProductOfferScreen(),
@@ -177,6 +179,21 @@ class MyApp extends StatelessWidget {
             '/add-offer': (context) => const AddOfferScreen(),
             '/create-gift': (context) => const CreateGiftPromoScreen(currentSellerId: ''),
             '/delivery-areas': (context) => const DeliveryAreaScreen(currentSellerId: ''),
+
+            // 🚚 مسار خدمة "ابعتلي حد" المطور
+            '/abaatly-had': (context) {
+              final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+              return AbaatlyHadProScreen(
+                userCurrentLocation: args?['location'] ?? LatLng(30.0444, 31.2357),
+                isStoreOwner: args?['isStoreOwner'] ?? false,
+              );
+            },
+
+            // 📍 مسار تتبع الطلب الخاص (للفقاعة)
+            '/customerTracking': (context) {
+              final orderId = ModalRoute.of(context)?.settings.arguments as String? ?? '';
+              return CustomerTrackingScreen(orderId: orderId);
+            },
           },
           onGenerateRoute: (settings) {
             if (settings.name == MarketplaceHomeScreen.routeName) {
@@ -245,7 +262,6 @@ class MyApp extends StatelessWidget {
 
 class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
-
   @override
   State<AuthWrapper> createState() => _AuthWrapperState();
 }
@@ -310,7 +326,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
 class PostRegistrationMessageScreen extends StatelessWidget {
   const PostRegistrationMessageScreen({super.key});
-
   @override
   Widget build(BuildContext context) {
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;

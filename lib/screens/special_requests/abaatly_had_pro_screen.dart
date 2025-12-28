@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sizer/sizer.dart'; // أضفتها لضمان تناسق المقاسات
+import 'package:my_test_app/services/bubble_service.dart'; // 🎯 ضروري لتشغيل الفقاعة فوراً
 import 'location_picker_screen.dart';
 
 class AbaatlyHadProScreen extends StatefulWidget {
@@ -30,7 +32,7 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
   bool _dropoffConfirmed = false;
   bool _isLoading = false;
 
-  final Color accentOrange = const Color(0xFFE65100); // برتقالي قوي للعمليات
+  final Color accentOrange = const Color(0xFFE65100);
 
   @override
   void initState() {
@@ -39,6 +41,7 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
   }
 
   void _setupInitialLocations() {
+    // 🎯 هنا نضمن استلام الموقع الممرر من الصفحة الرئيسية واستخدامه فوراً
     if (widget.isStoreOwner) {
       _pickupController.text = "موقعي الحالي (المحل) ✅";
       _pickupCoords = widget.userCurrentLocation;
@@ -88,6 +91,7 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
 
     setState(() => _isLoading = true);
     try {
+      // 🎯 إرسال البيانات كاملة لـ Firestore
       DocumentReference docRef = await FirebaseFirestore.instance.collection('specialRequests').add({
         'details': _detailsController.text,
         'pickupAddress': _pickupController.text,
@@ -98,16 +102,20 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
         'createdAt': FieldValue.serverTimestamp(),
         'requestType': widget.isStoreOwner ? 'store_delivery' : 'consumer_personal',
         'price': 0,
+        'isStoreOwner': widget.isStoreOwner, // حفظ صفة صاحب الطلب
       });
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('active_special_order_id', docRef.id);
+      
+      // 🎯 تفعيل الفقاعة فوراً قبل الخروج من الصفحة
+      BubbleService.show(docRef.id);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("تم إرسال طلبك! ابحث عن فقاعة التتبع 🚀"))
+          const SnackBar(content: Text("🚀 تم إرسال طلبك! ابحث عن فقاعة التتبع الآن"))
         );
-        Navigator.pop(context);
+        Navigator.pop(context); // العودة للرئيسية حيث تظهر الفقاعة
       }
     } catch (e) {
       setState(() => _isLoading = false);
@@ -116,7 +124,10 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg, style: const TextStyle(fontSize: 16)), backgroundColor: Colors.red));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg, style: TextStyle(fontSize: 14.sp)),
+      backgroundColor: Colors.red,
+    ));
   }
 
   @override
@@ -126,11 +137,15 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
       child: Scaffold(
         backgroundColor: const Color(0xFFFBFBFB),
         appBar: AppBar(
-          title: const Text("طلب توصيل خاص", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
+          title: Text("طلب توصيل خاص", 
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18.sp)),
           centerTitle: true,
           backgroundColor: Colors.white,
           elevation: 0,
-          leading: IconButton(icon: const Icon(Icons.close, color: Colors.black), onPressed: () => Navigator.pop(context)),
+          leading: IconButton(
+            icon: const Icon(Icons.close, color: Colors.black), 
+            onPressed: () => Navigator.pop(context)
+          ),
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -158,15 +173,16 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
                 onTap: () => _pickLocation(false),
               ),
               const SizedBox(height: 35),
-              const Text("تفاصيل الحمولة", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 19)),
+              Text("تفاصيل الحمولة", 
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16.sp)),
               const SizedBox(height: 12),
               TextField(
                 controller: _detailsController,
                 maxLines: 4,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600),
                 decoration: InputDecoration(
                   hintText: "مثال: شنطة ملابس، كرتونة طلبات...",
-                  hintStyle: TextStyle(fontSize: 16, color: Colors.grey[400]),
+                  hintStyle: TextStyle(fontSize: 13.sp, color: Colors.grey[400]),
                   filled: true,
                   fillColor: Colors.white,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide(color: Colors.grey[200]!)),
@@ -186,8 +202,9 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
                     shadowColor: accentOrange.withOpacity(0.4),
                   ),
                   child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text("تأكيد وطلب مندوب الآن", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : Text("تأكيد وطلب مندوب الآن", 
+                        style: TextStyle(color: Colors.white, fontSize: 17.sp, fontWeight: FontWeight.w900)),
                 ),
               ),
             ],
@@ -224,9 +241,15 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 15, fontWeight: FontWeight.bold)),
-                  Text(controller.text.isEmpty ? "اضغط للتحديد من الخريطة" : controller.text,
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: isConfirmed ? Colors.black : Colors.red[900])),
+                  Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 11.sp, fontWeight: FontWeight.bold)),
+                  Text(
+                    controller.text.isEmpty ? "اضغط للتحديد من الخريطة" : controller.text,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900, 
+                      fontSize: 14.sp, 
+                      color: isConfirmed ? Colors.black : Colors.red[900]
+                    )
+                  ),
                 ],
               ),
             ),

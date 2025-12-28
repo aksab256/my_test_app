@@ -1,3 +1,4 @@
+// lib/screens/customer_tracking_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,6 +7,7 @@ import 'package:sizer/sizer.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class CustomerTrackingScreen extends StatelessWidget {
+  static const routeName = '/customerTracking';
   final String orderId;
   const CustomerTrackingScreen({super.key, required this.orderId});
 
@@ -23,7 +25,6 @@ class CustomerTrackingScreen extends StatelessWidget {
         var orderData = orderSnapshot.data!.data() as Map<String, dynamic>;
         String status = orderData['status'] ?? "pending";
         String? driverId = orderData['driverId'];
-
         GeoPoint pickup = orderData['pickupLocation'];
         GeoPoint dropoff = orderData['dropoffLocation'];
         LatLng pickupLatLng = LatLng(pickup.latitude, pickup.longitude);
@@ -48,18 +49,27 @@ class CustomerTrackingScreen extends StatelessWidget {
             return Directionality(
               textDirection: TextDirection.rtl,
               child: Scaffold(
+                extendBodyBehindAppBar: true,
                 appBar: AppBar(
-                  title: Text("تتبع الطلب #${orderId.substring(0, 5)}", 
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14.sp)),
-                  centerTitle: true,
+                  backgroundColor: Colors.white.withOpacity(0.8),
                   elevation: 0,
+                  iconTheme: const IconThemeData(color: Colors.black, size: 30),
+                  title: Text(
+                    "تتبع الرحلة",
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18.sp, color: Colors.black),
+                  ),
+                  centerTitle: true,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+                  ),
                 ),
                 body: Stack(
                   children: [
+                    // 🗺️ الخريطة بمفتاح Mapbox
                     FlutterMap(
                       options: MapOptions(
                         initialCenter: driverLatLng ?? pickupLatLng,
-                        initialZoom: 14.0,
+                        initialZoom: 14.5,
                       ),
                       children: [
                         TileLayer(
@@ -68,29 +78,31 @@ class CustomerTrackingScreen extends StatelessWidget {
                         ),
                         MarkerLayer(
                           markers: [
-                            // مكان الاستلام (Pin صغير واحترافي)
+                            // نقطة الاستلام
                             Marker(
                               point: pickupLatLng,
-                              width: 35, height: 35,
-                              child: const Icon(Icons.location_on, color: Colors.green, size: 30),
+                              width: 50, height: 50,
+                              child: const Icon(Icons.location_on, color: Colors.green, size: 45),
                             ),
-                            // مكان التسليم
+                            // نقطة التسليم
                             Marker(
                               point: dropoffLatLng,
-                              width: 35, height: 35,
-                              child: const Icon(Icons.flag_circle, color: Colors.red, size: 30),
+                              width: 50, height: 50,
+                              child: const Icon(Icons.flag_circle, color: Colors.red, size: 45),
                             ),
-                            // المندوب
+                            // المندوب (المتحرك)
                             if (driverLatLng != null)
                               Marker(
                                 point: driverLatLng,
-                                width: 50, height: 50,
+                                width: 70, height: 70,
                                 child: _buildDriverMarker(orderData['vehicleType'] ?? 'motorcycle'),
                               ),
                           ],
                         ),
                       ],
                     ),
+                    
+                    // 🏷️ لوحة المعلومات السفلية
                     _buildBottomPanel(status, orderData, driverData),
                   ],
                 ),
@@ -104,64 +116,81 @@ class CustomerTrackingScreen extends StatelessWidget {
 
   Widget _buildDriverMarker(String vehicleType) {
     IconData icon = Icons.delivery_dining;
-    if (vehicleType == "pickup") icon = Icons.local_shipping;
-    if (vehicleType == "jumbo") icon = Icons.fire_truck;
+    if (vehicleType == "pickup" || vehicleType == "ربع نقل") icon = Icons.local_shipping;
+    if (vehicleType == "jumbo" || vehicleType == "جامبو") icon = Icons.fire_truck;
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 8, spreadRadius: 1)],
-      ),
-      child: Icon(icon, color: Colors.blue[900], size: 28),
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.blue[900],
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 3),
+            boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 10)],
+          ),
+          child: Icon(icon, color: Colors.white, size: 30),
+        ),
+        const Icon(Icons.arrow_drop_down, color: Colors.blue, size: 20),
+      ],
     );
   }
 
   Widget _buildBottomPanel(String status, Map<String, dynamic> order, Map<String, dynamic>? driver) {
     return Positioned(
-      bottom: 20, left: 15, right: 15,
-      child: Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        elevation: 15,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _statusStepper(status),
-              const Divider(height: 30),
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 25,
-                    backgroundColor: Colors.blue[50],
-                    child: Icon(Icons.person, color: Colors.blue[900]),
+      bottom: 25, left: 15, right: 15,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 25, spreadRadius: 5)],
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // مؤشر الحالة (Stepper)
+            _statusStepper(status),
+            const SizedBox(height: 20),
+            const Divider(thickness: 1),
+            const SizedBox(height: 10),
+            
+            // معلومات المندوب والسعر
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 35,
+                  backgroundColor: Colors.blue[100],
+                  child: Icon(Icons.person, color: Colors.blue[900], size: 40),
+                ),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        driver != null ? driver['fullname'] : "جاري تعيين مندوب...",
+                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16.sp),
+                      ),
+                      Text(
+                        "التكلفة النهائية: ${order['price']} ج.م",
+                        style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.w900, fontSize: 13.sp),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          driver != null ? driver['fullname'] : "جاري البحث عن مندوب...",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.sp),
-                        ),
-                        Text(
-                          "التكلفة: ${order['price']} ج.م",
-                          style: TextStyle(color: Colors.green[800], fontWeight: FontWeight.bold, fontSize: 10.sp),
-                        ),
-                      ],
+                ),
+                if (driver != null)
+                  GestureDetector(
+                    onTap: () => _makePhoneCall(driver['phone']),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+                      child: const Icon(Icons.phone_in_talk, color: Colors.white, size: 30),
                     ),
                   ),
-                  if (driver != null && (status == 'accepted' || status == 'delivered'))
-                    IconButton(
-                      icon: const Icon(Icons.phone_in_talk, color: Colors.green, size: 30),
-                      onPressed: () => _makePhoneCall(driver['phone']),
-                    ),
-                ],
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -172,11 +201,11 @@ class CustomerTrackingScreen extends StatelessWidget {
     bool isDelivered = status == 'delivered';
 
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         _stepItem("تم الطلب", true),
         _stepLine(isAccepted),
-        _stepItem("تم القبول", isAccepted),
+        _stepItem("في الطريق", isAccepted),
         _stepLine(isDelivered),
         _stepItem("وصلنا", isDelivered),
       ],
@@ -186,15 +215,33 @@ class CustomerTrackingScreen extends StatelessWidget {
   Widget _stepItem(String title, bool active) {
     return Column(
       children: [
-        Icon(active ? Icons.check_circle : Icons.radio_button_off,
-            color: active ? Colors.blue[900] : Colors.grey[300], size: 18),
-        Text(title, style: TextStyle(fontSize: 7.sp, color: active ? Colors.black : Colors.grey)),
+        Icon(
+          active ? Icons.check_circle : Icons.radio_button_off,
+          color: active ? Colors.blue[900] : Colors.grey[300],
+          size: 24.sp,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 10.sp, 
+            fontWeight: active ? FontWeight.w900 : FontWeight.normal,
+            color: active ? Colors.black : Colors.grey
+          ),
+        ),
       ],
     );
   }
 
   Widget _stepLine(bool active) => Expanded(
-    child: Container(height: 2, color: active ? Colors.blue[900] : Colors.grey[200], margin: const EdgeInsets.only(bottom: 12)),
+    child: Container(
+      height: 4, 
+      margin: EdgeInsets.only(bottom: 25.sp, left: 5, right: 5),
+      decoration: BoxDecoration(
+        color: active ? Colors.blue[900] : Colors.grey[200],
+        borderRadius: BorderRadius.circular(10)
+      ),
+    ),
   );
 
   Future<void> _makePhoneCall(String phoneNumber) async {
