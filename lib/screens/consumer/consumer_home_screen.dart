@@ -82,8 +82,10 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> {
         centerTitle: true,
         title: Column(
           children: [
-            Text("مرحباً بك، ${user?.displayName ?? 'مستخدم'}", style: TextStyle(color: Colors.black54, fontSize: 10.sp)),
-            Text("AMR", style: TextStyle(color: darkGreenText, fontWeight: FontWeight.bold, fontSize: 18.sp)),
+            Text("مرحباً بك، ${user?.displayName ?? 'مستخدم'}", 
+              style: TextStyle(color: Colors.black54, fontSize: 10.sp)),
+            Text(user?.displayName?.split(' ').first.toUpperCase() ?? "GUEST", 
+              style: TextStyle(color: darkGreenText, fontWeight: FontWeight.bold, fontSize: 18.sp)),
           ],
         ),
         actions: [_buildPointsBadge()],
@@ -94,19 +96,13 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> {
           child: Column(
             children: [
               const SizedBox(height: 20),
-              // 1. بانر الرادار (تم إعادته كعنصر أساسي)
               _buildSmartRadarButton(),
-              
-              // 2. بانر ابعتلي حد
               _buildFreeDeliveryBanner(),
-
               const ConsumerSectionTitle(title: 'الأقسام المميزة'),
               _buildCategoriesSection(),
-              
               const SizedBox(height: 10),
               const ConsumerSectionTitle(title: 'أحدث العروض الحصرية'),
               _buildBannersSection(),
-              
               const SizedBox(height: 30),
             ],
           ),
@@ -116,7 +112,6 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> {
     );
   }
 
-  // 📡 بانر الرادار بتصميمه الضخم والأنيق
   Widget _buildSmartRadarButton() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
@@ -124,7 +119,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> {
         onTap: () => Navigator.pushNamed(context, ConsumerStoreSearchScreen.routeName),
         borderRadius: BorderRadius.circular(40),
         child: Container(
-          height: 90, // ارتفاع كبير يعطي فخامة كما في الصورة
+          height: 90,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [softGreen, const Color(0xFF43A047)],
@@ -139,7 +134,6 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> {
           child: Row(
             children: [
               const SizedBox(width: 20),
-              // أيقونة الرادار العائمة
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
@@ -214,8 +208,31 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> {
     ],
   );
 
-  Widget _buildPointsBadge() => Container(/* كود النقاط كما هو */);
-  Widget _buildCategoriesSection() => FutureBuilder<List<ConsumerCategory>>(/* كود الأقسام كما هو */);
-  Widget _buildBannersSection() => FutureBuilder<List<ConsumerBanner>>(/* كود البنرات كما هو */);
+  Widget _buildPointsBadge() => Container(
+    margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
+    padding: const EdgeInsets.symmetric(horizontal: 10),
+    decoration: BoxDecoration(color: Colors.amber.withOpacity(0.1), borderRadius: BorderRadius.circular(15)),
+    child: Row(children: [
+      const Icon(Icons.stars, color: Colors.orange, size: 18),
+      const SizedBox(width: 4),
+      Text("0", style: TextStyle(color: darkGreenText, fontWeight: FontWeight.bold, fontSize: 11.sp)),
+    ]),
+  );
+
+  Widget _buildCategoriesSection() => FutureBuilder<List<ConsumerCategory>>(
+    future: dataService.fetchMainCategories(),
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+      return ConsumerCategoriesBanner(categories: snapshot.data ?? []);
+    },
+  );
+
+  Widget _buildBannersSection() => FutureBuilder<List<ConsumerBanner>>(
+    future: dataService.fetchPromoBanners(),
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+      return ConsumerPromoBanners(banners: snapshot.data ?? [], height: 220);
+    },
+  );
 }
 
