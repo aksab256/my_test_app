@@ -36,47 +36,37 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     });
 
     try {
-      // أ- تسجيل الدخول الصريح
+      // أ- تسجيل الدخول الصريح من خلال الخدمة
       String fakeEmail = "${_phone.trim()}@aswaq.com";
       final String userRole = await _authService.signInWithEmailAndPassword(fakeEmail, _password);
 
-      // ب- تحديث الجلسة والعمليات الجانبية (محاطة بـ try داخلي لضمان عدم تعطيل الدخول)
-      try {
-        await UserSession.loadSession();
+      // ب- تحديث بيانات الجلسة (خطوة حاسمة للموظفين)
+      await UserSession.loadSession();
 
-        if (UserSession.isSubUser) {
-          final subUserDoc = await FirebaseFirestore.instance
-              .collection("subUsers")
-              .doc(_phone.trim())
-              .get();
+      // ج- فحص حالة الموظف الفرعي (SubUser)
+      if (UserSession.isSubUser) {
+        final subUserDoc = await FirebaseFirestore.instance
+            .collection("subUsers")
+            .doc(_phone.trim())
+            .get();
 
-          if (subUserDoc.exists && subUserDoc.data()?['mustChangePassword'] == true) {
-            if (mounted) setState(() => _isLoading = false);
-            _showChangePasswordDialog(_phone.trim());
-            return;
-          }
+        if (subUserDoc.exists && subUserDoc.data()?['mustChangePassword'] == true) {
+          if (mounted) setState(() => _isLoading = false);
+          _showChangePasswordDialog(_phone.trim());
+          return; // يتوقف هنا فقط إذا كان ملزماً بتغيير كلمة السر
         }
-
-        // إرسال التوكن للـ AWS بشكل صامت
-        _sendNotificationDataToAWS().catchError((e) => debugPrint("AWS Silent Error: $e"));
-      } catch (innerError) {
-        debugPrint("Secondary Sync Error (Ignored): $innerError");
       }
 
+      // د- إرسال بيانات الإشعارات بشكل صامت
+      _sendNotificationDataToAWS().catchError((e) => debugPrint("AWS Silent Error: $e"));
+
       if (!mounted) return;
-      
-      // ج- التوجه للشاشة الرئيسية
+
+      // هـ- التوجه للشاشة الرئيسية (ستعمل الآن للموظف في المرة الثانية)
       _navigateToHome(userRole);
 
     } catch (e) {
       debugPrint("Core Login Error: $e");
-      
-      // 🎯 الفحص الحاسم: إذا كان هناك مستخدم مسجل بالفعل في Firebase، فهذا يعني أن الدخول نجح 
-      // والخطأ ناتج عن تضارب في الـ Navigation فقط، لذا نتجاهله.
-      if (FirebaseAuth.instance.currentUser != null) {
-        debugPrint("✅ تم تجاهل الخطأ لأن الدخول نجح تقنياً.");
-        return; 
-      }
 
       if (mounted) {
         setState(() {
@@ -84,12 +74,17 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           // تمييز نوع الخطأ للمستخدم
           if (e.toString().contains('account-not-active')) {
             _errorMessage = 'هذا الحساب معلق، يرجى التواصل مع الإدارة';
-          } else if (e.toString().contains('invalid-credential') || 
-                     e.toString().contains('wrong-password') || 
+          } else if (e.toString().contains('invalid-credential') ||
+                     e.toString().contains('wrong-password') ||
                      e.toString().contains('user-not-found')) {
             _errorMessage = 'رقم الهاتف أو كلمة المرور غير صحيحة';
           } else {
-            _errorMessage = 'حدث خطأ غير متوقع، يرجى المحاولة لاحقاً';
+            // فحص أخير: لو الدخول نجح تقنياً في Firebase ولكن حدث خطأ في الكود التالي
+            if (FirebaseAuth.instance.currentUser != null) {
+              _navigateToHome('seller'); // محاولة توجيه اضطرارية
+            } else {
+              _errorMessage = 'حدث خطأ غير متوقع، يرجى المحاولة لاحقاً';
+            }
           }
         });
       }
@@ -254,7 +249,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   }
 }
 
-// ويدجت إدخال البيانات الموحد
 class _InputGroup extends StatelessWidget {
   final IconData icon;
   final String hintText;
