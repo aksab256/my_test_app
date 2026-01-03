@@ -279,7 +279,8 @@ class CheckoutController {
                         'total': orderSubtotalWithDelivery,
                         'paymentMethod': paymentMethodString,
                         'status': 'new-order',
-                        'orderDate': DateTime.now().toUtc().toIso8601String(), 
+                        'orderDate': FieldValue.serverTimestamp(),
+
 
                         'commissionRateSnapshot': commissionRatesCache[sellerId] ?? 0.0, 
                         'cashbackApplied': discountPortion,
@@ -428,7 +429,8 @@ class CheckoutController {
 
                             'paymentMethod': paymentMethodString,
                             'status': 'new-order',
-                            'orderDate': DateTime.now().toUtc().toIso8601String(),
+                            'orderDate': FieldValue.serverTimestamp(),
+
                         };
                     } else {
                         // مسار Buyer المباشر (Direct Write) - المعدل
@@ -448,7 +450,8 @@ class CheckoutController {
                             'total': orderSubtotalWithDelivery,
                             'paymentMethod': paymentMethodString,
                             'status': 'new-order',
-                            'orderDate': DateTime.now().toUtc().toIso8601String(),
+                            'orderDate': FieldValue.serverTimestamp(),
+
 
                             'commissionRate': commissionRatesCache[sellerId] ?? 0.0, 
                             'isCommissionProcessed': false,
