@@ -38,9 +38,8 @@ class ClientDetailsStep extends StatefulWidget {
 class _ClientDetailsStepState extends State<ClientDetailsStep> {
   final _formKey = GlobalKey<FormState>();
   late MapController _mapController;
-  LatLng _selectedPosition = const LatLng(30.0444, 31.2357); // القاهرة كافتراضي
+  LatLng _selectedPosition = const LatLng(30.0444, 31.2357); 
   
-  // 🔑 Mapbox Access Token
   final String mapboxToken = "pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw";
 
   File? _logoPreview, _crPreview, _tcPreview;
@@ -63,11 +62,9 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   void initState() {
     super.initState();
     _mapController = MapController();
-    // إرسال الموقع الافتراضي في البداية
     widget.onLocationChanged(lat: _selectedPosition.latitude, lng: _selectedPosition.longitude);
   }
 
-  // --- Cloudinary Upload Logic ---
   Future<void> _uploadFileToCloudinary(File file, String field) async {
     setState(() => _isUploading = true);
     const String cloudName = "dgmmx6jbu";
@@ -121,16 +118,16 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text('إكمال بيانات الحساب', 
-                style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68)), 
+                style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68)), 
                 textAlign: TextAlign.center),
-              SizedBox(height: 4.h),
+              SizedBox(height: 3.h),
               
               _buildSectionHeader('المعلومات الأساسية', Icons.badge_rounded),
               _buildInputField('fullname', 'الاسم الكامل', Icons.person_rounded),
               _buildInputField('phone', 'رقم الهاتف', Icons.phone_android_rounded, keyboardType: TextInputType.phone),
               
               _buildSectionHeader('العنوان والموقع التجاري', Icons.map_rounded),
-              _buildInputField('address', 'العنوان بالتفصيل (أو اختر من الخريطة)', Icons.location_on_rounded),
+              _buildInputField('address', 'العنوان بالتفصيل', Icons.location_on_rounded),
               _buildMapContainer(),
               
               _buildSectionHeader('الأمان', Icons.security_rounded),
@@ -138,18 +135,18 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
               _buildInputField('confirmPassword', 'تأكيد كلمة المرور', Icons.lock_rounded, isPassword: true),
 
               if (widget.selectedUserType == 'seller') ...[
-                SizedBox(height: 3.h),
+                SizedBox(height: 2.h),
                 _buildSellerSpecificFields(),
               ],
               
-              SizedBox(height: 3.h),
+              SizedBox(height: 2.h),
               _buildTermsCheckbox(),
-              SizedBox(height: 4.h),
+              SizedBox(height: 2.h),
               _buildSubmitButton(),
               
               TextButton(
                 onPressed: widget.onGoBack,
-                child: Text('العودة لتعديل نوع الحساب', style: TextStyle(color: Colors.grey.shade400, fontSize: 13.sp)),
+                child: Text('العودة لتعديل نوع الحساب', style: TextStyle(color: Colors.grey.shade400, fontSize: 11.sp)),
               ),
               SizedBox(height: 5.h),
             ],
@@ -159,19 +156,17 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     );
   }
 
-  // الخريطة باستخدام Mapbox والتحكم في الدبوس
   Widget _buildMapContainer() {
     return Column(
       children: [
         Container(
-          height: 35.h,
+          height: 30.h,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(25),
-            border: Border.all(color: Colors.grey.shade200, width: 2),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.grey.shade200),
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(23),
+            borderRadius: BorderRadius.circular(20),
             child: Stack(
               children: [
                 FlutterMap(
@@ -179,31 +174,27 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
                   options: MapOptions(
                     initialCenter: _selectedPosition,
                     initialZoom: 13.0,
-                    onTap: (tapPosition, point) {
-                      _handleLocationChange(point);
-                    },
+                    onTap: (tapPos, point) => _handleLocationChange(point),
                   ),
                   children: [
                     TileLayer(
                       urlTemplate: "https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/tiles/{z}/{x}/{y}?access_token=$mapboxToken",
-                      userAgentPackageName: 'com.example.app',
                     ),
                     MarkerLayer(
                       markers: [
                         Marker(
                           point: _selectedPosition,
-                          width: 80,
-                          height: 80,
-                          child: const Icon(Icons.location_pin, size: 50, color: Colors.red),
+                          width: 50,
+                          height: 50,
+                          child: const Icon(Icons.location_pin, size: 40, color: Colors.red),
                         ),
                       ],
                     ),
                   ],
                 ),
-                // زر تحديد الموقع الحالي
                 Positioned(
-                  bottom: 15,
-                  right: 15,
+                  bottom: 10,
+                  right: 10,
                   child: FloatingActionButton(
                     mini: true,
                     backgroundColor: const Color(0xFF2D9E68),
@@ -211,28 +202,15 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
                     child: const Icon(Icons.my_location, color: Colors.white),
                   ),
                 ),
-                if (!_isMapActive) 
-                  Container(
-                    color: Colors.white.withOpacity(0.4),
-                    child: Center(
-                      child: Text("اضغط لتفعيل الخريطة وتحديد موقعك", 
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10.sp, backgroundColor: Colors.white70))
-                    ),
-                  ),
               ],
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Text("يمكنك تحريك الخريطة والضغط لتغيير مكان الدبوس بدقة", 
-            style: TextStyle(fontSize: 9.sp, color: Colors.grey)),
-        ),
+        Text("اضغط على الخريطة لتغيير مكان الدبوس", style: TextStyle(fontSize: 8.sp, color: Colors.grey)),
       ],
     );
   }
 
-  // --- دوال التحكم في الموقع ---
   void _handleLocationChange(LatLng point) {
     setState(() {
       _selectedPosition = point;
@@ -248,43 +226,35 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
         setState(() {
-          widget.controllers['address']!.text = 
-            "${place.street ?? ''}, ${place.locality ?? ''}, ${place.administrativeArea ?? ''}";
+          widget.controllers['address']!.text = "${place.street ?? ''}, ${place.locality ?? ''}";
         });
       }
-    } catch (e) {
-      debugPrint("Geocoding error: $e");
-    }
+    } catch (e) {}
   }
 
   Future<void> _goToCurrentLocation() async {
     if (await Permission.location.request().isGranted) {
       Position position = await Geolocator.getCurrentPosition();
       final newPos = LatLng(position.latitude, position.longitude);
-      _mapController.move(newPos, 16.0); // الزوم المطلوب
+      _mapController.move(newPos, 16.0);
       _handleLocationChange(newPos);
     }
   }
 
-  // --- بقية الـ Widgets (البائع، المدخلات، الأزرار) ---
-
   Widget _buildSellerSpecificFields() {
     return Container(
-      padding: EdgeInsets.all(5.w),
+      padding: EdgeInsets.all(4.w),
       decoration: BoxDecoration(
         color: const Color(0xFFF0F7F3),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: const Color(0xFF2D9E68).withOpacity(0.2)),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         children: [
-          Text('بيانات النشاط التجاري', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold, color: const Color(0xFF2D9E68))),
-          SizedBox(height: 3.h),
-          _buildInputField('merchantName', 'اسم النشاط / الشركة', Icons.storefront_rounded),
+          _buildInputField('merchantName', 'اسم النشاط', Icons.storefront_rounded),
           _buildBusinessTypeDropdown(),
-          _buildUploadItem('شعار العلامة التجارية', 'logo', _logoPreview),
-          _buildUploadItem('صورة السجل التجاري', 'cr', _crPreview),
-          _buildUploadItem('صورة البطاقة الضريبية', 'tc', _tcPreview),
+          _buildUploadItem('شعار النشاط', 'logo', _logoPreview),
+          _buildUploadItem('السجل التجاري', 'cr', _crPreview),
+          _buildUploadItem('البطاقة الضريبية', 'tc', _tcPreview),
         ],
       ),
     );
@@ -293,12 +263,8 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   Widget _buildBusinessTypeDropdown() {
     return Container(
       margin: EdgeInsets.only(bottom: 2.h),
-      padding: const EdgeInsets.symmetric(horizontal: 15),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
       child: DropdownButtonFormField<String>(
         value: _selectedBusinessType,
         decoration: const InputDecoration(border: InputBorder.none, hintText: "نوع النشاط"),
@@ -313,7 +279,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
 
   Widget _buildInputField(String key, String label, IconData icon, {bool isPassword = false, TextInputType keyboardType = TextInputType.text}) {
     return Padding(
-      padding: EdgeInsets.only(bottom: 2.h),
+      padding: EdgeInsets.only(bottom: 1.5.h),
       child: TextFormField(
         controller: widget.controllers[key],
         obscureText: isPassword && _obscurePassword,
@@ -324,8 +290,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
           suffixIcon: isPassword ? IconButton(icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => _obscurePassword = !_obscurePassword)) : null,
           filled: true,
           fillColor: Colors.white,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.grey.shade200)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.grey.shade200)),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
         ),
       ),
     );
@@ -335,18 +300,13 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     return GestureDetector(
       onTap: () => _pickFile(field),
       child: Container(
-        margin: EdgeInsets.only(bottom: 1.5.h),
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: file != null ? Colors.green : Colors.grey.shade300, width: 1),
-        ),
+        margin: EdgeInsets.only(bottom: 1.h),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: file != null ? Colors.green : Colors.grey.shade200)),
         child: Row(children: [
           Icon(file != null ? Icons.check_circle : Icons.upload_file, color: file != null ? Colors.green : Colors.grey),
           const SizedBox(width: 10),
-          Expanded(child: Text(label, style: TextStyle(fontSize: 11.sp))),
-          if (file != null) ClipRRect(borderRadius: BorderRadius.circular(5), child: Image.file(file, width: 40, height: 40, fit: BoxFit.cover)),
+          Expanded(child: Text(label, style: TextStyle(fontSize: 10.sp))),
         ]),
       ),
     );
@@ -354,4 +314,33 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
 
   Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
-      padding:
+      padding: EdgeInsets.symmetric(vertical: 1.5.h),
+      child: Row(children: [
+        Icon(icon, size: 20, color: const Color(0xFF2D9E68)),
+        const SizedBox(width: 8),
+        Text(title, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.bold)),
+      ]),
+    );
+  }
+
+  Widget _buildTermsCheckbox() {
+    return CheckboxListTile(
+      value: _termsAgreed,
+      onChanged: (v) => setState(() => _termsAgreed = v!),
+      activeColor: const Color(0xFF2D9E68),
+      title: Text("أوافق على الشروط", style: TextStyle(fontSize: 9.sp)),
+      controlAffinity: ListTileControlAffinity.leading,
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: (widget.isSaving || !_termsAgreed || _isUploading) ? null : widget.onRegister,
+        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68), padding: const EdgeInsets.symmetric(vertical: 15)),
+        child: (widget.isSaving || _isUploading) ? const CircularProgressIndicator(color: Colors.white) : const Text('إتمام التسجيل', style: TextStyle(color: Colors.white)),
+      ),
+    );
+  }
+}
