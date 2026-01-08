@@ -22,7 +22,6 @@ class _NewClientScreenState extends State<NewClientScreen> {
   String _selectedCountry = 'egypt';
   String _selectedUserType = '';
 
-  // تم توحيد المفاتيح لتطابق الـ HTML تماماً
   final Map<String, TextEditingController> _controllers = {
     'fullname': TextEditingController(),
     'phone': TextEditingController(),
@@ -31,10 +30,9 @@ class _NewClientScreenState extends State<NewClientScreen> {
     'address': TextEditingController(),
     'merchantName': TextEditingController(),
     'additionalPhone': TextEditingController(),
-    'businessType': TextEditingController(), // أضفنا هذا لربطه بالـ Dropdown
+    'businessType': TextEditingController(),
   };
 
-  // سنخزن روابط Cloudinary هنا بعد الرفع
   String? _logoUrl;
   String? _crUrl;
   String? _tcUrl;
@@ -50,7 +48,49 @@ class _NewClientScreenState extends State<NewClientScreen> {
     super.dispose();
   }
 
+  // 🛡️ رسالة اشتراطات جوجل للشفافية (Disclosure Statement)
+  Future<bool> _showLocationDisclosure() async {
+    return await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.location_on_rounded, color: Color(0xFF2D9E68)),
+            SizedBox(width: 10),
+            Text('الوصول إلى الموقع'),
+          ],
+        ),
+        content: const Text(
+          'تطبيق أكسب يجمع بيانات الموقع الجغرافي لتمكين ميزة "تحديد مكان النشاط التجاري" '
+          'ولضمان دقة التوصيل وربطك بأقرب الموردين، حتى عندما يكون التطبيق قيد الاستخدام أثناء عملية التسجيل.',
+          style: TextStyle(height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('لاحقاً', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2D9E68),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('موافق وفهمت', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
+  // 📍 دالة تحديد الموقع المحدثة
   Future<void> _determinePosition() async {
+    // إظهار رسالة الشفافية أولاً
+    bool disclosureAccepted = await _showLocationDisclosure();
+    if (!disclosureAccepted) return;
+
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       if (mounted) {
@@ -68,7 +108,9 @@ class _NewClientScreenState extends State<NewClientScreen> {
     }
 
     try {
-      Position position = await Geolocator.getCurrentPosition();
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high
+      );
       setState(() {
         _location = {'lat': position.latitude, 'lng': position.longitude};
       });
@@ -102,11 +144,7 @@ class _NewClientScreenState extends State<NewClientScreen> {
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         icon: const Icon(Icons.check_circle_outline, color: Color(0xFF2D9E68), size: 60),
-        title: const Text(
-          'تم التسجيل بنجاح',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('تم التسجيل بنجاح', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold)),
         content: Text(
           isSeller
               ? "تم استلام طلب انضمامك بنجاح! يسعدنا تواجدك معنا، يمكنك تسجيل الدخول فور موافقة الإدارة على حسابك."
@@ -123,11 +161,8 @@ class _NewClientScreenState extends State<NewClientScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
-              onPressed: () {
-                Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-              },
-              child: const Text('الذهاب لتسجيل الدخول',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false),
+              child: const Text('الذهاب لتسجيل الدخول', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ),
         ],
@@ -135,20 +170,19 @@ class _NewClientScreenState extends State<NewClientScreen> {
     );
   }
 
-  // 🎯 الدالة الجوهرية: تحويل الهاتف لميل ذكي وحفظ البيانات
+  // 🎯 التسجيل النهائي مع دمج "رقم الهاتف" و "الميل الذكي"
   Future<void> _handleRegistration() async {
-    final phone = _controllers['phone']!.text.trim();
+    final phoneValue = _controllers['phone']!.text.trim();
     final pass = _controllers['password']!.text;
     final confirmPass = _controllers['confirmPassword']!.text;
 
-    if (phone.isEmpty || phone.length < 8) {
+    if (phoneValue.isEmpty || phoneValue.length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ يرجى إدخال رقم هاتف صحيح')));
       return;
     }
     
-    // التوافق مع الـ HTML: تحويل الرقم لميل ذكي
-    // ملاحظة: الـ HTML استخدم @aksab.com أو @aswaq.com، سنثبتها حسب رغبتك
-    String smartEmail = "$phone@aksab.com";
+    // إنشاء الميل الذكي كمعرف للهوية فقط
+    String smartEmail = "$phoneValue@aksab.com";
 
     if (pass != confirmPass) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ كلمة المرور غير متطابقة')));
@@ -161,21 +195,20 @@ class _NewClientScreenState extends State<NewClientScreen> {
 
     setState(() => _isSaving = true);
     try {
-      // إرسال الروابط (URLs) القادمة من Cloudinary إلى الـ Data Source
       await _dataSource.registerClient(
         fullname: _controllers['fullname']!.text,
-        email: smartEmail,
+        email: smartEmail,      // يرسل لـ Auth
+        phone: phoneValue,      // يرسل كحقل بيانات مستقل
         password: pass,
         address: _controllers['address']!.text,
         country: _selectedCountry,
         userType: _selectedUserType,
         location: _location,
-        // هذه الروابط تم جلبها من Cloudinary داخل الـ Details Step
         logoUrl: _logoUrl, 
         crUrl: _crUrl,
         tcUrl: _tcUrl,
         merchantName: _controllers['merchantName']!.text,
-        businessType: _controllers['businessType']!.text, // تم السحب من الـ controller
+        businessType: _controllers['businessType']!.text,
         additionalPhone: _controllers['additionalPhone']!.text,
       );
 
@@ -249,7 +282,6 @@ class _NewClientScreenState extends State<NewClientScreen> {
                             controllers: _controllers,
                             selectedUserType: _selectedUserType,
                             isSaving: _isSaving,
-                            // استلام الروابط من Cloudinary وتخزينها في الصفحة الحالية
                             onUploadComplete: ({required field, required url}) {
                               setState(() {
                                 if (field == 'logo') _logoUrl = url;
@@ -278,7 +310,6 @@ class _NewClientScreenState extends State<NewClientScreen> {
     );
   }
 
-  // ... (نفس الـ Widgets الخاصة بـ _buildStepProgress و _LogoHeader و _Footer كما في الكود الأصلي)
   Widget _buildStepProgress() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
