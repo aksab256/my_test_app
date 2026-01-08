@@ -16,7 +16,7 @@ class ClientDetailsStep extends StatefulWidget {
   final String selectedUserType;
   final bool isSaving;
   final Function({required double lat, required double lng}) onLocationChanged;
-  final Function({required String field, required String url}) onUploadComplete; // نمرر الرابط بدلاً من الملف
+  final Function({required String field, required String url}) onUploadComplete;
   final VoidCallback onRegister;
   final VoidCallback onGoBack;
 
@@ -38,13 +38,16 @@ class ClientDetailsStep extends StatefulWidget {
 class _ClientDetailsStepState extends State<ClientDetailsStep> {
   final _formKey = GlobalKey<FormState>();
   late MapController _mapController;
-  LatLng _initialPosition = const LatLng(30.0444, 31.2357);
+  LatLng _selectedPosition = const LatLng(30.0444, 31.2357); // القاهرة كافتراضي
+  
+  // 🔑 Mapbox Access Token
+  final String mapboxToken = "pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw";
 
   File? _logoPreview, _crPreview, _tcPreview;
   bool _termsAgreed = false;
   bool _isMapActive = false;
   bool _obscurePassword = true;
-  bool _isUploading = false; // لمتابعة حالة رفع الصور لـ Cloudinary
+  bool _isUploading = false;
 
   String? _selectedBusinessType;
   final List<String> _businessTypes = [
@@ -60,10 +63,11 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   void initState() {
     super.initState();
     _mapController = MapController();
-    widget.onLocationChanged(lat: _initialPosition.latitude, lng: _initialPosition.longitude);
+    // إرسال الموقع الافتراضي في البداية
+    widget.onLocationChanged(lat: _selectedPosition.latitude, lng: _selectedPosition.longitude);
   }
 
-  // --- دالة الرفع لـ Cloudinary المماثلة للـ HTML ---
+  // --- Cloudinary Upload Logic ---
   Future<void> _uploadFileToCloudinary(File file, String field) async {
     setState(() => _isUploading = true);
     const String cloudName = "dgmmx6jbu";
@@ -83,11 +87,10 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         var responseString = String.fromCharCodes(responseData);
         var json = jsonDecode(responseString);
         String secureUrl = json['secure_url'];
-        
         widget.onUploadComplete(field: field, url: secureUrl);
       }
     } catch (e) {
-      debugPrint("Cloudinary Upload Error: $e");
+      debugPrint("Cloudinary Error: $e");
     } finally {
       setState(() => _isUploading = false);
     }
@@ -117,16 +120,17 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('إكمال بيانات الحساب', style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68)), textAlign: TextAlign.center),
+              Text('إكمال بيانات الحساب', 
+                style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68)), 
+                textAlign: TextAlign.center),
               SizedBox(height: 4.h),
+              
               _buildSectionHeader('المعلومات الأساسية', Icons.badge_rounded),
               _buildInputField('fullname', 'الاسم الكامل', Icons.person_rounded),
+              _buildInputField('phone', 'رقم الهاتف', Icons.phone_android_rounded, keyboardType: TextInputType.phone),
               
-              // حقل الهاتف مع توضيح أنه سيكون المعرف (Smart Email)
-              _buildInputField('phone', 'رقم الهاتف (سيحول لميل ذكي)', Icons.phone_android_rounded, keyboardType: TextInputType.phone),
-              
-              _buildSectionHeader('العنوان والموقع', Icons.map_rounded),
-              _buildInputField('address', 'العنوان الحالي', Icons.location_on_rounded, readOnly: true),
+              _buildSectionHeader('العنوان والموقع التجاري', Icons.map_rounded),
+              _buildInputField('address', 'العنوان بالتفصيل (أو اختر من الخريطة)', Icons.location_on_rounded),
               _buildMapContainer(),
               
               _buildSectionHeader('الأمان', Icons.security_rounded),
@@ -147,7 +151,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
                 onPressed: widget.onGoBack,
                 child: Text('العودة لتعديل نوع الحساب', style: TextStyle(color: Colors.grey.shade400, fontSize: 13.sp)),
               ),
-              SizedBox(height: 10.h),
+              SizedBox(height: 5.h),
             ],
           ),
         ),
@@ -155,27 +159,132 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     );
   }
 
+  // الخريطة باستخدام Mapbox والتحكم في الدبوس
+  Widget _buildMapContainer() {
+    return Column(
+      children: [
+        Container(
+          height: 35.h,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(25),
+            border: Border.all(color: Colors.grey.shade200, width: 2),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(23),
+            child: Stack(
+              children: [
+                FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: _selectedPosition,
+                    initialZoom: 13.0,
+                    onTap: (tapPosition, point) {
+                      _handleLocationChange(point);
+                    },
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: "https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/tiles/{z}/{x}/{y}?access_token=$mapboxToken",
+                      userAgentPackageName: 'com.example.app',
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: _selectedPosition,
+                          width: 80,
+                          height: 80,
+                          child: const Icon(Icons.location_pin, size: 50, color: Colors.red),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                // زر تحديد الموقع الحالي
+                Positioned(
+                  bottom: 15,
+                  right: 15,
+                  child: FloatingActionButton(
+                    mini: true,
+                    backgroundColor: const Color(0xFF2D9E68),
+                    onPressed: _goToCurrentLocation,
+                    child: const Icon(Icons.my_location, color: Colors.white),
+                  ),
+                ),
+                if (!_isMapActive) 
+                  Container(
+                    color: Colors.white.withOpacity(0.4),
+                    child: Center(
+                      child: Text("اضغط لتفعيل الخريطة وتحديد موقعك", 
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10.sp, backgroundColor: Colors.white70))
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Text("يمكنك تحريك الخريطة والضغط لتغيير مكان الدبوس بدقة", 
+            style: TextStyle(fontSize: 9.sp, color: Colors.grey)),
+        ),
+      ],
+    );
+  }
+
+  // --- دوال التحكم في الموقع ---
+  void _handleLocationChange(LatLng point) {
+    setState(() {
+      _selectedPosition = point;
+      _isMapActive = true;
+    });
+    _updateAddressText(point);
+    widget.onLocationChanged(lat: point.latitude, lng: point.longitude);
+  }
+
+  Future<void> _updateAddressText(LatLng position) async {
+    try {
+      final placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+      if (placemarks.isNotEmpty) {
+        final place = placemarks.first;
+        setState(() {
+          widget.controllers['address']!.text = 
+            "${place.street ?? ''}, ${place.locality ?? ''}, ${place.administrativeArea ?? ''}";
+        });
+      }
+    } catch (e) {
+      debugPrint("Geocoding error: $e");
+    }
+  }
+
+  Future<void> _goToCurrentLocation() async {
+    if (await Permission.location.request().isGranted) {
+      Position position = await Geolocator.getCurrentPosition();
+      final newPos = LatLng(position.latitude, position.longitude);
+      _mapController.move(newPos, 16.0); // الزوم المطلوب
+      _handleLocationChange(newPos);
+    }
+  }
+
+  // --- بقية الـ Widgets (البائع، المدخلات، الأزرار) ---
+
   Widget _buildSellerSpecificFields() {
     return Container(
       padding: EdgeInsets.all(5.w),
       decoration: BoxDecoration(
         color: const Color(0xFFF0F7F3),
-        borderRadius: BorderRadius.circular(35),
-        border: Border.all(color: const Color(0xFF2D9E68).withOpacity(0.3), width: 2),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: const Color(0xFF2D9E68).withOpacity(0.2)),
       ),
       child: Column(
         children: [
-          Text('بيانات الموردين', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68))),
+          Text('بيانات النشاط التجاري', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold, color: const Color(0xFF2D9E68))),
           SizedBox(height: 3.h),
-          _buildInputField('merchantName', 'اسم الشركة / النشاط', Icons.business_rounded),
-          
-          // حقل نوع النشاط (Dropdown) المماثل للـ HTML
+          _buildInputField('merchantName', 'اسم النشاط / الشركة', Icons.storefront_rounded),
           _buildBusinessTypeDropdown(),
-          
-          SizedBox(height: 2.h),
-          _buildUploadItem('شعار المورد', 'logo', _logoPreview),
-          _buildUploadItem('السجل التجاري', 'cr', _crPreview),
-          _buildUploadItem('البطاقة الضريبية', 'tc', _tcPreview),
+          _buildUploadItem('شعار العلامة التجارية', 'logo', _logoPreview),
+          _buildUploadItem('صورة السجل التجاري', 'cr', _crPreview),
+          _buildUploadItem('صورة البطاقة الضريبية', 'tc', _tcPreview),
         ],
       ),
     );
@@ -183,86 +292,41 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
 
   Widget _buildBusinessTypeDropdown() {
     return Container(
-      margin: EdgeInsets.only(bottom: 2.5.h),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      margin: EdgeInsets.only(bottom: 2.h),
+      padding: const EdgeInsets.symmetric(horizontal: 15),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade200, width: 1.5),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.grey.shade200),
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButtonFormField<String>(
-          value: _selectedBusinessType,
-          decoration: const InputDecoration(border: InputBorder.none),
-          hint: const Text("اختر نوع النشاط التجاري"),
-          items: _businessTypes.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
-          onChanged: (val) {
-            setState(() => _selectedBusinessType = val);
-            widget.controllers['businessType']?.text = val ?? "";
-          },
-        ),
+      child: DropdownButtonFormField<String>(
+        value: _selectedBusinessType,
+        decoration: const InputDecoration(border: InputBorder.none, hintText: "نوع النشاط"),
+        items: _businessTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+        onChanged: (val) {
+          setState(() => _selectedBusinessType = val);
+          widget.controllers['businessType']?.text = val ?? "";
+        },
       ),
     );
   }
 
-  // --- المكونات المساعدة للواجهة (نفس تصميمك السابق مع تعديلات طفيفة) ---
-
-  Widget _buildSectionHeader(String title, IconData icon) {
+  Widget _buildInputField(String key, String label, IconData icon, {bool isPassword = false, TextInputType keyboardType = TextInputType.text}) {
     return Padding(
-      padding: EdgeInsets.only(bottom: 2.5.h, top: 1.5.h),
-      child: Row(children: [
-        Icon(icon, size: 28, color: const Color(0xFF2D9E68)),
-        const SizedBox(width: 12),
-        Text(title, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w900)),
-        const Expanded(child: Divider(indent: 20, thickness: 1.5, color: Color(0xFFE8E8E8))),
-      ]),
-    );
-  }
-
-  Widget _buildInputField(String key, String label, IconData icon, {bool isPassword = false, bool readOnly = false, TextInputType keyboardType = TextInputType.text}) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: 2.5.h),
+      padding: EdgeInsets.only(bottom: 2.h),
       child: TextFormField(
         controller: widget.controllers[key],
         obscureText: isPassword && _obscurePassword,
-        readOnly: readOnly,
         keyboardType: keyboardType,
         decoration: InputDecoration(
           labelText: label,
-          suffixIcon: Icon(icon, color: const Color(0xFF2D9E68).withOpacity(0.7)),
-          prefixIcon: isPassword ? IconButton(icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => _obscurePassword = !_obscurePassword)) : null,
+          prefixIcon: Icon(icon, color: const Color(0xFF2D9E68)),
+          suffixIcon: isPassword ? IconButton(icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => _obscurePassword = !_obscurePassword)) : null,
           filled: true,
-          fillColor: readOnly ? Colors.grey.shade50 : Colors.white,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: Colors.grey.shade200, width: 1.5)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: Color(0xFF2D9E68), width: 2)),
+          fillColor: Colors.white,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.grey.shade200)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.grey.shade200)),
         ),
-      ),
-    );
-  }
-
-  Widget _buildMapContainer() {
-    return Container(
-      height: 35.h,
-      margin: EdgeInsets.only(bottom: 3.h),
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(30), border: Border.all(color: Colors.grey.shade200, width: 2)),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: Stack(children: [
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: _initialPosition, 
-              initialZoom: 14.0,
-              onTap: (tapPosition, point) { setState(() { _initialPosition = point; _isMapActive = true; }); _updateAddress(point); }
-            ),
-            children: [
-              TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
-              MarkerLayer(markers: [Marker(width: 50, height: 50, point: _initialPosition, child: const Icon(Icons.location_pin, size: 45, color: Colors.red))]),
-            ],
-          ),
-          if (!_isMapActive) Container(color: Colors.white.withOpacity(0.8), child: Center(child: ElevatedButton.icon(onPressed: _goToCurrentLocation, icon: const Icon(Icons.my_location, color: Colors.white), label: const Text('تحديد موقعي الآن', style: TextStyle(color: Colors.white)), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68))))),
-        ]),
       ),
     );
   }
@@ -271,53 +335,23 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     return GestureDetector(
       onTap: () => _pickFile(field),
       child: Container(
-        margin: EdgeInsets.only(bottom: 2.h),
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: file != null ? Colors.green : Colors.grey.shade300, width: 1.5)),
+        margin: EdgeInsets.only(bottom: 1.5.h),
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: file != null ? Colors.green : Colors.grey.shade300, width: 1),
+        ),
         child: Row(children: [
-          Icon(file != null ? Icons.check_circle : Icons.cloud_upload_outlined, size: 30, color: file != null ? Colors.green : Colors.grey),
-          const SizedBox(width: 15),
-          Expanded(child: Text(label, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.bold))),
-          if (file != null) ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(file, width: 50, height: 50, fit: BoxFit.cover)),
+          Icon(file != null ? Icons.check_circle : Icons.upload_file, color: file != null ? Colors.green : Colors.grey),
+          const SizedBox(width: 10),
+          Expanded(child: Text(label, style: TextStyle(fontSize: 11.sp))),
+          if (file != null) ClipRRect(borderRadius: BorderRadius.circular(5), child: Image.file(file, width: 40, height: 40, fit: BoxFit.cover)),
         ]),
       ),
     );
   }
 
-  Widget _buildTermsCheckbox() {
-    return Row(children: [
-      Checkbox(value: _termsAgreed, onChanged: (v) => setState(() => _termsAgreed = v!), activeColor: const Color(0xFF2D9E68)),
-      const Text("أوافق على شروط الاستخدام وسياسة الخصوصية"),
-    ]);
-  }
-
-  Widget _buildSubmitButton() {
-    return ElevatedButton(
-      onPressed: (widget.isSaving || !_termsAgreed || _isUploading) ? null : widget.onRegister,
-      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68), padding: const EdgeInsets.all(20), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22))),
-      child: (widget.isSaving || _isUploading) ? const CircularProgressIndicator(color: Colors.white) : Text('إتمام التسجيل والبدء', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold, color: Colors.white)),
-    );
-  }
-
-  // --- دوال الموقع ---
-  Future<void> _updateAddress(LatLng position) async {
-    try {
-      final placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
-      if (placemarks.isNotEmpty) {
-        final place = placemarks.first;
-        widget.controllers['address']!.text = "${place.street ?? ''}, ${place.locality ?? ''}";
-      }
-      widget.onLocationChanged(lat: position.latitude, lng: position.longitude);
-    } catch (e) { debugPrint(e.toString()); }
-  }
-
-  Future<void> _goToCurrentLocation() async {
-    if (await Permission.location.request().isGranted) {
-      Position position = await Geolocator.getCurrentPosition();
-      final newPos = LatLng(position.latitude, position.longitude);
-      _mapController.move(newPos, 15);
-      setState(() { _initialPosition = newPos; _isMapActive = true; });
-      _updateAddress(newPos);
-    }
-  }
-}
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding:
