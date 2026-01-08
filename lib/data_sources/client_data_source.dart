@@ -10,37 +10,38 @@ class ClientDataSource {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
 
-  // 🟢 تم التعديل لاستقبال الروابط (URLs) بدلاً من الملفات (Files)
   Future<User?> registerClient({
     required String fullname,
-    required String email,
+    required String email,    // هذا هو "الميل الذكي" للـ Auth
+    required String phone,    // 🟢 أضفنا هذا لاستقبال رقم الهاتف الفعلي
     required String password,
     required String address,
     required String country,
     required String userType,
     Map<String, double>? location,
-    String? logoUrl,       // تم التعديل هنا ليتوافق مع الـ Build
-    String? crUrl,         // إضافة للسجل التجاري
-    String? tcUrl,         // إضافة للبطاقة الضريبية
+    String? logoUrl,       
+    String? crUrl,         
+    String? tcUrl,         
     String? merchantName,
     String? businessType,
     String? additionalPhone,
   }) async {
     try {
-      // 1. إنشاء الحساب في Firebase Auth
+      // 1. إنشاء الحساب في Firebase Auth باستخدام الميل الذكي
       final userCredential = await _auth.createUserWithEmailAndPassword(
         email: email, 
         password: password
       );
       final String userId = userCredential.user!.uid;
 
-      // 2. تجهيز بيانات المستخدم الأساسية
+      // 2. تجهيز بيانات المستخدم (المفاتيح مطابقة للـ HTML)
       final Map<String, dynamic> userData = {
         'fullname': fullname,
         'email': email,
+        'phone': phone,       // 🟢 حفظ رقم الهاتف في قاعدة البيانات
         'address': address,
         'location': location,
-        'role': userType,
+        'role': userType,     // buyer, seller, or consumer
         'country': country,
         'createdAt': FieldValue.serverTimestamp(),
       };
@@ -50,22 +51,22 @@ class ClientDataSource {
         userData['merchantName'] = merchantName;
         userData['businessType'] = businessType;
         userData['additionalPhone'] = additionalPhone;
-        userData['logoUrl'] = logoUrl; // حفظ رابط الشعار
-        userData['crUrl'] = crUrl;     // حفظ رابط السجل
-        userData['tcUrl'] = tcUrl;     // حفظ رابط البطاقة الضريبية
+        userData['logoUrl'] = logoUrl;
+        userData['crUrl'] = crUrl;
+        userData['tcUrl'] = tcUrl;
         userData['isVerified'] = false;
       } else {
         userData['isVerified'] = true;
       }
 
-      // 4. تحديد المجموعة المستهدفة بناءً على النوع
+      // 4. تحديد المجموعة المستهدفة (Collections)
       String targetCollectionName;
       if (userType == "seller") {
         targetCollectionName = "pendingSellers";
       } else if (userType == "consumer") {
         targetCollectionName = "consumers";
       } else {
-        targetCollectionName = "users"; // لتاجر التجزئة (Buyer)
+        targetCollectionName = "users"; // لتاجر التجزئة
       }
 
       // 5. حفظ البيانات في Firestore
@@ -94,8 +95,6 @@ class ClientDataSource {
           'address': address
         }),
       );
-    } catch (e) {
-      // تجاهل الخطأ في الإشعارات لضمان إتمام عملية التسجيل
-    }
+    } catch (e) {}
   }
 }
