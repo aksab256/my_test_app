@@ -1,3 +1,4 @@
+// lib/screens/buyer/buyer_home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5,13 +6,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:convert';
 
-// استيراد الشاشات والمحتويات
-import 'package:my_test_app/screens/buyer/my_orders_screen.dart';
-import 'package:my_test_app/screens/buyer/cart_screen.dart';
-import 'package:my_test_app/screens/buyer/traders_screen.dart'; // سنأخذ منها TradersContent
-import 'package:my_test_app/widgets/home_content.dart'; // محتوى الصفحة الرئيسية
-
-// استيراد الودجت المساعدة
+// استيراد الـ Widgets والمحتويات
+import 'package:my_test_app/widgets/home_content.dart'; 
 import 'package:my_test_app/widgets/buyer_header_widget.dart';
 import 'package:my_test_app/widgets/buyer_mobile_nav_widget.dart';
 import 'package:my_test_app/widgets/chat_support_widget.dart'; 
@@ -29,7 +25,9 @@ class BuyerHomeScreen extends StatefulWidget {
 
 class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  int _selectedIndex = 1; // الافتراضي هو الرئيسية (HomeContent)
+  
+  // 🎯 نحن في الصفحة الرئيسية، لذا الاندكس هو 1 دائماً في هذا الملف
+  final int _selectedIndex = 1; 
 
   String _userName = 'مرحباً بك!';
   String? _currentUserId;
@@ -39,34 +37,48 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   bool _deliveryPricesAvailable = false;
   bool _deliveryIsActive = false;
 
-  // 🎯 تعريف قائمة الصفحات كمحتوى (Body) فقط لمنع التداخل
-  late List<Widget> _pages;
-
   @override
   void initState() {
     super.initState();
-    // إعداد الصفحات التي ستظهر في الـ Bottom Navigation
-    _pages = [
-      // التبويب 0: التجار (نرسل showHeader: false لإخفاء الهيدر المكرر)
-      const TradersContent(showHeader: false), 
-      // التبويب 1: الرئيسية
-      const HomeContent(), 
-      // التبويب 2: طلباتي (تأكد أن صفحة MyOrdersScreen لا تحتوي على Scaffold داخلي)
-      const MyOrdersScreen(),
-      // التبويب 3: السلة
-      const CartScreen(),
-    ];
     _initializeAppLogic();
   }
 
-  // --- منطق الإشعارات (كما في الأصل تماماً) ---
+  // --- منطق تهيئة التطبيق ---
+  void _initializeAppLogic() async {
+    final userAuth = _auth.currentUser;
+    if (userAuth == null) return;
+    _currentUserId = userAuth.uid;
+
+    // تشغيل الإشعارات (تظهر مرة واحدة فقط)
+    _setupNotifications();
+
+    final prefs = await SharedPreferences.getInstance();
+    _updateCartCount(prefs);
+
+    try {
+      final userDoc = await _db.collection('users').doc(_currentUserId).get();
+      if (userDoc.exists && mounted) {
+        final fullName = userDoc.data()?['fullname'] ?? 'زائر أكسب';
+        setState(() => _userName = 'أهلاً بك، $fullName!');
+      }
+    } catch (e) {
+      debugPrint('Error loading user data: $e');
+    }
+    
+    await _checkDeliveryStatusAndDisplayIcons();
+    await _updateNewDealerOrdersCount();
+  }
+
+  // --- منطق الإشعارات (تفعيل مرة واحدة) ---
   Future<void> _setupNotifications() async {
     if (_currentUserId == null) return;
+
     final prefs = await SharedPreferences.getInstance();
     bool alreadyShown = prefs.getBool('notifications_dialog_shown') ?? false;
     if (alreadyShown) return;
 
     if (!mounted) return;
+    
     bool? userAgreed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -86,9 +98,11 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     );
 
     await prefs.setBool('notifications_dialog_shown', true);
+
     if (userAgreed == true) {
       FirebaseMessaging messaging = FirebaseMessaging.instance;
       NotificationSettings settings = await messaging.requestPermission(alert: true, badge: true, sound: true);
+
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
         String? token = await messaging.getToken();
         if (token != null) {
@@ -103,50 +117,41 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     }
   }
 
-  // --- منطق تحميل البيانات (كما في الأصل) ---
-  void _initializeAppLogic() async {
-    final userAuth = _auth.currentUser;
-    if (userAuth == null) return;
-    _currentUserId = userAuth.uid;
-    _setupNotifications();
-
-    final prefs = await SharedPreferences.getInstance();
-    _updateCartCount(prefs);
-
-    try {
-      final userDoc = await _db.collection('users').doc(_currentUserId).get();
-      if (userDoc.exists && mounted) {
-        final fullName = userDoc.data()?['fullname'] ?? 'زائر أكسب';
-        setState(() => _userName = 'أهلاً بك، $fullName!');
-      }
-    } catch (e) { debugPrint('Error: $e'); }
-    
-    await _checkDeliveryStatusAndDisplayIcons();
-    await _updateNewDealerOrdersCount();
-  }
-
+  // --- تحديث عدد المنتجات في السلة ---
   void _updateCartCount(SharedPreferences prefs) {
     String? cartData = prefs.getString('cart_items');
     if (cartData != null) {
       List<dynamic> items = jsonDecode(cartData);
       if (mounted) setState(() => _cartCount = items.length);
+    } else {
+      if (mounted) setState(() => _cartCount = 0);
     }
   }
 
+  // --- التحقق من حالة الدليفري لإظهار الأيقونات في القائمة الجانبية ---
   Future<void> _checkDeliveryStatusAndDisplayIcons() async {
     if (_currentUserId == null) return;
     try {
       final approvedSnapshot = await _db.collection('deliverySupermarkets')
           .where("ownerId", isEqualTo: _currentUserId).get();
+
       if (approvedSnapshot.docs.isNotEmpty) {
         final docData = approvedSnapshot.docs.first.data();
-        if (mounted) setState(() { _deliveryIsActive = docData['isActive'] ?? false; _deliveryPricesAvailable = true; });
+        if (mounted) {
+          setState(() {
+            _deliveryIsActive = docData['isActive'] ?? false;
+            _deliveryPricesAvailable = true;
+          });
+        }
       } else {
         if (mounted) setState(() => _deliverySettingsAvailable = true);
       }
-    } catch (e) { debugPrint("Delivery Error: $e"); }
+    } catch (e) {
+      debugPrint("Delivery Status Error: $e");
+    }
   }
 
+  // --- تحديث عدد الطلبات الجديدة (لو المستخدم تاجر دليفري أيضاً) ---
   Future<void> _updateNewDealerOrdersCount() async {
     if (_currentUserId == null) return;
     final q = await _db.collection('consumerorders')
@@ -155,12 +160,23 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     if (mounted) setState(() => _newOrdersCount = q.size);
   }
 
-  // 🎯 عند التنقل بين التبويبات
+  // 🎯 منطق التنقل المستقل: يفتح كل صفحة كشاشة جديدة
   void _onItemTapped(int index) {
-    if (mounted) {
-      setState(() => _selectedIndex = index);
-      // تحديث السلة لحظياً عند التنقل
-      SharedPreferences.getInstance().then((prefs) => _updateCartCount(prefs));
+    if (index == _selectedIndex) return;
+
+    switch (index) {
+      case 0:
+        Navigator.pushReplacementNamed(context, '/traders'); // صفحة التجار
+        break;
+      case 1:
+        // نحن بالفعل هنا
+        break;
+      case 2:
+        Navigator.pushReplacementNamed(context, '/myOrders'); // صفحة طلباتي
+        break;
+      case 3:
+        Navigator.pushReplacementNamed(context, '/wallet'); // صفحة المحفظة
+        break;
     }
   }
 
@@ -170,7 +186,9 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
       if (mounted) Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-    } catch (e) { debugPrint('Logout Error: $e'); }
+    } catch (e) {
+      debugPrint('Logout Error: $e');
+    }
   }
 
   @override
@@ -180,7 +198,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       child: Scaffold(
         key: _scaffoldKey,
         backgroundColor: const Color(0xFFf5f7fa),
-        // 1. القائمة الجانبية (Drawer)
+        // القائمة الجانبية
         endDrawer: BuyerHeaderWidget.buildSidebar(
           context: context,
           onLogout: _handleLogout,
@@ -191,30 +209,27 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
         ),
         body: Column(
           children: <Widget>[
-            // 2. الهيدر العلوي (يحتوي على "أهلاً بك" والمنيو)
+            // الهيدر العلوي الموحد (أهلاً بك..)
             BuyerHeaderWidget(
               onMenuToggle: () => _scaffoldKey.currentState?.openEndDrawer(),
               menuNotificationDotActive: _newOrdersCount > 0,
               userName: _userName,
               onLogout: _handleLogout,
             ),
-            // 3. المحتوى المتغير (IndexedStack)
-            Expanded(
-              child: IndexedStack(
-                index: _selectedIndex,
-                children: _pages, // تم استخدام المحتويات فقط هنا
-              ),
+            // 🎯 هنا يتم عرض محتوى الصفحة الرئيسية فقط
+            const Expanded(
+              child: HomeContent(), 
             ),
           ],
         ),
-        // 4. البار السفلي الموحد
+        // الشريط السفلي (Index 1 للرئيسية)
         bottomNavigationBar: BuyerMobileNavWidget(
           selectedIndex: _selectedIndex,
           onItemSelected: _onItemTapped,
           cartCount: _cartCount,
           ordersChanged: false,
         ),
-        // 5. المساعد الذكي (يظهر مرة واحدة فقط لكل التبويبات)
+        // المساعد الذكي
         floatingActionButton: FloatingActionButton(
           heroTag: "buyer_home_chat_btn",
           onPressed: () {
