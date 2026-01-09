@@ -1,4 +1,3 @@
-// المسار: lib/screens/buyer/traders_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,8 +9,9 @@ import '../../widgets/traders_header_widget.dart';
 import '../../widgets/traders_list_widget.dart';
 import '../../widgets/traders_filter_widget.dart';
 import '../../widgets/chat_support_widget.dart';
+import '../../widgets/buyer_mobile_nav_widget.dart'; // 🎯 استيراد البار الموحد
 
-// --- مساعدات منطق الجغرافيا (Coordinates) ---
+// --- مساعدات منطق الجغرافيا ---
 class Coordinates {
   final double lat;
   final double lng;
@@ -34,24 +34,25 @@ bool isPointInPolygon(Coordinates point, List<Coordinates> polygon) {
   return inside;
 }
 
-// 🎯 أولاً: الـ Widget الخاص بالمحتوى فقط (بدون Scaffold)
-// نستخدمه داخل الشاشة الرئيسية لمنع تكرار الـ AppBar والـ BottomNav
-class TradersContent extends StatefulWidget {
-  final bool showHeader; 
-  const TradersContent({super.key, this.showHeader = true});
+class TradersScreen extends StatefulWidget {
+  static const String routeName = '/traders';
+  const TradersScreen({super.key});
 
   @override
-  State<TradersContent> createState() => _TradersContentState();
+  State<TradersScreen> createState() => _TradersScreenState();
 }
 
-class _TradersContentState extends State<TradersContent> {
+class _TradersScreenState extends State<TradersScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final int _selectedIndex = 0; // 🎯 نحن في تبويب التجار (Index 0)
+
   String _searchQuery = '';
   String _currentFilter = 'all';
   List<DocumentSnapshot> _activeSellers = [];
   List<DocumentSnapshot> _filteredTraders = [];
   List<String> _categories = [];
   bool _isLoading = true;
+  int _cartCount = 0;
   
   Coordinates? _userCoordinates;
   Map<String, List<Coordinates>> _areaCoordinatesMap = {};
@@ -63,14 +64,38 @@ class _TradersContentState extends State<TradersContent> {
   }
 
   Future<void> _initData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
+    
     await _fetchAndProcessGeoJson();
     _userCoordinates = await _getUserLocation();
     await _loadTraders();
+    await _loadCartCount();
+
     if (mounted) setState(() => _isLoading = false);
   }
 
-  // تحميل بيانات المناطق الجغرافية
+  Future<void> _loadCartCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? cartData = prefs.getString('cart_items');
+    if (cartData != null) {
+      List<dynamic> items = jsonDecode(cartData);
+      if (mounted) setState(() => _cartCount = items.length);
+    }
+  }
+
+  // منطق التنقل المستقل
+  void _onItemTapped(int index) {
+    if (index == _selectedIndex) return;
+    switch (index) {
+      case 0: break; // نحن هنا بالفعل
+      case 1: Navigator.pushReplacementNamed(context, '/buyerHome'); break;
+      case 2: Navigator.pushReplacementNamed(context, '/myOrders'); break;
+      case 3: Navigator.pushReplacementNamed(context, '/wallet'); break;
+    }
+  }
+
+  // --- منطق الجغرافيا والجلب (حسب كودك الأصلي) ---
   Future<void> _fetchAndProcessGeoJson() async {
     try {
       final String jsonString = await rootBundle.loadString('assets/OSMB-bc319d822a17aa9ad1089fc05e7d4e752460f877.geojson');
@@ -100,7 +125,6 @@ class _TradersContentState extends State<TradersContent> {
 
   Future<void> _loadTraders() async {
     try {
-      // 💡 استخدام اسم الكولكشن الصحيح من إعداداتك: deliverySupermarkets
       final snapshot = await _db.collection("deliverySupermarkets").get();
       List<DocumentSnapshot> serving = [];
 
@@ -128,10 +152,10 @@ class _TradersContentState extends State<TradersContent> {
   }
 
   void _applyFilters() {
+    if (!mounted) return;
     setState(() {
       _filteredTraders = _activeSellers.where((doc) {
         final data = doc.data() as Map<String, dynamic>;
-        // 💡 استخدام supermarketName حسب إعداداتك
         final name = (data['supermarketName'] ?? data['merchantName'] ?? '').toString().toLowerCase();
         final type = data['businessType']?.toString() ?? 'أخرى';
         return name.contains(_searchQuery.toLowerCase()) && (_currentFilter == 'all' || type == _currentFilter);
@@ -141,43 +165,10 @@ class _TradersContentState extends State<TradersContent> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Center(child: CircularProgressIndicator(color: Color(0xFF4CAF50)));
-
-    return Column(
-      children: [
-        if (widget.showHeader)
-          TradersHeaderWidget(
-            onSearch: (val) { _searchQuery = val; _applyFilters(); },
-            currentQuery: _searchQuery,
-          ),
-        TradersFilterWidget(
-          categories: _categories,
-          currentFilter: _currentFilter,
-          onFilterSelected: (val) { _currentFilter = val; _applyFilters(); },
-        ),
-        Expanded(
-          child: TradersListWidget(
-            traders: _filteredTraders,
-            onTraderTap: (doc) => Navigator.of(context).pushNamed('/traderOffers', arguments: doc.id),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// 🎯 ثانياً: الشاشة الكاملة (التي يتم استدعاؤها من الـ Routes)
-class TradersScreen extends StatelessWidget {
-  static const String routeName = '/traders';
-  const TradersScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xFFf5f7fa),
-        // شريط علوي أخضر واحد بدون أيقونة الوضع الليلي
         appBar: AppBar(
           elevation: 0,
           backgroundColor: const Color(0xFF4CAF50),
@@ -185,12 +176,45 @@ class TradersScreen extends StatelessWidget {
           title: const Text('التجار والسوبر ماركت', 
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Tajawal')),
         ),
-        // استخدام الـ Content هنا
-        body: const TradersContent(showHeader: true),
+        body: _isLoading 
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF4CAF50)))
+          : Column(
+              children: [
+                // هيدر البحث
+                TradersHeaderWidget(
+                  onSearch: (val) { _searchQuery = val; _applyFilters(); },
+                  currentQuery: _searchQuery,
+                ),
+                // فلاتر التصنيفات
+                TradersFilterWidget(
+                  categories: _categories,
+                  currentFilter: _currentFilter,
+                  onFilterSelected: (val) { _currentFilter = val; _applyFilters(); },
+                ),
+                // قائمة التجار
+                Expanded(
+                  child: TradersListWidget(
+                    traders: _filteredTraders,
+                    onTraderTap: (doc) {
+                      // 🎯 عند الضغط على تاجر، نرسل الـ ownerId لصفحة العروض
+                      final data = doc.data() as Map<String, dynamic>;
+                      Navigator.of(context).pushNamed('/traderOffers', arguments: data['ownerId'] ?? doc.id);
+                    },
+                  ),
+                ),
+              ],
+            ),
         
-        // المساعد الذكي كأيقونة عائمة واحدة
+        // 🎯 إضافة البار السفلي الموحد
+        bottomNavigationBar: BuyerMobileNavWidget(
+          selectedIndex: _selectedIndex,
+          onItemSelected: _onItemTapped,
+          cartCount: _cartCount,
+          ordersChanged: false,
+        ),
+
         floatingActionButton: FloatingActionButton(
-          heroTag: "traders_page_chat",
+          heroTag: "traders_fab",
           onPressed: () {
             showModalBottomSheet(
               context: context,
