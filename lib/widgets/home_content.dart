@@ -37,81 +37,41 @@ class _HomeContentState extends State<HomeContent> {
     super.dispose();
   }
 
-  // --- جلب البيانات ---
-  Future<void> _loadCategories() async {
+  // --- جلب البيانات (تظل كما هي لضمان استقرار الباك إند) ---
+  Future<void> _loadAllData() async {
     try {
-      final q = await _db.collection('mainCategory')
-          .where('status', isEqualTo: 'active')
-          .orderBy('order', descending: false)
-          .get();
-
-      final List<Map<String, dynamic>> loadedCategories = q.docs.map((doc) => {
-        'id': doc.id,
-        'name': doc['name'] ?? '',
-        'imageUrl': doc['imageUrl'] ?? '',
-      }).toList();
-
-      if (mounted) setState(() => _categories = loadedCategories);
+      await Future.wait([_loadCategories(), _loadRetailerBanners(), _loadRecentlyAddedProducts()]);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _startBannerAutoSlide();
+      }
     } catch (e) {
-      debugPrint('Error Categories: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadCategories() async {
+    final q = await _db.collection('mainCategory').where('status', isEqualTo: 'active').orderBy('order').get();
+    if (mounted) {
+      setState(() => _categories = q.docs.map((doc) => {'id': doc.id, 'name': doc['name'] ?? '', 'imageUrl': doc['imageUrl'] ?? ''}).toList());
     }
   }
 
   Future<void> _loadRetailerBanners() async {
-    try {
-      final q = await _db.collection('retailerBanners')
-          .where('status', isEqualTo: 'active')
-          .orderBy('order', descending: false)
-          .get();
-
-      final List<Map<String, dynamic>> loadedBanners = q.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'id': doc.id,
-          'name': data['name'] ?? '',
-          'imageUrl': data['imageUrl'] ?? '',
-          'linkType': data['linkType'] as String? ?? 'NONE',
-          'targetId': data['targetId'] as String? ?? '',
-        };
-      }).toList();
-
-      if (mounted) setState(() => _banners = loadedBanners);
-    } catch (e) {
-      debugPrint('Error Banners: $e');
+    final q = await _db.collection('retailerBanners').where('status', isEqualTo: 'active').orderBy('order').get();
+    if (mounted) {
+      setState(() => _banners = q.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList());
     }
   }
 
   Future<void> _loadRecentlyAddedProducts() async {
-    try {
-      final q = await _db.collection('products')
-          .where('status', isEqualTo: 'active')
-          .orderBy('createdAt', descending: true)
-          .limit(10)
-          .get();
-
-      final List<Map<String, dynamic>> loadedProducts = q.docs.map((doc) {
+    final q = await _db.collection('products').where('status', isEqualTo: 'active').orderBy('createdAt', descending: true).limit(10).get();
+    if (mounted) {
+      setState(() => _recentProducts = q.docs.map((doc) {
         final data = doc.data();
         final List<dynamic>? urls = data['imageUrls'] as List<dynamic>?;
-        return {
-          'id': doc.id,
-          'name': data['name'] ?? 'منتج',
-          'imageUrl': (urls != null && urls.isNotEmpty) ? urls.first as String : '',
-          'subId': data['subId'] ?? '',
-          'mainId': data['mainId'] ?? '',
-        };
-      }).toList();
-
-      if (mounted) setState(() => _recentProducts = loadedProducts);
-    } catch (e) {
-      debugPrint('Error Products: $e');
-    }
-  }
-
-  Future<void> _loadAllData() async {
-    await Future.wait([_loadCategories(), _loadRetailerBanners(), _loadRecentlyAddedProducts()]);
-    if (mounted) {
-      setState(() => _isLoading = false);
-      _startBannerAutoSlide();
+        return {'id': doc.id, 'name': data['name'] ?? '', 'imageUrl': (urls != null && urls.isNotEmpty) ? urls.first : '', 'subId': data['subId'] ?? '', 'mainId': data['mainId'] ?? ''};
+      }).toList());
     }
   }
 
@@ -126,51 +86,106 @@ class _HomeContentState extends State<HomeContent> {
     }
   }
 
-  // 🎯 إصلاح دالة الضغط لتطابق تعريفات main.dart تماماً
+  // 🎯 التعديل الجوهري: إدارة التنقل بذكاء
   void _handleBannerClick(String? linkType, String? targetId) {
     if (targetId == null || targetId.isEmpty || linkType == null) return;
     final type = linkType.toUpperCase();
 
-    if (type == 'EXTERNAL' && targetId.startsWith('http')) {
-      // منطق الروابط الخارجية
-    } 
-    else if (type == 'PRODUCT') {
-      Navigator.of(context).pushNamed('/productDetails', arguments: {'productId': targetId});
-    } 
-    else if (type == 'CATEGORY') {
-      // يوجه لصفحة الأقسام الفرعية كما هو معرف في main.dart السطر 244
-      Navigator.of(context).pushNamed('/category', arguments: targetId);
-    } 
-    else if (type == 'SUB_CATEGORY') {
-      // يوجه لصفحة المنتجات مباشرة كما هو معرف في main.dart السطر 247
-      Navigator.of(context).pushNamed('/products', arguments: {'subId': targetId, 'mainId': ''});
-    }
-    else if (type == 'RETAILER') {
-      Navigator.of(context).pushNamed(TraderOffersScreen.routeName, arguments: targetId);
+    switch (type) {
+      case 'PRODUCT':
+        Navigator.of(context).pushNamed('/productDetails', arguments: {'productId': targetId});
+        break;
+      case 'CATEGORY':
+        // يفتح صفحة الأقسام الفرعية بالمعرف الصحيح
+        Navigator.of(context).pushNamed('/category', arguments: targetId);
+        break;
+      case 'RETAILER':
+        // يفتح صفحة عروض تاجر محدد
+        Navigator.of(context).pushNamed(TraderOffersScreen.routeName, arguments: targetId);
+        break;
+      case 'TRADERS_LIST':
+        // 🚀 إذا أردت فتح "قائمة التجار" بالكامل وليس تاجراً واحداً
+        Navigator.of(context).pushNamed('/traders');
+        break;
     }
   }
 
-  // 🎯 تعديل حجم الأيقونة وتأقلم الصورة
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) return const Center(child: CircularProgressIndicator(color: Color(0xFF4CAF50)));
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 15),
+          
+          // 1. البانرات المتحركة
+          _buildBannerSlider(),
+          
+          const SizedBox(height: 25),
+          
+          // 2. عنوان الأقسام
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 15),
+            child: Text('الأقسام الرئيسية', 
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Tajawal', color: Color(0xFF2c3e50))),
+          ),
+          
+          const SizedBox(height: 15),
+          
+          // 3. شبكة الأقسام (تم تحسين childAspectRatio للظهور بشكل سليم)
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            itemCount: _categories.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3, 
+              childAspectRatio: 0.85, // تعديل بسيط لضمان عدم قص النص
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10
+            ),
+            itemBuilder: (context, index) => _buildCategoryCard(_categories[index]),
+          ),
+
+          // 4. المنتجات المضافة حديثاً
+          if (_recentProducts.isNotEmpty) ...[
+             const Padding(
+               padding: EdgeInsets.only(right: 15, top: 20),
+               child: Text('أضيف حديثاً', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Tajawal')),
+             ),
+             const SizedBox(height: 10),
+             _buildRecentProductsList(),
+          ],
+          const SizedBox(height: 30),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCategoryCard(Map<String, dynamic> data) {
-    const double size = 65.0; // حجم محسّن
     return InkWell(
       onTap: () => Navigator.of(context).pushNamed('/category', arguments: data['id']),
       child: Column(
         children: [
           Container(
-            width: size, height: size,
+            width: 70, height: 70,
             decoration: BoxDecoration(
               color: Colors.white, shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: const Offset(0, 2))],
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 4))],
             ),
             child: ClipOval(
               child: data['imageUrl'].isNotEmpty 
-                ? Image.network(data['imageUrl'], fit: BoxFit.cover) // BoxFit.cover يضمن التأقلم
-                : const Icon(Icons.category, size: 30),
+                ? Image.network(data['imageUrl'], fit: BoxFit.cover)
+                : const Icon(Icons.category, size: 35, color: Color(0xFF4CAF50)),
             ),
           ),
-          const SizedBox(height: 8),
-          Text(data['name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, fontFamily: 'Tajawal'), overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 10),
+          Text(data['name'], 
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Tajawal'), 
+            maxLines: 1, overflow: TextOverflow.ellipsis),
         ],
       ),
     );
@@ -181,7 +196,7 @@ class _HomeContentState extends State<HomeContent> {
     return Column(
       children: [
         SizedBox(
-          height: 150,
+          height: 160,
           child: PageView.builder(
             controller: _bannerController,
             onPageChanged: (v) => setState(() => _currentBannerIndex = v),
@@ -189,7 +204,11 @@ class _HomeContentState extends State<HomeContent> {
             itemBuilder: (context, index) => InkWell(
               onTap: () => _handleBannerClick(_banners[index]['linkType'], _banners[index]['targetId']),
               child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 5),
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(15),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 5))],
+                ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(15),
                   child: Image.network(_banners[index]['imageUrl'], fit: BoxFit.cover),
@@ -198,40 +217,66 @@ class _HomeContentState extends State<HomeContent> {
             ),
           ),
         ),
+        const SizedBox(height: 8),
+        // نقاط المؤشر للبانر
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: _banners.asMap().entries.map((entry) {
+            return Container(
+              width: 8.0, height: 8.0,
+              margin: const EdgeInsets.symmetric(horizontal: 4.0),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _currentBannerIndex == entry.key ? const Color(0xFF4CAF50) : Colors.grey.shade300,
+              ),
+            );
+          }).toList(),
+        ),
       ],
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          const SizedBox(height: 15),
-          _buildBannerSlider(),
-          const SizedBox(height: 25),
-          const Text('الأقسام الرئيسية', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Tajawal')),
-          const SizedBox(height: 15),
-          GridView.builder(
-            shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            itemCount: _categories.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, childAspectRatio: 0.9),
-            itemBuilder: (context, index) => _buildCategoryCard(_categories[index]),
-          ),
-          if (_recentProducts.isNotEmpty) ...[
-             const SizedBox(height: 20),
-             const Padding(padding: EdgeInsets.only(right: 15), child: Align(alignment: Alignment.centerRight, child: Text('أضيف حديثاً', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)))),
-             SizedBox(height: 180, child: ListView.builder(scrollDirection: Axis.horizontal, reverse: true, itemCount: _recentProducts.length, itemBuilder: (context, index) {
-               final p = _recentProducts[index];
-               return InkWell(
-                 onTap: () => Navigator.of(context).pushNamed('/products', arguments: {'subId': p['subId'], 'mainId': p['mainId']}),
-                 child: Container(width: 130, margin: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)]), child: Column(children: [Expanded(child: ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(10)), child: Image.network(p['imageUrl'], fit: BoxFit.cover))), Padding(padding: const EdgeInsets.all(4), child: Text(p['name'], maxLines: 1, overflow: TextOverflow.ellipsis))])),
-               );
-             })),
-          ]
-        ],
+  Widget _buildRecentProductsList() {
+    return SizedBox(
+      height: 200,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        reverse: true,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        itemCount: _recentProducts.length,
+        itemBuilder: (context, index) {
+          final p = _recentProducts[index];
+          return InkWell(
+            onTap: () => Navigator.of(context).pushNamed('/products', arguments: {'subId': p['subId'], 'mainId': p['mainId']}),
+            child: Container(
+              width: 140,
+              margin: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5, spreadRadius: 1)],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                      child: Image.network(p['imageUrl'], fit: BoxFit.cover),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    child: Text(p['name'], 
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12, fontWeight: FontWeight.w600),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  )
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
