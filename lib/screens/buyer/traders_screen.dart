@@ -5,16 +5,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 
-// استيراد الـ Widgets الفرعية
+// استيراد الـ Widgets الخاصة بك
 import '../../widgets/traders_header_widget.dart';
 import '../../widgets/traders_list_widget.dart';
 import '../../widgets/traders_filter_widget.dart';
 import '../../widgets/chat_support_widget.dart';
-// 🚀 استيراد الشريط السفلي لضمان ظهوره
-import '../../widgets/buyer_mobile_nav_widget.dart';
 
-final FirebaseFirestore _db = FirebaseFirestore.instance;
-
+// --- مساعدات منطق الجغرافيا (Coordinates) ---
 class Coordinates {
   final double lat;
   final double lng;
@@ -37,144 +34,105 @@ bool isPointInPolygon(Coordinates point, List<Coordinates> polygon) {
   return inside;
 }
 
-class TradersScreen extends StatefulWidget {
-  static const String routeName = '/traders';
-  const TradersScreen({super.key});
+// 🎯 أولاً: الـ Widget الخاص بالمحتوى فقط (بدون Scaffold)
+// نستخدمه داخل الشاشة الرئيسية لمنع تكرار الـ AppBar والـ BottomNav
+class TradersContent extends StatefulWidget {
+  final bool showHeader; 
+  const TradersContent({super.key, this.showHeader = true});
 
   @override
-  State<TradersScreen> createState() => _TradersScreenState();
+  State<TradersContent> createState() => _TradersContentState();
 }
 
-class _TradersScreenState extends State<TradersScreen> {
+class _TradersContentState extends State<TradersContent> {
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
   String _searchQuery = '';
   String _currentFilter = 'all';
   List<DocumentSnapshot> _activeSellers = [];
   List<DocumentSnapshot> _filteredTraders = [];
   List<String> _categories = [];
+  bool _isLoading = true;
   
   Coordinates? _userCoordinates;
   Map<String, List<Coordinates>> _areaCoordinatesMap = {};
 
-  bool _isLoading = true;
-  String _loadingMessage = 'جاري تحميل التجار...';
-  int _cartCount = 0; // لعداد السلة في الشريط السفلي
-
   @override
   void initState() {
     super.initState();
-    _loadTradersAndFilter();
-    _loadCartCount();
+    _initData();
   }
 
-  // تحميل عدد عناصر السلة للشريط السفلي
-  Future<void> _loadCartCount() async {
-    final prefs = await SharedPreferences.getInstance();
-    String? cartData = prefs.getString('cart_items');
-    if (cartData != null) {
-      List<dynamic> items = jsonDecode(cartData);
-      if (mounted) setState(() => _cartCount = items.length);
-    }
+  Future<void> _initData() async {
+    setState(() => _isLoading = true);
+    await _fetchAndProcessGeoJson();
+    _userCoordinates = await _getUserLocation();
+    await _loadTraders();
+    if (mounted) setState(() => _isLoading = false);
   }
 
-  // --- منطق الجغرافيا (كما هو لضمان الفلترة) ---
-  Future<bool> _fetchAndProcessAdministrativeAreas() async {
-    const String geoJsonFilePath = 'assets/OSMB-bc319d822a17aa9ad1089fc05e7d4e752460f877.geojson';
+  // تحميل بيانات المناطق الجغرافية
+  Future<void> _fetchAndProcessGeoJson() async {
     try {
-      final String jsonString = await rootBundle.loadString(geoJsonFilePath);
-      final geoJsonData = json.decode(jsonString);
-      final Map<String, List<Coordinates>> map = {};
-      if (geoJsonData['features'] is List) {
-        for (final feature in geoJsonData['features']) {
-          final properties = feature['properties'];
+      final String jsonString = await rootBundle.loadString('assets/OSMB-bc319d822a17aa9ad1089fc05e7d4e752460f877.geojson');
+      final data = json.decode(jsonString);
+      if (data['features'] != null) {
+        for (var feature in data['features']) {
+          final name = feature['properties']['name'];
           final geometry = feature['geometry'];
-          final areaName = properties?['name'];
-          final coordinates = geometry?['coordinates'];
-          if (areaName != null && coordinates != null) {
-            List<dynamic> polygonCoords = [];
-            if (geometry['type'] == 'MultiPolygon' && coordinates.isNotEmpty) {
-              polygonCoords = coordinates[0][0] ?? [];
-            } else if (geometry['type'] == 'Polygon') {
-              polygonCoords = coordinates[0] ?? [];
-            }
-            if (polygonCoords.length >= 3) {
-              map[areaName] = polygonCoords.map<Coordinates>((coord) {
-                return Coordinates(lat: coord[1].toDouble(), lng: coord[0].toDouble());
-              }).toList();
-            }
+          if (name != null && geometry != null) {
+            List coordsRaw = (geometry['type'] == 'Polygon') ? geometry['coordinates'][0] : geometry['coordinates'][0][0];
+            _areaCoordinatesMap[name] = coordsRaw.map<Coordinates>((c) => Coordinates(lat: c[1].toDouble(), lng: c[0].toDouble())).toList();
           }
         }
       }
-      _areaCoordinatesMap = map;
-      return true;
-    } catch (e) { return false; }
+    } catch (e) { debugPrint("GeoJSON Error: $e"); }
   }
 
-  Future<Coordinates?> _getBuyerCoordinates() async {
+  Future<Coordinates?> _getUserLocation() async {
     final prefs = await SharedPreferences.getInstance();
     final userJson = prefs.getString('loggedUser');
     if (userJson == null) return null;
-    try {
-      final user = json.decode(userJson);
-      final loc = user['location'];
-      if (loc == null) return null;
-      double? lat = loc['lat']?.toDouble() ?? loc['latitude']?.toDouble();
-      double? lng = loc['lng']?.toDouble() ?? loc['longitude']?.toDouble();
-      if (lat != null && lng != null) return Coordinates(lat: lat, lng: lng);
-    } catch (e) { return null; }
+    final user = json.decode(userJson);
+    final loc = user['location'];
+    if (loc != null) return Coordinates(lat: loc['lat']?.toDouble(), lng: loc['lng']?.toDouble());
     return null;
   }
 
-  Future<void> _loadTradersAndFilter() async {
-    setState(() { _isLoading = true; });
-    _userCoordinates = await _getBuyerCoordinates();
-    final isBuyerLocationKnown = _userCoordinates != null;
-    await _fetchAndProcessAdministrativeAreas();
-    
+  Future<void> _loadTraders() async {
     try {
-      final snapshot = await _db.collection("sellers").where("status", isEqualTo: "active").get();
-      final List<DocumentSnapshot> sellersServingArea = [];
+      // 💡 استخدام اسم الكولكشن الصحيح من إعداداتك: deliverySupermarkets
+      final snapshot = await _db.collection("deliverySupermarkets").get();
+      List<DocumentSnapshot> serving = [];
 
-      for (final doc in snapshot.docs) {
+      for (var doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
-        final List<dynamic>? deliveryAreas = data['deliveryAreas'] as List<dynamic>?;
-        final bool hasDeliveryAreas = deliveryAreas != null && deliveryAreas.isNotEmpty;
-
-        if (!isBuyerLocationKnown || !hasDeliveryAreas) {
-          sellersServingArea.add(doc);
+        final List? areas = data['deliveryAreas'] as List?;
+        
+        if (_userCoordinates == null || areas == null || areas.isEmpty) {
+          serving.add(doc);
           continue;
         }
-        
-        final isAreaMatch = deliveryAreas.any((areaName) {
-          final areaPolygon = _areaCoordinatesMap[areaName.toString()];
-          if (areaPolygon != null && areaPolygon.length >= 3) {
-            return isPointInPolygon(_userCoordinates!, areaPolygon);
-          }
-          return false;
-        });
-        if (isAreaMatch) sellersServingArea.add(doc);
-      }
-      _activeSellers = sellersServingArea;
-      _categories = _getUniqueCategories(_activeSellers);
-      _applyFilters(); 
-      if (mounted) setState(() => _isLoading = false);
-    } catch (e) { if (mounted) setState(() => _isLoading = false); }
-  }
 
-  List<String> _getUniqueCategories(List<DocumentSnapshot> sData) {
-    final categories = <String>{};
-    for (final doc in sData) {
-      final data = doc.data() as Map<String, dynamic>;
-      final bType = data['businessType']?.toString().trim() ?? "أخرى";
-      categories.add(bType.isNotEmpty ? bType : "أخرى");
-    }
-    return categories.toList()..sort();
+        bool match = areas.any((areaName) {
+          final polygon = _areaCoordinatesMap[areaName];
+          return (polygon != null) ? isPointInPolygon(_userCoordinates!, polygon) : false;
+        });
+
+        if (match) serving.add(doc);
+      }
+
+      _activeSellers = serving;
+      _categories = _activeSellers.map((e) => (e.data() as Map)['businessType']?.toString() ?? "أخرى").toSet().toList()..sort();
+      _applyFilters();
+    } catch (e) { debugPrint("Load Traders Error: $e"); }
   }
 
   void _applyFilters() {
     setState(() {
       _filteredTraders = _activeSellers.where((doc) {
         final data = doc.data() as Map<String, dynamic>;
-        final name = data['merchantName']?.toString().toLowerCase() ?? '';
+        // 💡 استخدام supermarketName حسب إعداداتك
+        final name = (data['supermarketName'] ?? data['merchantName'] ?? '').toString().toLowerCase();
         final type = data['businessType']?.toString() ?? 'أخرى';
         return name.contains(_searchQuery.toLowerCase()) && (_currentFilter == 'all' || type == _currentFilter);
       }).toList();
@@ -183,11 +141,43 @@ class _TradersScreenState extends State<TradersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const Center(child: CircularProgressIndicator(color: Color(0xFF4CAF50)));
+
+    return Column(
+      children: [
+        if (widget.showHeader)
+          TradersHeaderWidget(
+            onSearch: (val) { _searchQuery = val; _applyFilters(); },
+            currentQuery: _searchQuery,
+          ),
+        TradersFilterWidget(
+          categories: _categories,
+          currentFilter: _currentFilter,
+          onFilterSelected: (val) { _currentFilter = val; _applyFilters(); },
+        ),
+        Expanded(
+          child: TradersListWidget(
+            traders: _filteredTraders,
+            onTraderTap: (doc) => Navigator.of(context).pushNamed('/traderOffers', arguments: doc.id),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// 🎯 ثانياً: الشاشة الكاملة (التي يتم استدعاؤها من الـ Routes)
+class TradersScreen extends StatelessWidget {
+  static const String routeName = '/traders';
+  const TradersScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xFFf5f7fa),
-        // ✅ شريط علوي أخضر واحد بدون أيقونة الوضع الليلي
+        // شريط علوي أخضر واحد بدون أيقونة الوضع الليلي
         appBar: AppBar(
           elevation: 0,
           backgroundColor: const Color(0xFF4CAF50),
@@ -195,31 +185,12 @@ class _TradersScreenState extends State<TradersScreen> {
           title: const Text('التجار والسوبر ماركت', 
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Tajawal')),
         ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFF4CAF50)))
-            : Column(
-                children: [
-                  TradersHeaderWidget(
-                    onSearch: (val) { _searchQuery = val; _applyFilters(); },
-                    currentQuery: _searchQuery,
-                  ),
-                  TradersFilterWidget(
-                    categories: _categories,
-                    currentFilter: _currentFilter,
-                    onFilterSelected: (val) { _currentFilter = val; _applyFilters(); },
-                  ),
-                  Expanded(
-                    child: TradersListWidget(
-                      traders: _filteredTraders,
-                      onTraderTap: (doc) => Navigator.of(context).pushNamed('/traderOffers', arguments: doc.id),
-                    ),
-                  ),
-                ],
-              ),
-
-        // 🚀 إعادة المساعد الذكي كزر عائم (Floating)
+        // استخدام الـ Content هنا
+        body: const TradersContent(showHeader: true),
+        
+        // المساعد الذكي كأيقونة عائمة واحدة
         floatingActionButton: FloatingActionButton(
-          heroTag: "traders_fab_chat",
+          heroTag: "traders_page_chat",
           onPressed: () {
             showModalBottomSheet(
               context: context,
@@ -230,17 +201,6 @@ class _TradersScreenState extends State<TradersScreen> {
           },
           backgroundColor: const Color(0xFF4CAF50),
           child: const Icon(Icons.support_agent, color: Colors.white, size: 30),
-        ),
-
-        // 🚀 إعادة الشريط السفلي الأساسي للتطبيق
-        bottomNavigationBar: BuyerMobileNavWidget(
-          selectedIndex: 0, // تحديد التاجر كقسم نشط
-          onItemSelected: (index) {
-             if (index == 1) Navigator.of(context).pushReplacementNamed('/buyerHome');
-             // أضف باقي التنقلات هنا حسب الحاجة
-          },
-          cartCount: _cartCount,
-          ordersChanged: false,
         ),
       ),
     );
