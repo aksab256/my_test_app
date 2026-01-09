@@ -45,24 +45,44 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     _initializeAppLogic();
   }
 
-  // 🎯 دالة طلب إذن الإشعارات وحفظ التوكن للمشتري
+  // 🎯 التعديل 1: رسالة تمهيدية قبل طلب إذن الإشعارات الرسمي
   Future<void> _setupNotifications() async {
     if (_currentUserId == null) return;
 
     FirebaseMessaging messaging = FirebaseMessaging.instance;
-    NotificationSettings settings = await messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
+
+    // إظهار رسالة توضيحية للمستخدم أولاً
+    bool? userAgreed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("تفعيل التنبيهات", textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+        content: const Text("يرجى تفعيل التنبيهات لتتمكن من متابعة حالة طلباتك والعروض الجديدة فور حدوثها.", textAlign: TextAlign.center),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("ليس الآن")),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4CAF50)),
+            child: const Text("موافق", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
 
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      String? token = await messaging.getToken();
-      if (token != null) {
-        await _db.collection('users').doc(_currentUserId).update({
-          'fcmToken': token,
-          'lastTokenUpdate': FieldValue.serverTimestamp(),
-        });
+    if (userAgreed == true) {
+      NotificationSettings settings = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        String? token = await messaging.getToken();
+        if (token != null) {
+          await _db.collection('users').doc(_currentUserId).update({
+            'fcmToken': token,
+            'lastTokenUpdate': FieldValue.serverTimestamp(),
+          });
+        }
       }
     }
   }
@@ -114,8 +134,19 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     await _monitorUserOrdersStatusChanges();
   }
 
+  // 🎯 التعديل 2: جعل عداد السلة يقرأ القيمة الحقيقية المخزنة
   void _updateCartCount(SharedPreferences prefs) {
-    if (mounted) setState(() => _cartCount = 5); // قيمة تجريبية
+    String? cartData = prefs.getString('cart_items');
+    if (cartData != null) {
+      List<dynamic> items = jsonDecode(cartData);
+      if (mounted) {
+        setState(() => _cartCount = items.length);
+      }
+    } else {
+      if (mounted) {
+        setState(() => _cartCount = 0);
+      }
+    }
   }
 
   Future<void> _checkDeliveryStatusAndDisplayIcons() async {
@@ -202,7 +233,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
           cartCount: _cartCount,
           ordersChanged: _ordersChanged,
         ),
-        // 🚀 تم تحديث زر الشات هنا ليعمل مع المساعد الذكي
         floatingActionButton: FloatingActionButton(
           heroTag: "buyer_home_chat_btn",
           onPressed: () {
@@ -220,4 +250,3 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     );
   }
 }
-
