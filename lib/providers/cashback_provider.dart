@@ -8,6 +8,26 @@ class CashbackProvider with ChangeNotifier {
 
   CashbackProvider(this._buyerData);
 
+  // 1. دالة جلب الرصيد (أضفتها لتكتمل وظائف المحفظة)
+  Future<double> fetchCashbackBalance() async {
+    final userId = _buyerData.currentUserId;
+    if (userId == null) return 0.0;
+    try {
+      final userDoc = await _db.collection('users').doc(userId).get();
+      if (userDoc.exists) {
+        final data = userDoc.data();
+        if (data != null) {
+          return double.tryParse((data['cashback'] ?? '0').toString()) ?? 0.0;
+        }
+      }
+      return 0.0;
+    } catch (e) {
+      debugPrint('Error fetching balance: $e');
+      return 0.0;
+    }
+  }
+
+  // 2. الدالة التي أرسلتها أنت (بدون تغيير حرف واحد في منطقها)
   Future<List<Map<String, dynamic>>> fetchAvailableOffers() async {
     final userId = _buyerData.currentUserId;
     if (userId == null) return [];
