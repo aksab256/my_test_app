@@ -2,311 +2,198 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart' as intl;             
-import '../../providers/cashback_provider.dart';     
-// ✅ [التعديل هنا] إضافة استيراد BuyerDataProvider لحل خطأ "isn't a type"
-import '../../providers/buyer_data_provider.dart'; 
-import '../../theme/app_theme.dart'; // افتراض وجود AppTheme
+import 'package:intl/intl.dart' as intl;
+import 'package:sizer/sizer.dart'; // للتحكم الاحترافي في المقاسات
+import 'package:google_fonts/google_fonts.dart';
+import '../../providers/cashback_provider.dart';
+import '../../providers/buyer_data_provider.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/buyer_mobile_nav_widget.dart';
 
 class WalletScreen extends StatelessWidget {
-  // ✅ الإضافة المطلوبة لتصحيح الخطأ "Member not found: 'routeName'."
-  static const String routeName = '/wallet'; 
-
+  static const String routeName = '/wallet';
   const WalletScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: AppTheme.scaffoldLight,
-        body: Column(
-          children: [
-            // 💡 الرأس العلوي (Top Header)
-            _buildTopHeader(context),
-
-            // 💡 محتوى الأهداف
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 15.0),
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 20),
-                      _buildCashbackGoalsList(),
-                    ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.pushReplacementNamed(context, '/buyerHome');
+      },
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: const Color(0xFFF8F9FA), // لون مريح للعين
+          body: SafeArea( // 🛡️ حماية المحتوى من الحواف
+            child: Column(
+              children: [
+                _buildTopHeader(context),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: () => Provider.of<CashbackProvider>(context, listen: false).fetchCashbackGoals(),
+                    child: _buildCashbackGoalsList(),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
+          bottomNavigationBar: BuyerMobileNavWidget(
+            selectedIndex: 3, // المحفظة هي رقم 3
+            onItemSelected: (index) {
+              if (index == 3) return;
+              if (index == 0) Navigator.pushReplacementNamed(context, '/traders');
+              if (index == 1) Navigator.pushReplacementNamed(context, '/buyerHome');
+              if (index == 2) Navigator.pushReplacementNamed(context, '/myOrders');
+            },
+          ),
         ),
-        // 🚨 ملاحظة: لا يجب أن نضع شريط التنقل السفلي هنا، بل في BuyerHomeScreen
       ),
     );
   }
 
   Widget _buildTopHeader(BuildContext context) {
-    // 💡 استخدام Provider لجلب بيانات رصيد الكاش باك
-    final cashbackProvider = Provider.of<CashbackProvider>(context, listen: false);
-    // 💡 الآن يمكن التعرف على BuyerDataProvider بسبب الاستيراد
-    final buyerData = Provider.of<BuyerDataProvider>(context, listen: false);                             
-    return Container(                                      
+    final buyerData = Provider.of<BuyerDataProvider>(context);
+    final cashbackProvider = Provider.of<CashbackProvider>(context);
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(20.sp),
       decoration: BoxDecoration(
-        color: AppTheme.primaryGreen, // استخدام لون ثابت بدلاً من التدرج المعقد
-        gradient: const LinearGradient(                        
-          colors: [AppTheme.primaryGreen, Color(0xFF0056b3)],                                                       
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+        color: AppTheme.primaryGreen,
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(30),
+          bottomRight: Radius.circular(30),
         ),
-        boxShadow: [                                           
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),                
-            blurRadius: 4,
-            offset: const Offset(0, 2),                        
-          ),
-        ],                                                 
+        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 5))],
       ),
-      padding: const EdgeInsets.only(top: 40, bottom: 20, left: 15, right: 15),
-      child: Column(                                         
+      child: Column(
         children: [
-          Row(                                                   
-            children: [
-              IconButton(                                            
-                icon: const Icon(Icons.arrow_back, color: Colors.white),                                                  
-                onPressed: () => Navigator.of(context).pop(),                                                           
-              ),
-              const Expanded(                                        
-                child: Center(
-                  child: Text(
-                    'أهدافي للكاش باك',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),                                                   
-              const SizedBox(width: 48), // لموازنة زر الرجوع
-            ],
+          Text(
+            'أهدافي للكاش باك',
+            style: GoogleFonts.cairo(fontSize: 22.sp, fontWeight: FontWeight.bold, color: Colors.white),
           ),
-
-          // رسالة الترحيب
-          Padding(
-            padding: const EdgeInsets.only(top: 8.0),
-            child: Text(
-              // 💡 تم الافتراض أن fullName متاح في BuyerDataProvider
-              'أهلاً بك، ${buyerData.loggedInUser?.fullname ?? 'زائر'}!',
-              style: TextStyle(fontSize: 18, color: Colors.white.withOpacity(0.9)),
-            ),
+          SizedBox(height: 10.sp),
+          Text(
+            'أهلاً بك، ${buyerData.loggedInUser?.fullname ?? 'زائر'}!',
+            style: GoogleFonts.cairo(fontSize: 16.sp, color: Colors.white70),
           ),
-                                                               
-          // بطاقة رصيد الكاش باك
-          FutureBuilder<double>(
-            future: cashbackProvider.fetchCashbackBalance(),                                                          
-            builder: (context, snapshot) {
-              String balanceText;
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                balanceText = '...';
-              } else if (snapshot.hasError) {
-                balanceText = 'خطأ!';
-              } else {
-                final balance = snapshot.data ?? 0.0;
-                balanceText = '${balance.toStringAsFixed(2)} جنيه';
-              }
-
-              return Container(                                      
-                margin: const EdgeInsets.only(top: 15),
-                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white.withOpacity(0.4)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 3,                                     
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'رصيد الكاش باك الحالي:',
-                      style: TextStyle(fontSize: 16, color: Colors.white),
-                    ),
-                    Text(
-                      balanceText,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFFFFD700), // Gold
-                        shadows: [Shadow(blurRadius: 5, color: Colors.black26)],
-                      ),
-                    ),                                                 
-                  ],
-                ),
-              );
-            },
-          ),
+          SizedBox(height: 20.sp),
+          _buildBalanceCard(cashbackProvider),
         ],
       ),
     );
   }
-                                                       
-  // 💡 بناء قائمة الأهداف (Goal Cards)
-  Widget _buildCashbackGoalsList() {                     
-    return Consumer<CashbackProvider>(
-      builder: (context, provider, child) {                  
-        return FutureBuilder<List<Map<String, dynamic>>>(                                                           
-          future: provider.fetchCashbackGoals(),
-          builder: (context, snapshot) {                         
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: Padding(
-                padding: EdgeInsets.all(30.0),                       
-                child: Text('جاري تحميل الأهداف...', style: TextStyle(fontSize: 16)),
-              ));
-            }
 
-            if (snapshot.hasError) {
-              return Center(child: Padding(
-                padding: const EdgeInsets.all(30.0),
-                child: Text('حدث خطأ أثناء تحميل الأهداف: ${snapshot.error}', style: const TextStyle(color: Colors.red, fontSize: 16)),
-              ));
-            }
-
-            final goals = snapshot.data ?? [];
-
-            if (goals.isEmpty) {
-              return const Center(child: Padding(                    
-                padding: EdgeInsets.all(30.0),
-                child: Text('لا توجد أهداف كاش باك متاحة لك حاليًا.', style: TextStyle(fontSize: 16)),
-              ));                                                
-            }
-                                                                 
-            return Column(
-              children: goals.map((goal) {                           
-                return _buildGoalCard(context, goal);
-              }).toList(),                                       
-            );
-          },                                                 
-        );
-      },
-    );                                                 
-  }
-
-  Widget _buildGoalCard(BuildContext context, Map<String, dynamic> goal) {                                    
-    final double minAmount = goal['minAmount'] ?? 0.0;                                                        
-    final double currentProgress = goal['currentProgress'] ?? 0.0;
-    final double progressPercentage = (currentProgress / minAmount) * 100;
-    final double displayProgress = progressPercentage.clamp(0.0, 100.0);
-    // 💡 استخدام Intl
-    final String timeRemainingText = intl.DateFormat('yyyy/MM/dd').format(goal['endDate']); 
-                                                   
-    final progressColor = displayProgress >= 100 ? Colors.green : const Color(0xFFFFC107); // Gold
-                                                         
-    return Container(
-      margin: const EdgeInsets.only(bottom: 15),
-      padding: const EdgeInsets.all(20),                   
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(                                             
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 15,
-            offset: const Offset(0, 6),                        
+  Widget _buildBalanceCard(CashbackProvider provider) {
+    return FutureBuilder<double>(
+      future: provider.fetchCashbackBalance(),
+      builder: (context, snapshot) {
+        double balance = snapshot.data ?? 0.0;
+        return Container(
+          padding: EdgeInsets.all(15.sp),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: Colors.white30),
           ),
-        ],
-        border: Border(                                        
-          right: BorderSide(color: AppTheme.primaryGreen, width: 5),                                              
-        ),
-      ),                                                   
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(                                                   
-            children: [
-              const Icon(Icons.star, color: Color(0xFFFFC107)),                                                         
-              const SizedBox(width: 8),
-              Text(                                                  
-                goal['title'] ?? 'هدف كاش باك',
-                style: TextStyle(                                      
-                  color: AppTheme.primaryGreen,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),                                                 
-              ),
-            ],                                                 
-          ),
-          const SizedBox(height: 5),                           
-          Text(
-            'مطلوب: ${minAmount.toStringAsFixed(2)} جنيه لتحصل على كاش باك: ${goal['value']} ${goal['type'] == 'percentage' ? '%' : 'جنيه'}',
-            style: const TextStyle(fontSize: 14, color: Color(0xFF6c757d)),                                         
-          ),
-          const SizedBox(height: 10),                          
-          Row(
-            children: [
-              const Icon(Icons.timer_outlined, size: 16, color: Colors.red),
-              const SizedBox(width: 4),                            
-              Text(
-                'ينتهي في: $timeRemainingText',                      
-                style: const TextStyle(fontSize: 12, color: Colors.red),                                                
-              ),
-            ],
-          ),                                                   
-          const SizedBox(height: 15),
-
-          // Progress Bar                                      
-          ClipRRect(
-            borderRadius: BorderRadius.circular(50),
-            child: LinearProgressIndicator(                        
-              value: displayProgress / 100,
-              backgroundColor: const Color(0xFFe9ecef),
-              valueColor: AlwaysStoppedAnimation<Color>(progressColor),                                                 
-              minHeight: 12,
-            ),                                                 
-          ),
-          const SizedBox(height: 8),
-
-          // Progress Text
-          Row(
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              Text('رصيد المحفظة:', style: GoogleFonts.cairo(fontSize: 18.sp, color: Colors.white)),
               Text(
-                'مجموع المشتريات: ${currentProgress.toStringAsFixed(2)} / ${minAmount.toStringAsFixed(2)} جنيه',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-              ),
-              Text(
-                '${displayProgress.toStringAsFixed(0)}%',
-                style: TextStyle(
-                  color: progressColor,
-                  fontWeight: FontWeight.bold,                         
-                  fontSize: 14,
-                ),
+                '${balance.toStringAsFixed(2)} ج',
+                style: GoogleFonts.cairo(fontSize: 22.sp, fontWeight: FontWeight.w900, color: const Color(0xFFFFD700)),
               ),
             ],
           ),
+        );
+      },
+    );
+  }
 
-          // Achievement Message                               
-          if (displayProgress >= 100)
-            const Padding(
-              padding: EdgeInsets.only(top: 8.0),
-              child: Center(                                         
-                child: Text(
-                  'تم تحقيق الهدف! مبروك!',                            
-                  style: TextStyle(
-                    color: Colors.green,                                 
-                    fontWeight: FontWeight.bold,                         
-                    fontSize: 14,
-                  ),                                                 
+  Widget _buildCashbackGoalsList() {
+    return Consumer<CashbackProvider>(
+      builder: (context, provider, _) {
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: provider.fetchCashbackGoals(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final goals = snapshot.data ?? [];
+            if (goals.isEmpty) {
+              return Center(child: Text('لا توجد أهداف حالياً', style: GoogleFonts.cairo(fontSize: 18.sp)));
+            }
+            return ListView.builder(
+              padding: EdgeInsets.all(15.sp),
+              itemCount: goals.length,
+              itemBuilder: (context, index) => _buildGoalCard(context, goals[index]),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildGoalCard(BuildContext context, Map<String, dynamic> goal) {
+    bool isSingleOrder = goal['goalBasis'] == 'single_order';
+    double progress = goal['progressPercentage'];
+    Color progressColor = progress >= 100 ? Colors.green : Colors.orange;
+
+    return Card(
+      elevation: 4,
+      margin: EdgeInsets.only(bottom: 15.sp),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      child: Padding(
+        padding: EdgeInsets.all(15.sp),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.stars, color: progressColor, size: 24.sp),
+                SizedBox(width: 10.sp),
+                Expanded(
+                  child: Text(
+                    goal['title'],
+                    style: GoogleFonts.cairo(fontSize: 18.sp, fontWeight: FontWeight.bold),
+                  ),
                 ),
-              ),
+              ],
             ),
-        ],                                                 
+            const Divider(),
+            Text(
+              isSingleOrder ? '🎯 المطلوب: طلب واحد بقيمة ${goal['minAmount']} ج' : '📈 المطلوب: مجموع مشتريات ${goal['minAmount']} ج',
+              style: GoogleFonts.cairo(fontSize: 16.sp, color: Colors.black87),
+            ),
+            SizedBox(height: 10.sp),
+            LinearProgressIndicator(
+              value: progress / 100,
+              minHeight: 12,
+              backgroundColor: Colors.grey[200],
+              valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+            ),
+            SizedBox(height: 8.sp),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'الحالي: ${goal['currentProgress'].toStringAsFixed(1)} ج',
+                  style: GoogleFonts.cairo(fontSize: 15.sp, fontWeight: FontWeight.bold),
+                ),
+                Text('%${progress.toStringAsFixed(0)}', style: GoogleFonts.cairo(fontSize: 15.sp, color: progressColor)),
+              ],
+            ),
+            if (isSingleOrder && progress < 100)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text('* يجب تحقيق القيمة في عملية شراء واحدة', style: GoogleFonts.cairo(fontSize: 13.sp, color: Colors.red)),
+              ),
+          ],
+        ),
       ),
-    );                                                 
+    );
   }
 }
