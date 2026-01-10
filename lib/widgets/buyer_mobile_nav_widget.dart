@@ -1,12 +1,5 @@
+// lib/widgets/buyer_mobile_nav_widget.dart
 import 'package:flutter/material.dart';
-
-// 🟢 استيراد الشاشات الحقيقية
-import 'package:my_test_app/screens/buyer/my_orders_screen.dart';
-import 'package:my_test_app/screens/buyer/cart_screen.dart';
-import 'package:my_test_app/widgets/home_content.dart';
-import 'package:my_test_app/screens/buyer/traders_screen.dart';
-// ✅ إضافة استيراد المحفظة
-import 'package:my_test_app/screens/buyer/wallet_screen.dart';
 
 class BuyerMobileNavWidget extends StatelessWidget {
   final int selectedIndex;
@@ -22,54 +15,44 @@ class BuyerMobileNavWidget extends StatelessWidget {
     this.ordersChanged = false,
   });
 
-  // 🟢 ربط الصفحات الحقيقية بالترتيب الصحيح للأيقونات
-  static final List<Widget> mainPages = [
-    const MyOrdersScreen(),    // Index 0: مشترياتي
-    const HomeContent(),       // Index 1: الرئيسية
-    const CartScreen(),        // Index 2: السلة
-    const TradersScreen(),     // Index 3: التجار
-    const WalletScreen(),      // Index 4: المحفظة (تم التفعيل ✅)
-  ];
-
   @override
   Widget build(BuildContext context) {
     return NavigationBar(
+      height: 65,
+      // لضمان ظهور النص أسفل الأيقونة دائماً
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       selectedIndex: selectedIndex,
       onDestinationSelected: onItemSelected,
       backgroundColor: Colors.white,
-      indicatorColor: const Color(0xFF4CAF50).withOpacity(0.1),
+      elevation: 8,
+      indicatorColor: const Color(0xFF4CAF50).withOpacity(0.15),
       destinations: [
+        // Index 0: التجار
+        const NavigationDestination(
+          icon: Icon(Icons.storefront_outlined, color: Colors.grey),
+          selectedIcon: Icon(Icons.storefront_rounded, color: Color(0xFF4CAF50)),
+          label: 'التجار',
+        ),
+        // Index 1: الرئيسية
+        const NavigationDestination(
+          icon: Icon(Icons.home_outlined, color: Colors.grey),
+          selectedIcon: Icon(Icons.home_rounded, color: Color(0xFF4CAF50)),
+          label: 'الرئيسية',
+        ),
+        // Index 2: طلباتي (مع إشعار التغيير)
         NavigationDestination(
           icon: Badge(
             isLabelVisible: ordersChanged,
-            child: const Icon(Icons.shopping_bag_outlined),
+            child: const Icon(Icons.assignment_outlined, color: Colors.grey),
           ),
-          selectedIcon: const Icon(Icons.shopping_bag_rounded),
-          label: 'مشترياتي',
+          selectedIcon: const Icon(Icons.assignment_rounded, color: Color(0xFF4CAF50)),
+          label: 'طلباتي',
         ),
+        // Index 3: المحفظة
         const NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home_rounded),
-          label: 'الرئيسية',
-        ),
-        NavigationDestination(
-          icon: Badge(
-            label: Text('$cartCount'),
-            isLabelVisible: cartCount > 0,
-            child: const Icon(Icons.shopping_cart_outlined),
-          ),
-          selectedIcon: const Icon(Icons.shopping_cart_rounded),
-          label: 'السلة',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.store_outlined),
-          selectedIcon: Icon(Icons.store_rounded),
-          label: 'التجار',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.account_balance_wallet_outlined),
-          selectedIcon: Icon(Icons.account_balance_wallet_rounded),
-          label: 'محفظتي',
+          icon: Icon(Icons.account_balance_wallet_outlined, color: Colors.grey),
+          selectedIcon: Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF4CAF50)),
+          label: 'المحفظة',
         ),
       ],
     );
