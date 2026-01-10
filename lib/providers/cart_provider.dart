@@ -1,10 +1,7 @@
-// lib/providers/cart_provider.dart
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:math';
 import '../services/marketplace_data_service.dart';
 
 class CartItem {
@@ -75,15 +72,14 @@ class SellerOrderData {
   bool isMinOrderMet = true;
   bool hasProductErrors = false;
   
-  // ✅ أضفت هذا الحقل المطلوب في الـ UI
-  String get minOrderAlert => !isMinOrderMet ? "باقي ${minOrderTotal - total} ج للوصول للحد الأدنى" : "";
+  // ✅ الحقل المطلوب لعرض التنبيه في شاشة السلة
+  String get minOrderAlert => !isMinOrderMet ? "باقي ${(minOrderTotal - total).toStringAsFixed(2)} ج للوصول للحد الأدنى" : "";
 
   SellerOrderData({required this.sellerId, required this.sellerName, required this.items});
 }
 
 class CartProvider with ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final MarketplaceDataService _dataService = MarketplaceDataService();
 
   List<CartItem> _cartItems = [];
   Map<String, SellerOrderData> _sellersOrders = {};
@@ -91,9 +87,10 @@ class CartProvider with ChangeNotifier {
   double _totalDeliveryFees = 0.0;
   bool _hasCheckoutErrors = false;
   
-  // ✅ حقول مطلوبة من الـ UI لتجنب أخطاء الـ Build
+  // ✅ Getters أساسية لنجاح الـ Build
   bool hasPendingCheckout = false; 
   int get cartTotalItems => _cartItems.where((item) => !item.isGift).length;
+  bool get isCartEmpty => _cartItems.isEmpty; // ⬅️ هذا كان ناقصاً
 
   Map<String, SellerOrderData> get sellersOrders => _sellersOrders;
   double get totalProductsAmount => _totalProductsAmount;
@@ -101,7 +98,12 @@ class CartProvider with ChangeNotifier {
   double get finalTotal => _totalProductsAmount + _totalDeliveryFees;
   bool get hasCheckoutErrors => _hasCheckoutErrors;
 
-  // ✅ دالة مطلوبة لتغيير الكمية من الـ Card
+  // ✅ تصحيح: تغيير النوع من void لـ Future<void> ليتوافق مع الـ UI
+  Future<void> cancelPendingCheckout() async {
+    hasPendingCheckout = false;
+    notifyListeners();
+  }
+
   Future<void> changeQty(CartItem item, int delta, String role) async {
     final newQty = item.quantity + delta;
     if (newQty <= 0) {
@@ -116,13 +118,6 @@ class CartProvider with ChangeNotifier {
     }
   }
 
-  // ✅ دالة مطلوبة في الـ Build
-  void cancelPendingCheckout() {
-    hasPendingCheckout = false;
-    notifyListeners();
-  }
-
-  // ✅ دالة مطلوبة في الـ Build للذهاب للدفع
   void proceedToCheckout(BuildContext context, String role) {
     if (_hasCheckoutErrors) return;
     Navigator.pushNamed(context, '/checkout'); 
@@ -211,7 +206,6 @@ class CartProvider with ChangeNotifier {
     await loadCartAndRecalculate(userRole);
   }
 
-  // --- دوال مساعدة (نفس المنطق الصامت) ---
   Future<Map<String, dynamic>> _getSellerBusinessRules(String id, String role) async {
     final col = (role == 'buyer') ? 'sellers' : 'deliverySupermarkets';
     final doc = await _db.collection(col).doc(id).get();
@@ -248,19 +242,29 @@ class CartProvider with ChangeNotifier {
       if (trigger == null) continue;
       int qty = 0;
       if (trigger['type'] == "min_order" && seller.total >= (trigger['value'] ?? 0)) {
-        qty = promo['giftQuantityPerBase'] ?? 1;
+        qty = (promo['giftQuantityPerBase'] as num? ?? 1).toInt();
       } else if (trigger['type'] == "specific_item") {
         final match = seller.items.where((i) => i.offerId == trigger['offerId']);
         if (match.isNotEmpty) {
-          qty = (match.first.quantity ~/ (trigger['triggerQuantityBase'] ?? 1)) * (promo['giftQuantityPerBase'] ?? 1);
+          // ✅ تصحيح عملية الحساب والتحويل لـ int
+          int triggerBase = (trigger['triggerQuantityBase'] as num? ?? 1).toInt();
+          int giftPerBase = (promo['giftQuantityPerBase'] as num? ?? 1).toInt();
+          qty = (match.first.quantity ~/ triggerBase) * giftPerBase;
         }
       }
       if (qty > 0) {
         gifts.add(CartItem(
-          offerId: promo['giftOfferId'], productId: promo['giftProductId'],
-          sellerId: seller.sellerId, sellerName: seller.sellerName,
-          name: promo['giftProductName'], price: 0.0, unit: promo['giftUnitName'],
-          unitIndex: -1, quantity: qty, isGift: true, imageUrl: promo['giftProductImage'],
+          offerId: promo['giftOfferId']?.toString() ?? '',
+          productId: promo['giftProductId']?.toString() ?? '',
+          sellerId: seller.sellerId,
+          sellerName: seller.sellerName,
+          name: promo['giftProductName']?.toString() ?? 'Gift',
+          price: 0.0,
+          unit: promo['giftUnitName']?.toString() ?? '',
+          unitIndex: -1,
+          quantity: qty,
+          isGift: true,
+          imageUrl: promo['giftProductImage']?.toString() ?? '',
         ));
       }
     }
