@@ -223,31 +223,49 @@ class CartProvider with ChangeNotifier {
     return {'minQty': (d['minOrder'] ?? 1), 'maxQty': (d['maxOrder'] ?? 9999), 'stock': stk, 'currentPrice': prc};
   }
 
+  // ... (الجزء العلوي من الملف كما هو بدون تغيير حتى دالة _calculateGifts)
+
   List<CartItem> _calculateGifts(SellerOrderData seller, List<Map<String, dynamic>> promos) {
     final gifts = <CartItem>[];
     for (var promo in promos) {
       final trigger = promo['trigger'] as Map<String, dynamic>?;
       if (trigger == null) continue;
       int qty = 0;
+      
       if (trigger['type'] == "min_order" && seller.total >= (trigger['value'] ?? 0)) {
-        qty = promo['giftQuantityPerBase'] ?? 1;
+        qty = (promo['giftQuantityPerBase'] as num? ?? 1).toInt();
       } else if (trigger['type'] == "specific_item") {
         final match = seller.items.where((i) => i.offerId == trigger['offerId']);
         if (match.isNotEmpty) {
-          qty = (match.first.quantity ~/ (trigger['triggerQuantityBase'] ?? 1)) * (promo['giftQuantityPerBase'] ?? 1);
+          // ✅ التصحيح الأكيد هنا: تحويل القيم لضمان نجاح عملية القسمة
+          int triggerBase = (trigger['triggerQuantityBase'] as num? ?? 1).toInt();
+          int giftPerBase = (promo['giftQuantityPerBase'] as num? ?? 1).toInt();
+          
+          qty = (match.first.quantity ~/ triggerBase) * giftPerBase;
         }
       }
+      
       if (qty > 0) {
         gifts.add(CartItem(
-          offerId: promo['giftOfferId'], productId: promo['giftProductId'],
-          sellerId: seller.sellerId, sellerName: seller.sellerName,
-          name: promo['giftProductName'], price: 0.0, unit: promo['giftUnitName'],
-          unitIndex: -1, quantity: qty, isGift: true, imageUrl: promo['giftProductImage'],
+          offerId: promo['giftOfferId']?.toString() ?? 'gift',
+          productId: promo['giftProductId']?.toString() ?? 'gift',
+          sellerId: seller.sellerId,
+          sellerName: seller.sellerName,
+          name: promo['giftProductName']?.toString() ?? 'هدية',
+          price: 0.0,
+          unit: promo['giftUnitName']?.toString() ?? 'وحدة',
+          unitIndex: -1,
+          quantity: qty,
+          isGift: true,
+          imageUrl: promo['giftProductImage']?.toString() ?? '',
         ));
       }
     }
     return gifts;
   }
+
+// ... (باقي الملف كما هو)
+
 
   Future<List<Map<String, dynamic>>> _getGiftPromosBySellerId(String id) async {
     final snap = await _db.collection('giftPromos').where('sellerId', isEqualTo: id).where('status', isEqualTo: 'active').get();
