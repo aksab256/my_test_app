@@ -8,7 +8,7 @@ class CashbackProvider with ChangeNotifier {
 
   CashbackProvider(this._buyerData);
 
-  // 1. دالة جلب الرصيد (أضفتها لتكتمل وظائف المحفظة)
+  // إصلاح 1: إعادة رصيد الكاش باك
   Future<double> fetchCashbackBalance() async {
     final userId = _buyerData.currentUserId;
     if (userId == null) return 0.0;
@@ -16,25 +16,21 @@ class CashbackProvider with ChangeNotifier {
       final userDoc = await _db.collection('users').doc(userId).get();
       if (userDoc.exists) {
         final data = userDoc.data();
-        if (data != null) {
-          return double.tryParse((data['cashback'] ?? '0').toString()) ?? 0.0;
-        }
+        return double.tryParse((data?['cashback'] ?? '0').toString()) ?? 0.0;
       }
       return 0.0;
     } catch (e) {
-      debugPrint('Error fetching balance: $e');
       return 0.0;
     }
   }
 
-  // 2. الدالة التي أرسلتها أنت (بدون تغيير حرف واحد في منطقها)
+  // إصلاح 2: جلب العروض مع تمييز دقيق للنوع
   Future<List<Map<String, dynamic>>> fetchAvailableOffers() async {
     final userId = _buyerData.currentUserId;
     if (userId == null) return [];
     
     try {
       final now = DateTime.now();
-      // جلب القواعد النشطة
       final querySnapshot = await _db.collection("cashbackRules")
           .where("status", isEqualTo: "active")
           .get();
@@ -43,23 +39,16 @@ class CashbackProvider with ChangeNotifier {
       
       for (var docSnap in querySnapshot.docs) {
         final data = docSnap.data();
-        
         DateTime? startDate = (data['startDate'] as Timestamp?)?.toDate();
         DateTime? endDate = (data['endDate'] as Timestamp?)?.toDate();
 
-        // التأكد من أن العرض ساري حالياً
-        if (startDate == null || endDate == null) continue;
-        if (now.isBefore(startDate) || now.isAfter(endDate)) continue;
+        if (startDate == null || endDate == null || now.isBefore(startDate) || now.isAfter(endDate)) continue;
 
         String goalBasis = data['goalBasis'] ?? 'cumulative_spending';
         double minAmount = double.tryParse(data['minPurchaseAmount']?.toString() ?? '0') ?? 0.0;
-        
-        // حساب الأيام المتبقية
-        int daysRemaining = endDate.difference(now).inDays;
-        
         double progressAmount = 0;
-        
-        // إذا كان العرض "تراكمي" فقط، نحسب ما تم شراؤه فعلياً
+
+        // حساب التقدم فقط إذا كان تراكمياً
         if (goalBasis == 'cumulative_spending') {
           final ordersQuery = await _db.collection("orders")
               .where("buyer.id", isEqualTo: userId)
@@ -69,8 +58,7 @@ class CashbackProvider with ChangeNotifier {
               .get();
 
           for (var order in ordersQuery.docs) {
-            final orderData = order.data();
-            progressAmount += double.tryParse((orderData['totalAmount'] ?? orderData['total'] ?? '0').toString()) ?? 0.0;
+            progressAmount += double.tryParse((order.data()['totalAmount'] ?? '0').toString()) ?? 0.0;
           }
         }
 
@@ -78,18 +66,16 @@ class CashbackProvider with ChangeNotifier {
           'id': docSnap.id,
           'description': data['description'] ?? 'عرض كاش باك',
           'minAmount': minAmount,
-          'goalBasis': goalBasis,
+          'goalBasis': goalBasis, // التأكد من إرسال النوع الصحيح للشاشة
           'value': data['value'],
-          'type': data['type'], // percentage أو fixed
-          'daysRemaining': daysRemaining,
+          'type': data['type'],
+          'daysRemaining': endDate.difference(now).inDays,
           'currentProgress': progressAmount,
-          'endDate': endDate,
           'sellerName': data['sellerName'] ?? 'كل التجار',
         });
       }
       return offersList;
     } catch (e) {
-      debugPrint('Error: $e');
       return [];
     }
   }
