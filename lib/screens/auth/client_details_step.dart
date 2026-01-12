@@ -36,7 +36,7 @@ class ClientDetailsStep extends StatefulWidget {
 }
 
 class _ClientDetailsStepState extends State<ClientDetailsStep> {
-  final _formKey = GlobalKey<FormState>(); // 🎯 المفتاح الأساسي للتحقق
+  final _formKey = GlobalKey<FormState>();
   late MapController _mapController;
   LatLng _selectedPosition = const LatLng(30.0444, 31.2357);
 
@@ -63,16 +63,45 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     widget.onLocationChanged(lat: _selectedPosition.latitude, lng: _selectedPosition.longitude);
   }
 
-  // --- دالة رفع الصور لـ Cloudinary ---
+  // 🎯 رسالة الإفصاح المطلوبة من جوجل بلاي (Prominent Disclosure)
+  Future<bool?> _showLocationRationale() async {
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.location_on, color: Color(0xFF2D9E68)),
+              SizedBox(width: 10),
+              Text("استخدام الموقع الجغرافي"),
+            ],
+          ),
+          content: const Text(
+            "تطبيق أكسب يحتاج إلى الوصول لموقعك الجغرافي لتحديد مكان نشاطك التجاري بدقة على الخريطة. "
+            "هذا يساعد المشترين والمناديب على الوصول إليك وتسهيل عمليات التوصيل.",
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("رفض", style: TextStyle(color: Colors.grey))),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68)),
+              child: const Text("موافق ومتابعة", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _uploadFileToCloudinary(File file, String field) async {
     setState(() => _isUploading = true);
     const String cloudName = "dgmmx6jbu";
     const String uploadPreset = "commerce";
     try {
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/image/upload'),
-      );
+      var request = http.MultipartRequest('POST', Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/image/upload'));
       request.fields['upload_preset'] = uploadPreset;
       request.files.add(await http.MultipartFile.fromPath('file', file.path));
       var response = await request.send();
@@ -80,8 +109,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         var responseData = await response.stream.toBytes();
         var responseString = String.fromCharCodes(responseData);
         var json = jsonDecode(responseString);
-        String secureUrl = json['secure_url'];
-        widget.onUploadComplete(field: field, url: secureUrl);
+        widget.onUploadComplete(field: field, url: json['secure_url']);
       }
     } catch (e) {
       debugPrint("Cloudinary Error: $e");
@@ -110,41 +138,27 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
         child: Form(
-          key: _formKey, // 🎯 ربط الفورم بالمفتاح
+          key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('إكمال بيانات الحساب',
-                  style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68)),
-                  textAlign: TextAlign.center),
+              Text('إكمال بيانات الحساب', style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68)), textAlign: TextAlign.center),
               SizedBox(height: 3.h),
-
               _buildSectionHeader('المعلومات الأساسية', Icons.badge_rounded),
               _buildInputField('fullname', 'الاسم الكامل', Icons.person_rounded),
               _buildInputField('phone', 'رقم الهاتف', Icons.phone_android_rounded, keyboardType: TextInputType.phone),
-
               _buildSectionHeader('العنوان والموقع التجاري', Icons.map_rounded),
-              _buildInputField('address', 'العنوان بالتفصيل', Icons.location_on_rounded),
+              _buildInputField('address', 'العنوان (حدد من الخريطة بالأسفل)', Icons.location_on_rounded),
               _buildMapContainer(),
-
               _buildSectionHeader('الأمان', Icons.security_rounded),
               _buildInputField('password', 'كلمة المرور', Icons.lock_open_rounded, isPassword: true),
               _buildInputField('confirmPassword', 'تأكيد كلمة المرور', Icons.lock_rounded, isPassword: true),
-
-              if (widget.selectedUserType == 'seller') ...[
-                SizedBox(height: 2.h),
-                _buildSellerSpecificFields(),
-              ],
-
+              if (widget.selectedUserType == 'seller') ...[SizedBox(height: 2.h), _buildSellerSpecificFields()],
               SizedBox(height: 2.h),
               _buildTermsCheckbox(),
               SizedBox(height: 2.h),
               _buildSubmitButton(),
-
-              TextButton(
-                onPressed: widget.onGoBack,
-                child: Text('العودة لتعديل نوع الحساب', style: TextStyle(color: Colors.grey.shade400, fontSize: 11.sp)),
-              ),
+              TextButton(onPressed: widget.onGoBack, child: Text('العودة لتعديل نوع الحساب', style: TextStyle(color: Colors.grey.shade400, fontSize: 11.sp))),
               SizedBox(height: 5.h),
             ],
           ),
@@ -153,7 +167,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     );
   }
 
-  // --- منسدلة نوع النشاط (إجبارية) ---
   Widget _buildBusinessTypeDropdown() {
     return Container(
       margin: EdgeInsets.only(bottom: 2.h),
@@ -161,7 +174,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
       child: DropdownButtonFormField<String>(
         value: _selectedBusinessType,
-        // 🎯 التحقق من الاختيار
         validator: (value) => value == null ? "يرجى اختيار نوع النشاط" : null,
         decoration: const InputDecoration(border: InputBorder.none, hintText: "نوع النشاط"),
         items: _businessTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
@@ -173,7 +185,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     );
   }
 
-  // --- حقل الإدخال مع الـ Validator ---
   Widget _buildInputField(String key, String label, IconData icon, {bool isPassword = false, TextInputType keyboardType = TextInputType.text}) {
     return Padding(
       padding: EdgeInsets.only(bottom: 1.5.h),
@@ -181,9 +192,9 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         controller: widget.controllers[key],
         obscureText: isPassword && _obscurePassword,
         keyboardType: keyboardType,
-        // 🎯 منطق التحقق لكل حقل
+        readOnly: key == 'address', // 🎯 منع الكتابة في حقل العنوان
         validator: (value) {
-          if (value == null || value.trim().isEmpty) return 'هذا الحقل مطلوب';
+          if (value == null || value.trim().isEmpty) return key == 'address' ? 'يرجى تحديد موقعك على الخريطة' : 'هذا الحقل مطلوب';
           if (key == 'phone' && value.trim().length < 11) return 'رقم هاتف غير صحيح';
           if (key == 'confirmPassword' && value != widget.controllers['password']?.text) return 'كلمات المرور غير متطابقة';
           return null;
@@ -191,11 +202,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         decoration: InputDecoration(
           labelText: label,
           prefixIcon: Icon(icon, color: const Color(0xFF2D9E68)),
-          suffixIcon: isPassword
-              ? IconButton(
-                  icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword))
-              : null,
+          suffixIcon: isPassword ? IconButton(icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => _obscurePassword = !_obscurePassword)) : null,
           filled: true,
           fillColor: Colors.white,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
@@ -205,29 +212,19 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     );
   }
 
-  // --- زر إتمام التسجيل (يفحص الصلاحية) ---
   Widget _buildSubmitButton() {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: (widget.isSaving || !_termsAgreed || _isUploading)
-            ? null
-            : () {
-                // 🎯 التأكد من أن جميع الحقول الإجبارية صحيحة قبل الاستمرار
-                if (_formKey.currentState!.validate()) {
-                  widget.onRegister();
-                }
-              },
-        style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF2D9E68), padding: const EdgeInsets.symmetric(vertical: 15)),
-        child: (widget.isSaving || _isUploading)
-            ? const CircularProgressIndicator(color: Colors.white)
-            : const Text('إتمام التسجيل', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        onPressed: (widget.isSaving || !_termsAgreed || _isUploading) ? null : () {
+          if (_formKey.currentState!.validate()) widget.onRegister();
+        },
+        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68), padding: const EdgeInsets.symmetric(vertical: 15)),
+        child: (widget.isSaving || _isUploading) ? const CircularProgressIndicator(color: Colors.white) : const Text('إتمام التسجيل', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }
 
-  // --- باقي الودجت المساعدة (الخريطة، رفع الملفات) ---
   Widget _buildMapContainer() {
     return Column(children: [
       Container(
@@ -241,20 +238,35 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
               mapController: _mapController,
               options: MapOptions(
                 initialCenter: _selectedPosition,
-                initialZoom: 13.0,
+                initialZoom: 16.0, // 🎯 تقريب الخريطة أكثر
                 onTap: (tapPos, point) => _handleLocationChange(point),
               ),
               children: [
                 TileLayer(urlTemplate: "https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/tiles/{z}/{x}/{y}?access_token=$mapboxToken"),
-                MarkerLayer(markers: [
-                  Marker(point: _selectedPosition, width: 50, height: 50, child: const Icon(Icons.location_pin, size: 40, color: Colors.red)),
-                ]),
+                MarkerLayer(markers: [Marker(point: _selectedPosition, width: 50, height: 50, child: const Icon(Icons.location_pin, size: 40, color: Colors.red))]),
               ],
             ),
-            Positioned(bottom: 10, right: 10, child: FloatingActionButton(mini: true, backgroundColor: const Color(0xFF2D9E68), onPressed: _goToCurrentLocation, child: const Icon(Icons.my_location, color: Colors.white))),
+            Positioned(
+              bottom: 10,
+              right: 10,
+              child: FloatingActionButton(
+                mini: true,
+                backgroundColor: const Color(0xFF2D9E68),
+                onPressed: () async {
+                  var status = await Permission.location.status;
+                  if (!status.isGranted) {
+                    bool? agreed = await _showLocationRationale(); // 🎯 رسالة جوجل
+                    if (agreed != true) return;
+                  }
+                  _goToCurrentLocation();
+                },
+                child: const Icon(Icons.my_location, color: Colors.white),
+              ),
+            ),
           ]),
         ),
       ),
+      Text("اضغط على الخريطة لتحديد موقعك بدقة", style: TextStyle(fontSize: 8.sp, color: Colors.grey)),
     ]);
   }
 
@@ -270,7 +282,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
         setState(() {
-          widget.controllers['address']!.text = "${place.street ?? ''}, ${place.locality ?? ''}";
+          widget.controllers['address']!.text = "${place.street ?? ''}, ${place.locality ?? ''}, ${place.administrativeArea ?? ''}";
         });
       }
     } catch (e) {}
@@ -280,7 +292,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     if (await Permission.location.request().isGranted) {
       Position position = await Geolocator.getCurrentPosition();
       final newPos = LatLng(position.latitude, position.longitude);
-      _mapController.move(newPos, 16.0);
+      _mapController.move(newPos, 16.0); // تقريب عند الانتقال للموقع الحالي
       _handleLocationChange(newPos);
     }
   }
@@ -306,11 +318,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         margin: EdgeInsets.only(bottom: 1.h),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: file != null ? Colors.green : Colors.grey.shade200)),
-        child: Row(children: [
-          Icon(file != null ? Icons.check_circle : Icons.upload_file, color: file != null ? Colors.green : Colors.grey),
-          const SizedBox(width: 10),
-          Expanded(child: Text(label, style: TextStyle(fontSize: 10.sp))),
-        ]),
+        child: Row(children: [Icon(file != null ? Icons.check_circle : Icons.upload_file, color: file != null ? Colors.green : Colors.grey), const SizedBox(width: 10), Expanded(child: Text(label, style: TextStyle(fontSize: 10.sp)))]),
       ),
     );
   }
