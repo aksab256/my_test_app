@@ -1,4 +1,4 @@
-Name: Build Flutter APK (Fast Release)
+name: Build Flutter APK (Fast Release)
 
 on:
   push:
@@ -53,4 +53,3 @@ jobs:
           cd android
           chmod +x gradlew
           ./gradlew signingReport
-
