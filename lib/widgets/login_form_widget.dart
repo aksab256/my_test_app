@@ -11,7 +11,6 @@ import 'dart:convert';
 
 class LoginFormWidget extends StatefulWidget {
   const LoginFormWidget({super.key});
-
   @override
   State<LoginFormWidget> createState() => _LoginFormWidgetState();
 }
@@ -25,7 +24,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   final AuthService _authService = AuthService();
   final Color primaryGreen = const Color(0xff28a745);
 
-  // 1. معالجة تسجيل الدخول الأساسية
+  // 1. معالجة تسجيل الدخول الذكية (دعم aksab و aswaq)
   Future<void> _submitLogin() async {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
@@ -36,56 +35,59 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     });
 
     try {
-      // أ- تسجيل الدخول الصريح
-      String fakeEmail = "${_phone.trim()}@aswaq.com";
-      final String userRole = await _authService.signInWithEmailAndPassword(fakeEmail, _password);
+      String userRole;
+      String phoneClean = _phone.trim();
+      
+      try {
+        // 🎯 المحاولة بالدومين الجديد أولاً (مثل حساب أحمد)
+        debugPrint("Trying login with @aksab.com...");
+        userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aksab.com", _password);
+      } catch (e) {
+        // 🎯 إذا فشل، المحاولة بالدومين القديم (للحسابات السابقة)
+        debugPrint("Aksab failed, trying @aswaq.com...");
+        userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aswaq.com", _password);
+      }
 
-      // ب- تحديث الجلسة والعمليات الجانبية (محاطة بـ try داخلي لضمان عدم تعطيل الدخول)
+      // ب- تحديث الجلسة والعمليات الجانبية
       try {
         await UserSession.loadSession();
-
+        
+        // جلب بيانات الـ SubUser إذا كان الحساب موظفاً
         if (UserSession.isSubUser) {
           final subUserDoc = await FirebaseFirestore.instance
               .collection("subUsers")
-              .doc(_phone.trim())
+              .doc(phoneClean)
               .get();
 
           if (subUserDoc.exists && subUserDoc.data()?['mustChangePassword'] == true) {
             if (mounted) setState(() => _isLoading = false);
-            _showChangePasswordDialog(_phone.trim());
+            _showChangePasswordDialog(phoneClean);
             return;
           }
         }
-
-        // إرسال التوكن للـ AWS بشكل صامت
         _sendNotificationDataToAWS().catchError((e) => debugPrint("AWS Silent Error: $e"));
       } catch (innerError) {
-        debugPrint("Secondary Sync Error (Ignored): $innerError");
+        debugPrint("Secondary Sync Error: $innerError");
       }
 
       if (!mounted) return;
-      
-      // ج- التوجه للشاشة الرئيسية
       _navigateToHome(userRole);
 
     } catch (e) {
       debugPrint("Core Login Error: $e");
-      
-      // 🎯 الفحص الحاسم: إذا كان هناك مستخدم مسجل بالفعل في Firebase، فهذا يعني أن الدخول نجح 
-      // والخطأ ناتج عن تضارب في الـ Navigation فقط، لذا نتجاهله.
       if (FirebaseAuth.instance.currentUser != null) {
-        debugPrint("✅ تم تجاهل الخطأ لأن الدخول نجح تقنياً.");
-        return; 
+        // إذا نجح الـ Auth تقنياً رغم وجود خطأ في الكود اللاحق، نكمل للدخول
+        _navigateToHome(UserSession.role ?? 'seller');
+        return;
       }
-
+      
       if (mounted) {
         setState(() {
           _isLoading = false;
-          // تمييز نوع الخطأ للمستخدم
           if (e.toString().contains('account-not-active')) {
             _errorMessage = 'هذا الحساب معلق، يرجى التواصل مع الإدارة';
-          } else if (e.toString().contains('invalid-credential') || 
-                     e.toString().contains('wrong-password') || 
+          } else if (e.toString().contains('invalid-credential') ||
+                     e.toString().contains('wrong-password') ||
                      e.toString().contains('user-not-found')) {
             _errorMessage = 'رقم الهاتف أو كلمة المرور غير صحيحة';
           } else {
@@ -96,7 +98,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     }
   }
 
-  // 2. دالة التوجيه
   void _navigateToHome(String role) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -105,21 +106,18 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         duration: const Duration(seconds: 2),
       ),
     );
-
+    
     String route = '/';
     if (role == 'seller') {
       route = '/sellerhome';
     } else if (role == 'consumer') {
       route = '/consumerhome';
     }
-
     Navigator.of(context).pushNamedAndRemoveUntil(route, (route) => false);
   }
 
-  // 3. ديالوج تغيير كلمة السر للموظفين
   void _showChangePasswordDialog(String phone) {
     final TextEditingController newPassController = TextEditingController();
-
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -165,7 +163,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     );
   }
 
-  // 4. إرسال بيانات الإشعارات
   Future<void> _sendNotificationDataToAWS() async {
     try {
       String? token = await FirebaseMessaging.instance.getToken();
@@ -254,7 +251,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   }
 }
 
-// ويدجت إدخال البيانات الموحد
 class _InputGroup extends StatelessWidget {
   final IconData icon;
   final String hintText;
