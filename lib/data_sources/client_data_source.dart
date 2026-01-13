@@ -1,19 +1,7 @@
-// lib/data_sources/client_data_source.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:firebase_messaging/firebase_messaging.dart';
-
-class ClientDataSource {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
-
   Future<User?> registerClient({
     required String fullname,
-    required String email,    // هذا هو "الميل الذكي" للـ Auth
-    required String phone,    // 🟢 أضفنا هذا لاستقبال رقم الهاتف الفعلي
+    required String email,    
+    required String phone,    
     required String password,
     required String address,
     required String country,
@@ -27,26 +15,31 @@ class ClientDataSource {
     String? additionalPhone,
   }) async {
     try {
-      // 1. إنشاء الحساب في Firebase Auth باستخدام الميل الذكي
       final userCredential = await _auth.createUserWithEmailAndPassword(
         email: email, 
         password: password
       );
       final String userId = userCredential.user!.uid;
 
-      // 2. تجهيز بيانات المستخدم (المفاتيح مطابقة للـ HTML)
       final Map<String, dynamic> userData = {
         'fullname': fullname,
         'email': email,
-        'phone': phone,       // 🟢 حفظ رقم الهاتف في قاعدة البيانات
+        'phone': phone,       
         'address': address,
         'location': location,
-        'role': userType,     // buyer, seller, or consumer
+        'role': userType,     
         'country': country,
         'createdAt': FieldValue.serverTimestamp(),
+        // ✅ إضافة حالة "مستخدم جديد" لإظهار الرسالة الترحيبية عند أول دخول
+        'isNewUser': true, 
       };
 
-      // 3. إضافة البيانات الخاصة بالمورد (Seller)
+      // 🔵 منطق النقاط والهدايا الترحيبية للمستهلك
+      if (userType == "consumer") {
+        userData['loyaltyPoints'] = 0; // القيمة المبدئية قبل تفعيل هدية الترحيب
+        userData['hasClaimedWelcomeGift'] = false; // لم يستلم الهدية بعد
+      }
+
       if (userType == 'seller') {
         userData['merchantName'] = merchantName;
         userData['businessType'] = businessType;
@@ -59,20 +52,18 @@ class ClientDataSource {
         userData['isVerified'] = true;
       }
 
-      // 4. تحديد المجموعة المستهدفة (Collections)
       String targetCollectionName;
       if (userType == "seller") {
         targetCollectionName = "pendingSellers";
       } else if (userType == "consumer") {
         targetCollectionName = "consumers";
       } else {
-        targetCollectionName = "users"; // لتاجر التجزئة
+        targetCollectionName = "users"; 
       }
 
-      // 5. حفظ البيانات في Firestore
       await _firestore.collection(targetCollectionName).doc(userId).set(userData);
       
-      // 6. تسجيل التوكن الخاص بالإشعارات
+      // ✅ تسجيل التوكن مع إرسال الـ Role لضمان توجيه إشعارات الترحيب صح
       await _registerFCMTokenApi(userId, userType, address);
 
       return userCredential.user;
@@ -80,21 +71,3 @@ class ClientDataSource {
       throw e.toString();
     }
   }
-
-  Future<void> _registerFCMTokenApi(String userId, String role, String address) async {
-    try {
-      final fcmToken = await _fcm.getToken();
-      if (fcmToken == null) return;
-      await http.post(
-        Uri.parse("https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction"),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'userId': userId, 
-          'fcmToken': fcmToken, 
-          'role': role, 
-          'address': address
-        }),
-      );
-    } catch (e) {}
-  }
-}
