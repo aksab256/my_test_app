@@ -24,7 +24,6 @@ class DeliveryOffersScreen extends StatefulWidget {
 }
 
 class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
-  String? _statusMessage;
   String _searchTerm = '';
   String _welcomeMessage = 'مرحباً بك..';
 
@@ -57,16 +56,22 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
 
   void _showSnackBar(String msg, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Text(msg, style: const TextStyle(fontFamily: 'Cairo')),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text('إدارة عروضي الحالية', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('إدارة قائمة الأسعار', 
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
         backgroundColor: AppTheme.primaryGreen,
         centerTitle: true,
         elevation: 0,
@@ -84,7 +89,7 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
               _buildSearchBar(),
               Expanded(
                 child: provider.isLoading 
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryGreen))
                   : offers.isEmpty 
                     ? _buildEmptyState()
                     : _buildOffersList(offers),
@@ -96,27 +101,35 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
     );
   }
 
-  // --- الهيدر الاحترافي ---
   Widget _buildHeader(int count) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 30),
       decoration: const BoxDecoration(
         color: AppTheme.primaryGreen,
-        borderRadius: BorderRadius.only(bottomLeft: Radius.circular(30), bottomRight: Radius.circular(30)),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(30), 
+          bottomRight: Radius.circular(30)
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(_welcomeMessage, style: const TextStyle(color: Colors.white, fontSize: 16)),
-          const SizedBox(height: 8),
+          Text(_welcomeMessage, 
+            style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14)),
+          const SizedBox(height: 5),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('قائمة منتجاتك النشطة', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+              const Text('عروضك المتاحة', 
+                style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
-                child: Text('$count منتج', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2), 
+                  borderRadius: BorderRadius.circular(15)
+                ),
+                child: Text('$count منتج', 
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -125,59 +138,84 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
     );
   }
 
+  // الإصلاح الجذري لمشكلة الـ boxShadow في الـ TextField
   Widget _buildSearchBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
-      child: TextField(
-        onChanged: (v) => setState(() => _searchTerm = v),
-        decoration: InputDecoration(
-          hintText: 'ابحث في عروضك...',
-          prefixIcon: const Icon(Icons.search, color: AppTheme.primaryGreen),
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+      padding: const EdgeInsets.fromLTRB(16, -20, 16, 10),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: TextField(
+          onChanged: (v) => setState(() => _searchTerm = v),
+          decoration: InputDecoration(
+            hintText: 'ابحث في منتجاتك...',
+            prefixIcon: const Icon(Icons.search, color: AppTheme.primaryGreen),
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+          ),
         ),
       ),
     );
   }
 
-  // --- قائمة العروض بنظام البطاقات ---
   Widget _buildOffersList(List<ProductOffer> offers) {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: offers.length,
       itemBuilder: (context, index) {
         final offer = offers[index];
-        return Container(
+        return Card(
           margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
-          ),
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           child: Column(
             children: [
               ListTile(
                 contentPadding: const EdgeInsets.all(12),
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    offer.productDetails.imageUrls.first,
-                    width: 60, height: 60, fit: BoxFit.cover,
-                    errorBuilder: (c, e, s) => const Icon(Icons.image_not_supported, size: 40),
+                leading: Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey[200]!),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.network(
+                      offer.productDetails.imageUrls.isNotEmpty ? offer.productDetails.imageUrls.first : '',
+                      fit: BoxFit.cover,
+                      errorBuilder: (c, e, s) => const Icon(Icons.fastfood, color: Colors.grey),
+                    ),
                   ),
                 ),
-                title: Text(offer.productDetails.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                subtitle: Text('تاريخ الإضافة: ${DateFormat('yyyy/MM/dd').format(offer.createdAt)}'),
+                title: Text(offer.productDetails.name, 
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                subtitle: Text('تحديث: ${DateFormat('dd/MM/yyyy').format(offer.createdAt)}',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12)),
                 trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                  icon: const Icon(Icons.delete_sweep, color: Colors.redAccent, size: 28),
                   onPressed: () => _confirmDelete(offer.id),
                 ),
               ),
-              const Divider(height: 1),
-              Padding(
-                padding: const EdgeInsets.all(12),
+              const Divider(height: 1, indent: 20, endIndent: 20),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(20), 
+                    bottomRight: Radius.circular(20)
+                  ),
+                ),
                 child: Column(
                   children: offer.units.asMap().entries.map((entry) {
                     final unitIndex = entry.key;
@@ -186,17 +224,22 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
-                            child: Text(unit.unitName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          ),
-                          const SizedBox(width: 10),
-                          Text('${unit.price} ج.م', style: const TextStyle(color: AppTheme.primaryGreen, fontWeight: FontWeight.bold)),
+                          const Icon(Icons.label_outline, size: 16, color: AppTheme.primaryGreen),
+                          const SizedBox(width: 8),
+                          Text(unit.unitName, style: const TextStyle(fontWeight: FontWeight.w600)),
                           const Spacer(),
-                          InkWell(
-                            onTap: () => _showEditPriceModal(offer, unitIndex),
-                            child: const Text('تعديل السعر', style: TextStyle(color: Colors.blue, fontSize: 12, decoration: TextDecoration.underline)),
+                          Text('${unit.price} ج.م', 
+                            style: const TextStyle(color: AppTheme.primaryGreen, fontWeight: FontWeight.bold, fontSize: 16)),
+                          const SizedBox(width: 15),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              backgroundColor: Colors.blue.withOpacity(0.1),
+                              minimumSize: const Size(60, 30),
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+                            ),
+                            onPressed: () => _showEditPriceModal(offer, unitIndex),
+                            child: const Text('تعديل', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
@@ -215,12 +258,13 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
     final res = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('حذف العرض'),
-        content: const Text('هل أنت متأكد من حذف هذا المنتج من قائمة أسعارك؟'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Text('حذف المنتج', textAlign: TextAlign.right),
+        content: const Text('هل تريد إزالة هذا المنتج من قائمة أسعارك؟ سيختفي من متجر العملاء أيضاً.', textAlign: TextAlign.right),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, elevation: 0),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('تأكيد الحذف', style: TextStyle(color: Colors.white)),
           ),
@@ -229,7 +273,7 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
     );
     if (res == true) {
       await Provider.of<ProductOfferProvider>(context, listen: false).deleteOffer(id);
-      _showSnackBar('تم حذف العرض بنجاح', Colors.green);
+      _showSnackBar('تم الحذف بنجاح', Colors.green);
     }
   }
 
@@ -238,30 +282,49 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 20, right: 20, top: 20),
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+        ),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20, 
+          left: 25, right: 25, top: 20
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('تعديل سعر الوحدة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
             const SizedBox(height: 20),
+            Text('تعديل سعر ${offer.units[index].unitName}', 
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.primaryGreen)),
+            const SizedBox(height: 10),
+            Text(offer.productDetails.name, style: TextStyle(color: Colors.grey[600])),
+            const SizedBox(height: 25),
             TextField(
               controller: controller,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               autofocus: true,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2),
               decoration: InputDecoration(
-                labelText: 'السعر الجديد لـ (${offer.units[index].unitName})',
-                suffixText: 'ج.م',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+                suffixText: 'جنيه مصري',
+                filled: true,
+                fillColor: Colors.grey[100],
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 25),
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 55,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryGreen, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryGreen,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  elevation: 0
+                ),
                 onPressed: () async {
                   final price = double.tryParse(controller.text);
                   if (price != null) {
@@ -272,10 +335,10 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
                     _showSnackBar('تم تحديث السعر بنجاح', Colors.blue);
                   }
                 },
-                child: const Text('حفظ التعديل', style: TextStyle(color: Colors.white, fontSize: 16)),
+                child: const Text('حفظ السعر الجديد', 
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
               ),
             ),
-            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -287,11 +350,10 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.inventory_2_outlined, size: 80, color: Colors.grey[300]),
-          const SizedBox(height: 16),
-          const Text('لا توجد عروض حالياً', style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          const Text('ابدأ بإضافة منتجاتك من شاشة الإضافة', style: TextStyle(color: Colors.grey)),
+          Icon(Icons.search_off_rounded, size: 100, color: Colors.grey[300]),
+          const SizedBox(height: 20),
+          const Text('لم نجد هذا المنتج في قائمتك', 
+            style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -299,7 +361,7 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
 
   Widget _buildBottomBar(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+      height: 75,
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))],
@@ -307,8 +369,8 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildNavBtn(context, Icons.dashboard, 'لوحة التحكم', Colors.blueGrey, DeliveryMerchantDashboardScreen.routeName),
-          _buildNavBtn(context, Icons.store, 'المتجر', Colors.blue, BuyerHomeScreen.routeName),
+          _buildNavBtn(context, FontAwesomeIcons.chartPie, 'الإحصائيات', Colors.blueGrey, DeliveryMerchantDashboardScreen.routeName),
+          _buildNavBtn(context, FontAwesomeIcons.shop, 'عرض المتجر', Colors.blue, BuyerHomeScreen.routeName),
         ],
       ),
     );
@@ -318,13 +380,12 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
     return InkWell(
       onTap: () => Navigator.pushReplacementNamed(context, route),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color),
-          const SizedBox(height: 4),
+          FaIcon(icon, color: color, size: 20),
+          const SizedBox(height: 6),
           Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
         ],
       ),
     );
   }
-}
