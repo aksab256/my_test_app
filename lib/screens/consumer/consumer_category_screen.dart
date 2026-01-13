@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:my_test_app/screens/consumer/consumer_widgets.dart'; 
-import 'package:my_test_app/widgets/buyer_category_ads_banner.dart';
 import 'package:sizer/sizer.dart';
 
 class ConsumerCategoryScreen extends StatefulWidget {
@@ -30,97 +29,105 @@ class _ConsumerCategoryScreenState extends State<ConsumerCategoryScreen> {
           elevation: 0,
           centerTitle: true,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF66BB6A)),
+            icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF43A047)),
             onPressed: () => Navigator.pop(context),
           ),
           title: Text(
             widget.categoryName,
-            style: TextStyle(color: const Color(0xFF2E7D32), fontWeight: FontWeight.w900, fontSize: 16.sp),
+            style: TextStyle(
+              color: const Color(0xFF2E7D32), 
+              fontWeight: FontWeight.w900, 
+              fontSize: 16.sp
+            ),
           ),
         ),
-        body: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Column(
-            children: [
-              const SizedBox(height: 15),
-              // 1. بانر الإعلانات الخاص بالقسم
-              BuyerCategoryAdsBanner(categoryId: widget.mainCategoryId),
-              
-              const SizedBox(height: 20),
-              const ConsumerSectionTitle(title: 'التصنيفات المتاحة'),
-              
-              // 2. شبكة الأقسام الفرعية (النسخة الخاصة بالمستهلك)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 15),
-                child: _buildConsumerSubGrid(),
-              ),
-              
-              const SizedBox(height: 40),
-            ],
-          ),
-        ),
-        // 3. الشريط السفلي للمستهلك بأيقونات واضحة
-        bottomNavigationBar: const ConsumerFooterNav(cartCount: 0, activeIndex: 1), // الـ Index 1 للأقسام
-      ),
-    );
-  }
+        body: Column(
+          children: [
+            const ConsumerSectionTitle(title: 'الأقسام الفرعية المتاحة'),
+            
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                // 🎯 جلب الأقسام الفرعية التي تنتمي لهذا القسم فقط عبر حقل mainId
+                stream: FirebaseFirestore.instance
+                    .collection('subCategory')
+                    .where('mainId', isEqualTo: widget.mainCategoryId) 
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator(color: Color(0xFF43A047)));
+                  }
+                  
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const Center(child: Text("لا توجد أقسام فرعية متاحة حالياً"));
+                  }
+                  
+                  final docs = snapshot.data!.docs;
+                  
+                  return GridView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 15,
+                      mainAxisSpacing: 15,
+                      childAspectRatio: 0.85, 
+                    ),
+                    itemCount: docs.length,
+                    itemBuilder: (context, index) {
+                      final data = docs[index].data() as Map<String, dynamic>;
+                      final String subId = docs[index].id;
+                      final String name = data['name'] ?? '';
+                      final String imageUrl = data['imageUrl'] ?? '';
 
-  // ويدجت شبكة الأقسام الفرعية مدمجة هنا للتبسيط حالياً
-  Widget _buildConsumerSubGrid() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('subCategory')
-          .where('mainCategoryId', isEqualTo: widget.mainCategoryId)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        
-        final docs = snapshot.data!.docs;
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 15,
-            mainAxisSpacing: 15,
-            childAspectRatio: 0.9,
-          ),
-          itemCount: docs.length,
-          itemBuilder: (context, index) {
-            final data = docs[index].data() as Map<String, dynamic>;
-            return GestureDetector(
-              onTap: () {
-                // 🎯 هنا الربط المستقبلي لصفحة منتجات المستهلك
-                print("الذهاب لمنتجات القسم الفرعي: ${data['name']}");
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
-                ),
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                        child: Image.network(data['imageUrl'], fit: BoxFit.cover, width: double.infinity),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(10),
-                      child: Text(
-                        data['name'],
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                    ),
-                  ],
-                ),
+                      return GestureDetector(
+                        onTap: () {
+                          // هنا سيتم التوجيه لاحقاً لصفحة المنتجات
+                          print("الانتقال لمنتجات: $name");
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(15),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05), 
+                                blurRadius: 10,
+                                offset: const Offset(0, 4)
+                              )
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
+                                  child: imageUrl.isNotEmpty 
+                                    ? Image.network(imageUrl, fit: BoxFit.cover, width: double.infinity)
+                                    : Container(color: Colors.grey[100], child: const Icon(Icons.image)),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.all(10),
+                                child: Text(
+                                  name,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
               ),
-            );
-          },
-        );
-      },
+            ),
+          ],
+        ),
+        bottomNavigationBar: const ConsumerFooterNav(cartCount: 0, activeIndex: 1),
+      ),
     );
   }
 }
