@@ -14,7 +14,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ConsumerHomeScreen extends StatefulWidget {
-  // ✅ تم اعتماد h صغيرة بناءً على ملاحظتك وتوحيداً مع main.dart
   static const routeName = '/consumerhome'; 
   const ConsumerHomeScreen({super.key});
 
@@ -48,9 +47,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
     await Future.delayed(const Duration(milliseconds: 500));
 
     NotificationSettings settings = await messaging.requestPermission(
-      alert: true, 
-      badge: true, 
-      sound: true
+      alert: true, badge: true, sound: true
     );
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
@@ -73,11 +70,10 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
 
     overlayEntry = OverlayEntry(
       builder: (context) => _CelebrationWidget(
-        points: points, // ✅ تم تصحيح الخطأ: نستخدم المتغير الممرر للدالة
+        points: points, 
         onDismiss: () => overlayEntry.remove(),
       ),
     );
-
     overlayState.insert(overlayEntry);
   }
 
@@ -131,7 +127,43 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
         toolbarHeight: 90,
         iconTheme: IconThemeData(color: softGreen, size: 28),
         centerTitle: true,
-        // 🎯 تم استخدام StreamBuilder لجلب fullname من Firestore لتجنب أخطاء الـ Build
+        // ✅ التعديل الأول: إضافة أيقونة الإشعارات ومراقبة مجموعة nofictions
+        leading: StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('nofictions')
+              .where('userId', isEqualTo: user?.uid)
+              .orderBy('createdAt', descending: true)
+              .limit(10)
+              .snapshots(),
+          builder: (context, snapshot) {
+            int notificationCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.notifications_active_outlined, color: softGreen, size: 28),
+                  onPressed: () {
+                    // التوجيه لصفحة الإشعارات عند الحاجة
+                  },
+                ),
+                if (notificationCount > 0)
+                  Positioned(
+                    top: 22,
+                    right: 12,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10)),
+                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                      child: Text('$notificationCount', 
+                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
         title: StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('consumers').doc(user?.uid).snapshots(),
           builder: (context, snapshot) {
@@ -159,8 +191,8 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
               int points = 0;
               if (snapshot.hasData && snapshot.data!.exists) {
                 var userData = snapshot.data!.data() as Map<String, dynamic>;
-                // ✅ الحقل الصحيح في Firestore هو loyaltyPoints
                 points = userData['loyaltyPoints'] ?? 0;
+                // ✅ الحفاظ على منطق welcomePointsProcessed الأصلي
                 bool isProcessed = userData['welcomePointsProcessed'] ?? false;
 
                 if (isProcessed && points > 0) {
@@ -194,7 +226,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
     );
   }
 
-  // ... (بقية الـ Widgets كما هي في كودك الأصلي)
+  // --- بقية الـ Widgets المساعدة (نفس كودك الأصلي تماماً) ---
   Widget _buildSmartRadarButton() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
@@ -317,7 +349,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
       );
 }
 
-// كلاس الـ Overlay للاحتفال (Celebration Widget)
+// --- كلاس الاحتفال (نفس منطقك تماماً) ---
 class _CelebrationWidget extends StatefulWidget {
   final int points;
   final VoidCallback onDismiss;
@@ -337,11 +369,8 @@ class _CelebrationWidgetState extends State<_CelebrationWidget> with SingleTicke
     _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _scaleAnimation = CurvedAnimation(parent: _controller, curve: Curves.elasticOut);
     _controller.forward();
-
     Future.delayed(const Duration(seconds: 4), () {
-      if (mounted) {
-        _controller.reverse().then((value) => widget.onDismiss());
-      }
+      if (mounted) _controller.reverse().then((value) => widget.onDismiss());
     });
   }
 
