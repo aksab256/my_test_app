@@ -30,22 +30,15 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initSequence();
-    });
+    // 💡 تم تفريغ initState من طلب الإشعارات الفوري لترك المجال للاحتفالية أولاً
   }
 
-  Future<void> _initSequence() async {
-    await _setupNotifications();
-  }
-
-  Future<void> _setupNotifications() async {
+  // ✅ تعديل: طلب الإشعارات يظهر الآن فقط بعد انتهاء رسالة الترحيب
+  Future<void> _setupNotificationsAfterCelebration() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     FirebaseMessaging messaging = FirebaseMessaging.instance;
-    await Future.delayed(const Duration(milliseconds: 500));
-
     NotificationSettings settings = await messaging.requestPermission(
       alert: true, badge: true, sound: true
     );
@@ -71,7 +64,11 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
     overlayEntry = OverlayEntry(
       builder: (context) => _CelebrationWidget(
         points: points, 
-        onDismiss: () => overlayEntry.remove(),
+        onDismiss: () {
+          overlayEntry.remove();
+          // 🎯 بعد إغلاق الرسالة الترحيبية، نطلب إذن الإشعارات
+          _setupNotificationsAfterCelebration();
+        },
       ),
     );
     overlayState.insert(overlayEntry);
@@ -88,9 +85,13 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
         }
       });
       await prefs.setBool('welcome_anim_shown_v2', true);
+    } else {
+      // إذا كانت قد ظهرت سابقاً، نطلب الإشعارات فوراً عند الدخول
+      _setupNotificationsAfterCelebration();
     }
   }
 
+  // ... (دالة _handleAbaatlyHad كما هي)
   Future<void> _handleAbaatlyHad() async {
     try {
       LocationPermission permission = await Geolocator.checkPermission();
@@ -120,50 +121,14 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
 
     return Scaffold(
       backgroundColor: const Color(0xFFFBFBFB),
-      drawer: const ConsumerSideMenu(),
+      drawer: const ConsumerSideMenu(), // ✅ الشريط الجانبي موجود هنا
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         toolbarHeight: 90,
+        // ✅ زر القائمة الجانبية (leading) سيظهر تلقائياً هنا بفضل الـ Drawer
         iconTheme: IconThemeData(color: softGreen, size: 28),
         centerTitle: true,
-        // ✅ التعديل الأول: إضافة أيقونة الإشعارات ومراقبة مجموعة nofictions
-        leading: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('nofictions')
-              .where('userId', isEqualTo: user?.uid)
-              .orderBy('createdAt', descending: true)
-              .limit(10)
-              .snapshots(),
-          builder: (context, snapshot) {
-            int notificationCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
-            return Stack(
-              alignment: Alignment.center,
-              children: [
-                IconButton(
-                  icon: Icon(Icons.notifications_active_outlined, color: softGreen, size: 28),
-                  onPressed: () {
-                    // التوجيه لصفحة الإشعارات عند الحاجة
-                  },
-                ),
-                if (notificationCount > 0)
-                  Positioned(
-                    top: 22,
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10)),
-                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                      child: Text('$notificationCount', 
-                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
         title: StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('consumers').doc(user?.uid).snapshots(),
           builder: (context, snapshot) {
@@ -185,6 +150,41 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
           }
         ),
         actions: [
+          // ✅ تم نقل الإشعارات هنا بجانب النقاط لعدم حجب زر الـ Menu
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('nofictions')
+                .where('userId', isEqualTo: user?.uid)
+                .orderBy('createdAt', descending: true)
+                .limit(10)
+                .snapshots(),
+            builder: (context, snapshot) {
+              int notificationCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.notifications_active_outlined, color: softGreen, size: 26),
+                    onPressed: () {}, // سيفتح صفحة الإشعارات لاحقاً
+                  ),
+                  if (notificationCount > 0)
+                    Positioned(
+                      top: 25,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10)),
+                        constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                        child: Text('$notificationCount', 
+                          style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
           StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance.collection('consumers').doc(user?.uid).snapshots(),
             builder: (context, snapshot) {
@@ -192,9 +192,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
               if (snapshot.hasData && snapshot.data!.exists) {
                 var userData = snapshot.data!.data() as Map<String, dynamic>;
                 points = userData['loyaltyPoints'] ?? 0;
-                // ✅ الحفاظ على منطق welcomePointsProcessed الأصلي
                 bool isProcessed = userData['welcomePointsProcessed'] ?? false;
-
                 if (isProcessed && points > 0) {
                   _checkFirstTimeWelcome(points);
                 }
@@ -202,6 +200,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
               return _buildPointsBadge(points);
             },
           ),
+          const SizedBox(width: 5),
         ],
       ),
       body: SafeArea(
@@ -226,7 +225,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
     );
   }
 
-  // --- بقية الـ Widgets المساعدة (نفس كودك الأصلي تماماً) ---
+  // (بقية الـ Widgets كما هي في كودك)
   Widget _buildSmartRadarButton() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
@@ -349,7 +348,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
       );
 }
 
-// --- كلاس الاحتفال (نفس منطقك تماماً) ---
+// ✅ تعديل: كلاس الاحتفال أصبح أكبر وأكثر فخامة
 class _CelebrationWidget extends StatefulWidget {
   final int points;
   final VoidCallback onDismiss;
@@ -366,11 +365,14 @@ class _CelebrationWidgetState extends State<_CelebrationWidget> with SingleTicke
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
     _scaleAnimation = CurvedAnimation(parent: _controller, curve: Curves.elasticOut);
     _controller.forward();
+
     Future.delayed(const Duration(seconds: 4), () {
-      if (mounted) _controller.reverse().then((value) => widget.onDismiss());
+      if (mounted) {
+        _controller.reverse().then((value) => widget.onDismiss());
+      }
     });
   }
 
@@ -383,36 +385,38 @@ class _CelebrationWidgetState extends State<_CelebrationWidget> with SingleTicke
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.black26,
+      color: Colors.black45, // تعتيم الخلفية أكثر لتركيز الانتباه
       child: Center(
         child: ScaleTransition(
           scale: _scaleAnimation,
           child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 30),
-            padding: const EdgeInsets.all(25),
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.all(35), // زيادة الحشو الداخلي
+            width: 85.w, // عرض أكبر
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(30),
-              boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.4), blurRadius: 20)],
+              borderRadius: BorderRadius.circular(40),
+              boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.5), blurRadius: 30, spreadRadius: 5)],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text("🎉", style: TextStyle(fontSize: 50)),
-                const SizedBox(height: 10),
-                Text("هدية ترحيبية!", style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.orange)),
-                const SizedBox(height: 10),
+                Text("🎉", style: TextStyle(fontSize: 60.sp)),
+                const SizedBox(height: 15),
+                Text("هدية ترحيبية!", style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w900, color: Colors.orange)),
+                const SizedBox(height: 20),
                 RichText(
                   textAlign: TextAlign.center,
                   text: TextSpan(
-                    style: TextStyle(fontSize: 14.sp, color: Colors.black87, fontFamily: 'Cairo'),
+                    style: TextStyle(fontSize: 16.sp, color: Colors.black87, fontFamily: 'Cairo'),
                     children: [
-                      const TextSpan(text: "أهلاً بك في أكسب، جالك "),
-                      TextSpan(text: "${widget.points} نقطة", style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF2E7D32))),
-                      const TextSpan(text: "\nجمع أكتر.. اكسب أكتر!"),
+                      const TextSpan(text: "أهلاً بك في أكسب، جالك\n"),
+                      TextSpan(text: "${widget.points} نقطة", style: TextStyle(fontSize: 24.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2E7D32))),
+                      const TextSpan(text: "\n\nجمع أكتر.. اكسب أكتر!"),
                     ],
                   ),
                 ),
+                const SizedBox(height: 10),
               ],
             ),
           ),
