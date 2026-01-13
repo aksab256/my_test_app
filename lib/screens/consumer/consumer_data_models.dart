@@ -1,11 +1,11 @@
-// lib/screens/consumer/consumer_data_models.dart                                                               
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class ConsumerCategory {                                  
   final String id;                                        
   final String name;                                      
   final String imageUrl;
   final String? link;                                   
   
-  // 🟢 الحل: تم إضافة 'const' إلى المُنشئ
   const ConsumerCategory({                                        
     required this.id,                                       
     required this.name,                                     
@@ -17,12 +17,32 @@ class ConsumerCategory {
 class ConsumerBanner {                                    
   final String id;                                        
   final String imageUrl;
-  final String link;                                                                                              
+  final String? link; // تركناه لضمان عدم كسر أي كود قديم يعتمد عليه
   
-  // 🟢 الحل: تم إضافة 'const' إلى المُنشئ
+  // 🎯 الإضافات المطلوبة لحل مشكلة الـ Build
+  final String? targetType; 
+  final String? targetId;
+  final String? name;
+
   const ConsumerBanner({                                          
     required this.id,                                       
     required this.imageUrl,
-    required this.link,                                   
+    this.link,
+    this.targetType, // مضاف حديثاً
+    this.targetId,   // مضاف حديثاً
+    this.name,       // مضاف حديثاً
   });
+
+  // إضافة factory لتحويل البيانات من Firestore بشكل آمن
+  factory ConsumerBanner.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return ConsumerBanner(
+      id: doc.id,
+      imageUrl: data['imageUrl'] ?? '',
+      link: data['link'],
+      targetType: data['targetType'], // سيقرأ القيمة لو موجودة في الداتا
+      targetId: data['targetId'],     // سيقرأ القيمة لو موجودة في الداتا
+      name: data['name'] ?? data['title'], // يدعم التسميتين
+    );
+  }
 }
