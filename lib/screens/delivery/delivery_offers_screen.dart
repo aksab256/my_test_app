@@ -389,3 +389,4 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
       ),
     );
   }
+}
