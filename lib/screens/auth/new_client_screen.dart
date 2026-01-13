@@ -284,7 +284,8 @@ class _LogoHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const Icon(Icons.person_add_check_rounded, size: 60, color: Color(0xFF2D9E68)),
+        const Icon(Icons.how_to_reg_rounded, size: 60, color: Color(0xFF2D9E68)),
+
         SizedBox(height: 1.h),
         Text('انضم إلينا الآن',
             style: TextStyle(
