@@ -1,3 +1,15 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+class ClientDataSource {
+  // ✅ يجب التأكد من وجود هذه التعريفات داخل الكلاس
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
+
   Future<User?> registerClient({
     required String fullname,
     required String email,    
@@ -33,11 +45,9 @@
         'isNewUser': true, 
       };
 
-      // 🔵 تعديل منطق المستهلك ليتوافق مع "مستمع" الـ Home
       if (userType == "consumer") {
         userData['loyaltyPoints'] = 0; 
         userData['hasClaimedWelcomeGift'] = false; 
-        // ✅ هذا الحقل حيوي جداً لأن الـ Home يراقبه لإظهار الـ Celebration
         userData['welcomePointsProcessed'] = false; 
       }
 
@@ -71,3 +81,22 @@
       throw e.toString();
     }
   }
+
+  // ✅ تأكد من وجود هذه الدالة داخل الكلاس أيضاً
+  Future<void> _registerFCMTokenApi(String userId, String role, String address) async {
+    try {
+      final fcmToken = await _fcm.getToken();
+      if (fcmToken == null) return;
+      await http.post(
+        Uri.parse("https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction"),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'userId': userId, 
+          'fcmToken': fcmToken, 
+          'role': role, 
+          'address': address
+        }),
+      );
+    } catch (e) {}
+  }
+}
