@@ -132,20 +132,29 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   Future<void> _checkDeliveryStatusAndDisplayIcons() async {
     if (_currentUserId == null) return;
     try {
-      final approvedSnapshot = await _db.collection('deliverySupermarkets')
-          .where("ownerId", isEqualTo: _currentUserId).get();
-
-      if (approvedSnapshot.docs.isNotEmpty) {
-        final docData = approvedSnapshot.docs.first.data();
+      // تم استبدال get بـ snapshots للمراقبة اللحظية
+      _db.collection('deliverySupermarkets')
+          .where("ownerId", isEqualTo: _currentUserId)
+          .snapshots()
+          .listen((snapshot) {
         if (mounted) {
-          setState(() {
-            _deliveryIsActive = docData['isActive'] ?? false;
-            _deliveryPricesAvailable = true;
-          });
+          if (snapshot.docs.isNotEmpty) {
+            final docData = snapshot.docs.first.data();
+            setState(() {
+              _deliveryIsActive = docData['isActive'] ?? false;
+              _deliveryPricesAvailable = true;
+              // إخفاء أيقونة الإعدادات فور وجود مستند لمنع التكرار
+              _deliverySettingsAvailable = false; 
+            });
+          } else {
+            setState(() {
+              _deliverySettingsAvailable = true;
+              _deliveryPricesAvailable = false;
+              _deliveryIsActive = false;
+            });
+          }
         }
-      } else {
-        if (mounted) setState(() => _deliverySettingsAvailable = true);
-      }
+      });
     } catch (e) {
       debugPrint("Delivery Status Error: $e");
     }
