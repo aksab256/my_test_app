@@ -200,7 +200,8 @@ class _OptionCard extends StatelessWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.w900, 
                       fontSize: 15.sp, // يعادل تقريباً 19-20 بكسل
-                      color: isActive ? primary : Colors.blackDE,
+                      color: isActive ? primary : const Color(0xFFDEDEDE),
+
                     ),
                   ),
                   SizedBox(height: 0.5.h),
