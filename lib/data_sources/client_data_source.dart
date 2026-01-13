@@ -30,14 +30,15 @@
         'role': userType,     
         'country': country,
         'createdAt': FieldValue.serverTimestamp(),
-        // ✅ إضافة حالة "مستخدم جديد" لإظهار الرسالة الترحيبية عند أول دخول
         'isNewUser': true, 
       };
 
-      // 🔵 منطق النقاط والهدايا الترحيبية للمستهلك
+      // 🔵 تعديل منطق المستهلك ليتوافق مع "مستمع" الـ Home
       if (userType == "consumer") {
-        userData['loyaltyPoints'] = 0; // القيمة المبدئية قبل تفعيل هدية الترحيب
-        userData['hasClaimedWelcomeGift'] = false; // لم يستلم الهدية بعد
+        userData['loyaltyPoints'] = 0; 
+        userData['hasClaimedWelcomeGift'] = false; 
+        // ✅ هذا الحقل حيوي جداً لأن الـ Home يراقبه لإظهار الـ Celebration
+        userData['welcomePointsProcessed'] = false; 
       }
 
       if (userType == 'seller') {
@@ -63,7 +64,6 @@
 
       await _firestore.collection(targetCollectionName).doc(userId).set(userData);
       
-      // ✅ تسجيل التوكن مع إرسال الـ Role لضمان توجيه إشعارات الترحيب صح
       await _registerFCMTokenApi(userId, userType, address);
 
       return userCredential.user;
