@@ -4,17 +4,16 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'consumer_data_models.dart';
-// 🎯 استيراد صفحة الأقسام لربط الضغط
+// 🎯 استيراد صفحة الأقسام الجديدة للمستهلك
 import 'package:my_test_app/screens/consumer/consumer_category_screen.dart'; 
 
-// 1. الشريط الجانبي (Side Menu)
+// 1. الشريط الجانبي (Side Menu) كما هو
 class ConsumerSideMenu extends StatelessWidget {
   const ConsumerSideMenu({super.key});
 
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Drawer(
@@ -29,9 +28,7 @@ class ConsumerSideMenu extends StatelessWidget {
                   name = data['fullname'] ?? "مستخدِم كسبان";
                 }
                 return UserAccountsDrawerHeader(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(colors: [Color(0xFF43A047), Color(0xFF2E7D32)]),
-                  ),
+                  decoration: const BoxDecoration(color: Color(0xFF43A047)),
                   currentAccountPicture: const CircleAvatar(
                     backgroundColor: Colors.white,
                     child: Icon(Icons.person_rounded, size: 50, color: Color(0xFF43A047)),
@@ -41,37 +38,35 @@ class ConsumerSideMenu extends StatelessWidget {
                 );
               },
             ),
-            _buildDrawerItem(Icons.history_rounded, 'سجل الطلبات', () => Navigator.pushNamed(context, '/consumer-purchases')),
-            _buildDrawerItem(Icons.location_on_outlined, 'عناوين التوصيل', () {}),
-            _buildDrawerItem(Icons.privacy_tip_outlined, 'سياسة الخصوصية', () async {
-              final url = Uri.parse('https://amrshipl83.github.io/aksabprivce/');
-              if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
-            }),
+            ListTile(
+              leading: const Icon(Icons.privacy_tip_outlined, color: Color(0xFF43A047), size: 28),
+              title: const Text('سياسة الخصوصية', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              onTap: () async {
+                final url = Uri.parse('https://amrshipl83.github.io/aksabprivce/');
+                if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
+              },
+            ),
             const Spacer(),
             const Divider(),
-            _buildDrawerItem(Icons.logout_rounded, 'تسجيل الخروج', () async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.clear();
-              await FirebaseAuth.instance.signOut();
-              if (context.mounted) Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-            }, color: Colors.red),
+            ListTile(
+              leading: const Icon(Icons.logout_rounded, color: Colors.red, size: 28),
+              title: const Text('تسجيل الخروج', style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
+              onTap: () async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.clear();
+                await FirebaseAuth.instance.signOut();
+                if (context.mounted) Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+              },
+            ),
             const SizedBox(height: 20),
           ],
         ),
       ),
     );
   }
-
-  Widget _buildDrawerItem(IconData icon, String title, VoidCallback onTap, {Color color = Colors.black87}) {
-    return ListTile(
-      leading: Icon(icon, color: color, size: 26),
-      title: Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color)),
-      onTap: onTap,
-    );
-  }
 }
 
-// 2. شريط التنقل السفلي (Footer Nav) - تم تحديث الأيقونات والمسارات
+// 2. شريط التنقل السفلي (Footer Nav) - تم إرجاعه لـ 4 أيقونات والمسارات الأصلية
 class ConsumerFooterNav extends StatelessWidget {
   final int cartCount;
   final int activeIndex;
@@ -79,35 +74,30 @@ class ConsumerFooterNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -2))],
-      ),
-      child: BottomNavigationBar(
-        currentIndex: activeIndex,
-        selectedItemColor: const Color(0xFF43A047),
-        unselectedItemColor: Colors.grey[400],
-        type: BottomNavigationBarType.fixed,
-        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-        items: [
-          const BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'الرئيسية'),
-          const BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded), label: 'الأقسام'),
-          BottomNavigationBarItem(
-            icon: Badge(
-              label: Text(cartCount.toString()),
-              isLabelVisible: cartCount > 0,
-              child: const Icon(Icons.shopping_basket_rounded),
-            ),
-            label: 'سلتك',
+    return BottomNavigationBar(
+      currentIndex: activeIndex == -1 ? 0 : activeIndex,
+      selectedItemColor: const Color(0xFF43A047),
+      unselectedItemColor: Colors.grey,
+      type: BottomNavigationBarType.fixed,
+      items: [
+        const BottomNavigationBarItem(icon: Icon(Icons.store), label: 'المتجر'),
+        const BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'طلباتي'),
+        BottomNavigationBarItem(
+          icon: Badge(
+            label: Text(cartCount.toString()),
+            isLabelVisible: cartCount > 0,
+            child: const Icon(Icons.shopping_cart),
           ),
-          const BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: 'طلباتي'),
-        ],
-        onTap: (index) {
-          if (index == activeIndex) return;
-          final routes = ['/consumerhome', '/all-categories', '/cart', '/consumer-purchases'];
-          Navigator.pushNamed(context, routes[index]);
-        },
-      ),
+          label: 'السلة',
+        ),
+        const BottomNavigationBarItem(icon: Icon(Icons.person), label: 'حسابي'),
+      ],
+      onTap: (index) {
+        if (index == activeIndex) return;
+        // المسارات الأصلية الموجودة في مشروعك
+        final routes = ['/consumerhome', '/consumer-purchases', '/cart', '/myDetails'];
+        Navigator.pushNamed(context, routes[index]);
+      },
     );
   }
 }
@@ -119,13 +109,10 @@ class ConsumerSectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF2D3142))),
-          const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-        ],
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -143,13 +130,12 @@ class ConsumerCategoriesBanner extends StatelessWidget {
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 10),
         itemCount: categories.length,
         itemBuilder: (context, index) {
           final category = categories[index];
           return GestureDetector(
             onTap: () {
-              // 🎯 التوجيه لصفحة الأقسام الجديدة للمستهلك
+              // 🎯 التوجيه لصفحة الأقسام الجديدة (النسخة المستقلة)
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -160,31 +146,16 @@ class ConsumerCategoriesBanner extends StatelessWidget {
                 ),
               );
             },
-            child: Container(
-              width: 85,
-              margin: const EdgeInsets.symmetric(horizontal: 5),
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
               child: Column(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF43A047).withOpacity(0.2), width: 2),
-                    ),
-                    child: CircleAvatar(
-                      radius: 32,
-                      backgroundColor: Colors.grey[100],
-                      backgroundImage: NetworkImage(category.imageUrl),
-                    ),
+                  CircleAvatar(
+                    radius: 30, 
+                    backgroundImage: NetworkImage(category.imageUrl)
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    category.name,
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF455A64)),
-                  ),
+                  const SizedBox(height: 5),
+                  Text(category.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
