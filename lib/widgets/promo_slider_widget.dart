@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../screens/consumer/consumer_data_models.dart';
 
-// تأكد من مسار واسم الملف الصحيح - غالباً الحروف سمول في flutter
-import '../screens/consumer/consumer_subcategory_screen.dart'; // تأكد من الاسم هنا
+// التصحيح النهائي بناءً على ملفاتك الحقيقية
+import '../screens/consumer/consumer_category_screen.dart'; 
 import '../screens/consumer/consumer_product_list_screen.dart'; 
 import '../screens/consumer/MarketplaceHomeScreen.dart'; 
 
@@ -54,17 +54,18 @@ class _PromoSliderWidgetState extends State<PromoSliderWidget> {
   }
 
   void _handleNavigation(ConsumerBanner banner) {
-    // حل مشكلة الـ Null Safety بإضافة القيمة الافتراضية ''
+    // حل مشكلة الـ Null Safety لإرضاء مترجم جوجل (Compiler)
     final String type = banner.targetType ?? ''; 
     final String targetId = banner.targetId ?? '';
-    final String name = banner.name ?? 'عرض جديد';
+    final String name = banner.name ?? 'عرض خاص';
 
     switch (type) {
       case 'CATEGORY':
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => ConsumerSubCategoryScreen(
+            // تأكد أن الكلاس اسمه ConsumerCategoryScreen داخل الملف
+            builder: (context) => ConsumerCategoryScreen(
               mainCategoryId: targetId,
               ownerId: widget.currentOwnerId ?? '', 
               mainCategoryName: name,
@@ -74,6 +75,7 @@ class _PromoSliderWidgetState extends State<PromoSliderWidget> {
         break;
 
       case 'SUB_CATEGORY':
+        // إذا كان لديك صفحة فرعية للمنتجات
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -98,7 +100,7 @@ class _PromoSliderWidgetState extends State<PromoSliderWidget> {
         break;
 
       default:
-        debugPrint("نوع غير مدعوم: $type");
+        debugPrint("Banner type not supported or null: $type");
     }
   }
 
@@ -128,16 +130,24 @@ class _PromoSliderWidgetState extends State<PromoSliderWidget> {
                 child: Container(
                   margin: const EdgeInsets.symmetric(horizontal: 8),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))
+                    ],
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(15),
                     child: CachedNetworkImage(
                       imageUrl: banner.imageUrl,
                       fit: BoxFit.cover,
-                      placeholder: (context, url) => Container(color: Colors.grey[200]),
-                      errorWidget: (context, url, error) => const Icon(Icons.error),
+                      placeholder: (context, url) => Container(
+                        color: Colors.grey[100],
+                        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        color: Colors.grey[200],
+                        child: const Icon(Icons.broken_image, color: Colors.grey),
+                      ),
                     ),
                   ),
                 ),
@@ -145,7 +155,7 @@ class _PromoSliderWidgetState extends State<PromoSliderWidget> {
             },
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         _buildDotsIndicator(),
       ],
     );
@@ -157,12 +167,12 @@ class _PromoSliderWidgetState extends State<PromoSliderWidget> {
       children: widget.banners.asMap().entries.map((entry) {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 300),
-          width: _currentPage == entry.key ? 20 : 7,
-          height: 7,
-          margin: const EdgeInsets.symmetric(horizontal: 4),
+          width: _currentPage == entry.key ? 18 : 6,
+          height: 6,
+          margin: const EdgeInsets.symmetric(horizontal: 3),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
-            color: _currentPage == entry.key ? Colors.green[700] : Colors.grey[300],
+            color: _currentPage == entry.key ? Colors.green[700] : Colors.grey[400],
           ),
         );
       }).toList(),
