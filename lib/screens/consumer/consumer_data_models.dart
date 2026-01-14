@@ -17,9 +17,10 @@ class ConsumerCategory {
 class ConsumerBanner {                                    
   final String id;                                        
   final String imageUrl;
-  final String? link; // تركناه لضمان عدم كسر أي كود قديم يعتمد عليه
+  final String? link; 
   
-  // 🎯 الإضافات المطلوبة لحل مشكلة الـ Build
+  // 🎯 الإضافات المطلوبة لدعم التوجيه الجديد وحل مشكلة الـ Build
+  final String? linkType;   // 👈 تمت الإضافة هنا
   final String? targetType; 
   final String? targetId;
   final String? name;
@@ -28,21 +29,22 @@ class ConsumerBanner {
     required this.id,                                       
     required this.imageUrl,
     this.link,
-    this.targetType, // مضاف حديثاً
-    this.targetId,   // مضاف حديثاً
-    this.name,       // مضاف حديثاً
+    this.linkType,     // 👈 تمت الإضافة هنا
+    this.targetType, 
+    this.targetId,   
+    this.name,       
   });
 
-  // إضافة factory لتحويل البيانات من Firestore بشكل آمن
   factory ConsumerBanner.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return ConsumerBanner(
       id: doc.id,
       imageUrl: data['imageUrl'] ?? '',
       link: data['link'],
-      targetType: data['targetType'], // سيقرأ القيمة لو موجودة في الداتا
-      targetId: data['targetId'],     // سيقرأ القيمة لو موجودة في الداتا
-      name: data['name'] ?? data['title'], // يدعم التسميتين
+      linkType: data['linkType'],     // 👈 سحب القيمة من الفايربيز
+      targetType: data['targetType'], 
+      targetId: data['targetId'],     
+      name: data['name'] ?? data['title'], 
     );
   }
 }
