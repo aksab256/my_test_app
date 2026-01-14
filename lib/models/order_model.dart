@@ -25,7 +25,7 @@ class OrderModel {
     required this.totalAmount,
   });
 
-  // 1. الـ Factory الخاص بالموردين (كولكشن orders) - نتركه كما هو
+  // 1. الـ Factory الأصلي (للموردين - كولكشن orders)
   factory OrderModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
@@ -62,12 +62,10 @@ class OrderModel {
     );
   }
 
-  // 🎯 2. الـ Factory المطور للمستهلكين (كولكشن consumerorders) 
-  // تم ضبطه ليناسب صورة الفايربيز التي أرسلتها (أبو الشام ومحمود)
+  // 🎯 2. الـ Factory المطور للمستهلكين (كولكشن consumerorders)
   factory OrderModel.fromConsumerFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    // أ- معالجة التاريخ: نضمن عدم حدوث كراش لو التنسيق اختلف
     DateTime finalDate;
     try {
       if (data['orderDate'] is Timestamp) {
@@ -79,37 +77,32 @@ class OrderModel {
       finalDate = DateTime.now();
     }
 
-    // ب- مطابقة المبالغ: المستهلك يستخدم finalAmount بدلاً من netTotal
-    final double netTotal = (data['finalAmount'] as num?)?.toDouble() ?? 
-                            (data['totalAmount'] as num?)?.toDouble() ?? 0.0;
+    final double netTotal = (data['finalAmount'] as num?)?.toDouble() ?? 0.0;
     final double subtotal = (data['subtotalPrice'] as num?)?.toDouble() ?? netTotal;
-    final double points = (data['pointsUsed'] as num?)?.toDouble() ?? 0.0;
 
-    // ج- بناء بيانات المشتري (محمود): الفايربيز يضع الحقول في الـ Root وليس داخل Map
-    // هنا ننسخ بيانات BuyerDetailsModel يدوياً لضمان الدقة
-    final buyerDetails = BuyerDetailsModel(
+    final buyerInfo = BuyerDetailsModel(
       name: data['customerName'] ?? 'عميل مستهلك',
-      phone: data['customerPhone'] ?? '', 
+      phone: data['customerPhone'] ?? '',
       address: data['deliveryAddress'] ?? data['customerAddress'] ?? 'عنوان المستهلك',
     );
 
-    // د- تحويل الأصناف: معالجة كل صنف على حدة (Try-Catch داخلي)
+    // تحويل الأصناف مع مراعاة الحقول الموجودة في الـ OrderItemModel فقط
     List<OrderItemModel> parsedItems = [];
     if (data['items'] is List) {
       for (var itemData in (data['items'] as List)) {
         try {
           if (itemData is Map<String, dynamic>) {
+            // نستخدم fromMap لأنها تتعامل داخلياً مع حقل 'price'
             parsedItems.add(OrderItemModel.fromMap(itemData));
           }
         } catch (e) {
-          // Fallback في حالة اختلاف مسميات حقول الأصناف (مثل price بدلاً من unitPrice)
+          // Fallback يدوي يتطابق تماماً مع الـ Constructor بتاعك
           parsedItems.add(OrderItemModel(
-            productId: itemData['productId'] ?? '',
             name: itemData['name'] ?? 'صنف غير معروف',
-            quantity: (itemData['quantity'] ?? 1).toInt(),
+            quantity: (itemData['quantity'] ?? 0).toInt(),
+            unit: itemData['unit'] ?? '',
             unitPrice: (itemData['price'] ?? 0).toDouble(),
-            offerId: itemData['offerId'] ?? '',
-            unitIndex: (itemData['unitIndex'] ?? 0).toInt(),
+            imageUrl: itemData['imageUrl'] ?? '',
           ));
         }
       }
@@ -117,13 +110,13 @@ class OrderModel {
 
     return OrderModel(
       id: doc.id,
-      sellerId: data['supermarketId'] ?? '', // نستخدم المعرف الموجود في الصورة
+      sellerId: data['supermarketId'] ?? '', 
       orderDate: finalDate,
       status: data['status'] ?? 'new-order',
-      buyerDetails: buyerDetails,
+      buyerDetails: buyerInfo,
       items: parsedItems,
       grossTotal: subtotal,
-      cashbackApplied: points,
+      cashbackApplied: (data['pointsUsed'] as num?)?.toDouble() ?? 0.0,
       totalAmount: netTotal,
     );
   }
@@ -133,8 +126,8 @@ class OrderModel {
       case 'new-order': return 'طلب جديد';
       case 'processing': return 'قيد التجهيز';
       case 'shipped': return 'تم الشحن';
-      case 'delivered': return 'تم التسليم ✅';
-      case 'cancelled': return 'ملغى ❌';
+      case 'delivered': return 'تم التسليم';
+      case 'cancelled': return 'ملغى';
       default: return 'طلب جديد';
     }
   }
