@@ -1,4 +1,3 @@
-// lib/models/order_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:my_test_app/models/buyer_details_model.dart';
 import 'package:my_test_app/models/order_item_model.dart';
@@ -26,7 +25,7 @@ class OrderModel {
     required this.totalAmount,
   });
 
-  // 1. الـ Factory الأصلي (للموردين - كولكشن orders)
+  // 1. الـ Factory الخاص بالموردين (كولكشن orders) - نتركه كما هو
   factory OrderModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
@@ -63,38 +62,68 @@ class OrderModel {
     );
   }
 
-  // 🎯 2. الـ Factory الجديد (للمستهلكين - كولكشن consumerorders)
+  // 🎯 2. الـ Factory المطور للمستهلكين (كولكشن consumerorders) 
+  // تم ضبطه ليناسب صورة الفايربيز التي أرسلتها (أبو الشام ومحمود)
   factory OrderModel.fromConsumerFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
-    // معالجة تاريخ المستهلك
+    // أ- معالجة التاريخ: نضمن عدم حدوث كراش لو التنسيق اختلف
     DateTime finalDate;
-    if (data['orderDate'] is Timestamp) {
-      finalDate = (data['orderDate'] as Timestamp).toDate();
-    } else {
+    try {
+      if (data['orderDate'] is Timestamp) {
+        finalDate = (data['orderDate'] as Timestamp).toDate();
+      } else {
+        finalDate = DateTime.now();
+      }
+    } catch (_) {
       finalDate = DateTime.now();
     }
 
-    // مطابقة المبالغ (في المستهلك نستخدم finalAmount و subtotalPrice)
-    final double netTotal = (data['finalAmount'] as num?)?.toDouble() ?? 0.0;
+    // ب- مطابقة المبالغ: المستهلك يستخدم finalAmount بدلاً من netTotal
+    final double netTotal = (data['finalAmount'] as num?)?.toDouble() ?? 
+                            (data['totalAmount'] as num?)?.toDouble() ?? 0.0;
     final double subtotal = (data['subtotalPrice'] as num?)?.toDouble() ?? netTotal;
+    final double points = (data['pointsUsed'] as num?)?.toDouble() ?? 0.0;
+
+    // ج- بناء بيانات المشتري (محمود): الفايربيز يضع الحقول في الـ Root وليس داخل Map
+    // هنا ننسخ بيانات BuyerDetailsModel يدوياً لضمان الدقة
+    final buyerDetails = BuyerDetailsModel(
+      name: data['customerName'] ?? 'عميل مستهلك',
+      phone: data['customerPhone'] ?? '', 
+      address: data['deliveryAddress'] ?? data['customerAddress'] ?? 'عنوان المستهلك',
+    );
+
+    // د- تحويل الأصناف: معالجة كل صنف على حدة (Try-Catch داخلي)
+    List<OrderItemModel> parsedItems = [];
+    if (data['items'] is List) {
+      for (var itemData in (data['items'] as List)) {
+        try {
+          if (itemData is Map<String, dynamic>) {
+            parsedItems.add(OrderItemModel.fromMap(itemData));
+          }
+        } catch (e) {
+          // Fallback في حالة اختلاف مسميات حقول الأصناف (مثل price بدلاً من unitPrice)
+          parsedItems.add(OrderItemModel(
+            productId: itemData['productId'] ?? '',
+            name: itemData['name'] ?? 'صنف غير معروف',
+            quantity: (itemData['quantity'] ?? 1).toInt(),
+            unitPrice: (itemData['price'] ?? 0).toDouble(),
+            offerId: itemData['offerId'] ?? '',
+            unitIndex: (itemData['unitIndex'] ?? 0).toInt(),
+          ));
+        }
+      }
+    }
 
     return OrderModel(
       id: doc.id,
-      sellerId: data['supermarketId'] ?? '', // المعرف هنا اسمه supermarketId
+      sellerId: data['supermarketId'] ?? '', // نستخدم المعرف الموجود في الصورة
       orderDate: finalDate,
       status: data['status'] ?? 'new-order',
-      // تحويل بيانات العميل لهيكل BuyerDetailsModel
-      buyerDetails: BuyerDetailsModel(
-        name: data['customerName'] ?? 'عميل مستهلك',
-        phone: data['customerPhone'] ?? '',
-        address: data['customerAddress'] ?? '',
-      ),
-      items: (data['items'] as List<dynamic>? ?? [])
-          .map((item) => OrderItemModel.fromMap(item as Map<String, dynamic>))
-          .toList(),
+      buyerDetails: buyerDetails,
+      items: parsedItems,
       grossTotal: subtotal,
-      cashbackApplied: (data['pointsUsed'] as num?)?.toDouble() ?? 0.0,
+      cashbackApplied: points,
       totalAmount: netTotal,
     );
   }
@@ -104,8 +133,8 @@ class OrderModel {
       case 'new-order': return 'طلب جديد';
       case 'processing': return 'قيد التجهيز';
       case 'shipped': return 'تم الشحن';
-      case 'delivered': return 'تم التسليم';
-      case 'cancelled': return 'ملغى';
+      case 'delivered': return 'تم التسليم ✅';
+      case 'cancelled': return 'ملغى ❌';
       default: return 'طلب جديد';
     }
   }
