@@ -7,7 +7,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:my_test_app/screens/consumer/consumer_store_search_screen.dart';
 import 'package:my_test_app/screens/consumer/points_loyalty_screen.dart';
-// 🎯 تم إضافة استيراد صفحة الأقسام الجديدة للمستهلك
 import 'package:my_test_app/screens/consumer/consumer_category_screen.dart'; 
 import 'package:my_test_app/widgets/promo_slider_widget.dart'; 
 import 'package:latlong2/latlong.dart';
@@ -32,11 +31,11 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
   @override
   void initState() {
     super.initState();
-    // التحقق من النقاط والترحيب عند بدء التشغيل
     _checkInitialPoints();
+    // 🔔 طلب إذن الإشعارات فور تشغيل التطبيق لضمان ظهور الرسالة للمستخدم
+    _requestNotificationPermissions();
   }
 
-  // ميثود مساعدة للتأكد من حالة النقاط والترحيب
   void _checkInitialPoints() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -52,22 +51,23 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
     }
   }
 
-  Future<void> _setupNotificationsAfterCelebration() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
+  // ميثود محسنة لطلب إذن الإشعارات وتحديث الـ Token
+  Future<void> _requestNotificationPermissions() async {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
     NotificationSettings settings = await messaging.requestPermission(
-      alert: true, badge: true, sound: true
+      alert: true, badge: true, sound: true, provisional: false,
     );
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      String? token = await messaging.getToken();
-      if (token != null) {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'fcmToken': token,
-          'lastTokenUpdate': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        String? token = await messaging.getToken();
+        if (token != null) {
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+            'fcmToken': token,
+            'lastTokenUpdate': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
       }
     }
   }
@@ -84,7 +84,6 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
         points: points, 
         onDismiss: () {
           overlayEntry.remove();
-          _setupNotificationsAfterCelebration();
         },
       ),
     );
@@ -97,13 +96,9 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
     
     if (!shown) {
       Future.microtask(() {
-        if (mounted) {
-          _showCelebrationOverlay(points);
-        }
+        if (mounted) _showCelebrationOverlay(points);
       });
       await prefs.setBool('welcome_anim_shown_v2', true);
-    } else {
-      _setupNotificationsAfterCelebration();
     }
   }
 
@@ -118,14 +113,12 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
 
       if (!mounted) return;
       Navigator.pushNamed(context, '/abaatly-had', arguments: {
-        'location': currentLatLng,
-        'isStoreOwner': false,
+        'location': currentLatLng, 'isStoreOwner': false,
       });
     } catch (e) {
       if (!mounted) return;
       Navigator.pushNamed(context, '/abaatly-had', arguments: {
-        'location': const LatLng(30.0444, 31.2357),
-        'isStoreOwner': false,
+        'location': const LatLng(30.0444, 31.2357), 'isStoreOwner': false,
       });
     }
   }
@@ -152,9 +145,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
               if (snapshot.hasData && snapshot.data!.exists) {
                 final data = snapshot.data!.data() as Map<String, dynamic>;
                 final fullStr = data['fullname']?.toString() ?? "";
-                if (fullStr.isNotEmpty) {
-                  firstName = fullStr.split(' ').first;
-                }
+                if (fullStr.isNotEmpty) firstName = fullStr.split(' ').first;
               }
               return Column(
                 children: [
@@ -193,59 +184,75 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
             ),
           ),
         ),
-        // 🎯 الـ Index 0 للرئيسية
         bottomNavigationBar: const ConsumerFooterNav(cartCount: 0, activeIndex: 0),
       ),
     );
   }
 
-  // --- Widgets ---
-
-  // 🛠️ تم تحديث منطق الأيقونة هنا ليتناسب مع Firestore ومعالجة الإشعارات غير المقروءة
+  // 🛠️ منسدلة الإشعارات الذكية المحدثة
   Widget _buildNotificationIcon(String? uid) {
     if (uid == null) return const SizedBox.shrink();
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('notifications') // التصحيح من nofictions إلى notifications
+          .collection('notifications')
           .where('userId', isEqualTo: uid)
-          .where('isRead', isEqualTo: false) // جلب الإشعارات الجديدة فقط
+          .orderBy('createdAt', descending: true)
+          .limit(10) 
           .snapshots(),
       builder: (context, snapshot) {
         int notificationCount = snapshot.hasData ? snapshot.data!.docs.length : 0;
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            IconButton(
-              icon: Icon(
-                notificationCount > 0 
-                  ? Icons.notifications_active 
-                  : Icons.notifications_active_outlined, 
-                color: softGreen, 
-                size: 26
-              ),
-              onPressed: () => Navigator.pushNamed(context, '/notifications'), 
-            ),
-            if (notificationCount > 0)
-              Positioned(
-                top: 25,
-                right: 8,
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: Colors.red, 
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white, width: 1),
-                  ),
-                  constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
-                  child: Text(
-                    notificationCount > 9 ? '+9' : '$notificationCount', 
-                    style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
+        
+        return PopupMenuButton<int>(
+          offset: const Offset(0, 55),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          icon: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(Icons.notifications_active_outlined, color: softGreen, size: 26),
+              if (notificationCount > 0)
+                Positioned(
+                  top: 0, right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                    constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
+                    child: Text('$notificationCount', 
+                      style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
+          itemBuilder: (context) {
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              return [
+                const PopupMenuItem(enabled: false, child: Center(child: Text("لا توجد إشعارات حالياً", style: TextStyle(fontFamily: 'Cairo', fontSize: 11)))),
+              ];
+            }
+            return snapshot.data!.docs.map((doc) {
+              Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+              return PopupMenuItem<int>(
+                enabled: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.circle, size: 8, color: softGreen),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(data['title'] ?? 'تنبيه', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, fontFamily: 'Cairo'))),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(data['message'] ?? data['body'] ?? '', style: const TextStyle(fontSize: 10, color: Colors.black54, fontFamily: 'Cairo')),
+                    const Divider(),
+                  ],
+                ),
+              );
+            }).toList();
+          },
         );
       },
     );
@@ -281,22 +288,12 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
           child: Row(
             children: [
               const SizedBox(width: 20),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
-                child: const Icon(Icons.radar, color: Colors.white, size: 35),
-              ),
+              Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle), child: const Icon(Icons.radar, color: Colors.white, size: 35)),
               const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("اكتشف المحلات القريبة", style: TextStyle(color: Colors.white, fontSize: 13.sp, fontWeight: FontWeight.w900)),
-                    Text("تفعيل رادار البحث الذكي", style: TextStyle(color: Colors.white70, fontSize: 9.sp, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
+              Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text("اكتشف المحلات القريبة", style: TextStyle(color: Colors.white, fontSize: 13.sp, fontWeight: FontWeight.w900)),
+                Text("تفعيل رادار البحث الذكي", style: TextStyle(color: Colors.white70, fontSize: 9.sp, fontWeight: FontWeight.bold)),
+              ])),
               const Icon(Icons.my_location, color: Colors.white, size: 28),
               const SizedBox(width: 25),
             ],
@@ -318,29 +315,15 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
         ),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
-              child: Icon(Icons.delivery_dining, color: Colors.white, size: 28.sp),
-            ),
+            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle), child: Icon(Icons.delivery_dining, color: Colors.white, size: 28.sp)),
             const SizedBox(width: 15),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("ابعتلي حد", style: TextStyle(color: Colors.white, fontSize: 15.sp, fontWeight: FontWeight.w900)),
-                  Text("مندوب حر لنقل أغراضك", style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 9.sp, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            ),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text("ابعتلي حد", style: TextStyle(color: Colors.white, fontSize: 15.sp, fontWeight: FontWeight.w900)),
+              Text("مندوب حر لنقل أغراضك", style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 9.sp, fontWeight: FontWeight.bold)),
+            ])),
             ElevatedButton(
               onPressed: _handleAbaatlyHad,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.orange[900],
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.orange[900], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
               child: Text("اطلب الآن", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11.sp)),
             ),
           ],
@@ -354,11 +337,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.amber.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.orange.withOpacity(0.5)),
-          ),
+          decoration: BoxDecoration(color: Colors.amber.withOpacity(0.15), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.orange.withOpacity(0.5))),
           child: Row(children: [
             const Icon(Icons.stars, color: Colors.orange, size: 22),
             const SizedBox(width: 6),
@@ -371,7 +350,6 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
         future: dataService.fetchMainCategories(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          // 🎯 تم تمرير قائمة الأقسام ليكون التوجيه من داخل الويدجت
           return ConsumerCategoriesBanner(categories: snapshot.data ?? []);
         },
       );
@@ -381,21 +359,15 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
           if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
-          
-          return PromoSliderWidget(
-            banners: snapshot.data!, 
-            height: 160.0 
-          );
+          return PromoSliderWidget(banners: snapshot.data!, height: 160.0);
         },
       );
 }
 
-// كلاس الاحتفالية
 class _CelebrationWidget extends StatefulWidget {
   final int points;
   final VoidCallback onDismiss;
   const _CelebrationWidget({required this.points, required this.onDismiss});
-
   @override
   State<_CelebrationWidget> createState() => _CelebrationWidgetState();
 }
@@ -416,10 +388,7 @@ class _CelebrationWidgetState extends State<_CelebrationWidget> with SingleTicke
   }
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  void dispose() { _controller.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
@@ -432,11 +401,7 @@ class _CelebrationWidgetState extends State<_CelebrationWidget> with SingleTicke
             margin: const EdgeInsets.symmetric(horizontal: 20),
             padding: const EdgeInsets.all(35),
             width: 85.w,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(40),
-              boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.5), blurRadius: 30, spreadRadius: 5)],
-            ),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(40), boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.5), blurRadius: 30, spreadRadius: 5)]),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -444,17 +409,11 @@ class _CelebrationWidgetState extends State<_CelebrationWidget> with SingleTicke
                 const SizedBox(height: 15),
                 Text("هدية ترحيبية!", style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w900, color: Colors.orange)),
                 const SizedBox(height: 20),
-                RichText(
-                  textAlign: TextAlign.center,
-                  text: TextSpan(
-                    style: TextStyle(fontSize: 14.sp, color: Colors.black87, fontFamily: 'Cairo'),
-                    children: [
-                      const TextSpan(text: "أهلاً بك في أكسب، جالك\n"),
-                      TextSpan(text: "${widget.points} نقطة", style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2E7D32))),
-                      const TextSpan(text: "\n\nجمع أكتر.. اكسب أكتر!"),
-                    ],
-                  ),
-                ),
+                RichText(textAlign: TextAlign.center, text: TextSpan(style: TextStyle(fontSize: 14.sp, color: Colors.black87, fontFamily: 'Cairo'), children: [
+                  const TextSpan(text: "أهلاً بك في أكسب، جالك\n"),
+                  TextSpan(text: "${widget.points} نقطة", style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2E7D32))),
+                  const TextSpan(text: "\n\nجمع أكتر.. اكسب أكتر!"),
+                ])),
                 const SizedBox(height: 10),
               ],
             ),
