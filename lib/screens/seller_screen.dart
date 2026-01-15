@@ -24,7 +24,7 @@ class SellerScreen extends StatefulWidget {
 class _SellerScreenState extends State<SellerScreen> {
   String _activeRoute = 'نظرة عامة';
   Widget _activeScreen = const SellerOverviewScreen();
-  final List<Map<String, String>> _recentNotifications = [];
+  // تم الاستغناء عن المصفوفة اليدوية واستبدالها بالـ Stream في الـ UI
 
   @override
   void initState() {
@@ -62,7 +62,6 @@ class _SellerScreenState extends State<SellerScreen> {
 
         if (token != null && uid != null) {
           // تحديث التوكن في المجموعة المناسبة (sellers أو subUsers)
-          // ملاحظة: الموظف نحدث بياناته في subUsers باستخدام هاتفه أو الـ UID
           String collection = (UserSession.isSubUser) ? 'subUsers' : 'sellers';
           
           // تحديث Firestore (نستخدم merge لعدم حذف البيانات القديمة)
@@ -94,10 +93,6 @@ class _SellerScreenState extends State<SellerScreen> {
     }
   }
 
-  void _showNotificationsList() {
-    // كود عرض قائمة الإشعارات (يمكنك تركه كما هو لديك)
-  }
-
   @override
   Widget build(BuildContext context) {
     final controller = Provider.of<SellerDashboardController>(context);
@@ -111,24 +106,73 @@ class _SellerScreenState extends State<SellerScreen> {
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
         actions: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.notifications_none_rounded, size: 28),
-                onPressed: _showNotificationsList,
-              ),
-              if (_recentNotifications.isNotEmpty)
-                Positioned(
-                  top: 15,
-                  right: 15,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 1.5)),
-                  ),
-                )
-            ],
+          // ✅ منطق الإشعارات المدمج (تشغيل الأيقونة الأصلية)
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('notifications')
+                .where('userId', isEqualTo: UserSession.userId)
+                .orderBy('createdAt', descending: true)
+                .limit(10)
+                .snapshots(),
+            builder: (context, snapshot) {
+              bool hasNotifications = snapshot.hasData && snapshot.data!.docs.isNotEmpty;
+
+              return PopupMenuButton<int>(
+                offset: const Offset(0, 50),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                // 🎯 الحفاظ على نفس تصميم الـ Stack والأيقونة الأصلية
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Icon(Icons.notifications_none_rounded, size: 28),
+                    ),
+                    if (hasNotifications)
+                      Positioned(
+                        top: 15,
+                        right: 15,
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent, 
+                            shape: BoxShape.circle, 
+                            border: Border.all(color: Colors.white, width: 1.5)
+                          ),
+                        ),
+                      )
+                  ],
+                ),
+                itemBuilder: (context) {
+                  if (!hasNotifications) {
+                    return [
+                      const PopupMenuItem(
+                        enabled: false,
+                        child: Center(child: Text("لا توجد إشعارات", style: TextStyle(fontFamily: 'Cairo', fontSize: 12))),
+                      )
+                    ];
+                  }
+                  return snapshot.data!.docs.map((doc) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    return PopupMenuItem<int>(
+                      enabled: false,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(data['title'] ?? 'تنبيه جديد', 
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, fontFamily: 'Cairo', color: Colors.black)),
+                          const SizedBox(height: 4),
+                          Text(data['message'] ?? '', 
+                            style: const TextStyle(fontSize: 11, color: Colors.black54, fontFamily: 'Cairo')),
+                          const Divider(),
+                        ],
+                      ),
+                    );
+                  }).toList();
+                },
+              );
+            }
           ),
           const SizedBox(width: 10),
         ],
@@ -154,7 +198,6 @@ class _SellerScreenState extends State<SellerScreen> {
       drawer: SellerSidebar(
         userData: SellerUserData(
           fullname: controller.data.sellerName,
-          // 🎯 تمرير حالة الموظف للتحكم في ظهور القوائم
           isSubUser: UserSession.isSubUser, 
         ),
         onMenuSelected: _selectMenuItem,
@@ -166,4 +209,3 @@ class _SellerScreenState extends State<SellerScreen> {
     );
   }
 }
-
