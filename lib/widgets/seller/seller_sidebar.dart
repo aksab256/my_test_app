@@ -1,6 +1,7 @@
 // lib/widgets/seller/seller_sidebar.dart
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
+import 'package:url_launcher/url_launcher.dart'; // تم إضافة الاستيراد لفتح الرابط
 import 'package:my_test_app/services/user_session.dart';
 import 'package:my_test_app/screens/seller/seller_overview_screen.dart';
 import 'package:my_test_app/screens/seller/add_offer_screen.dart';
@@ -14,7 +15,7 @@ import 'package:my_test_app/screens/platform_balance_screen.dart';
 
 class SellerUserData {
   final String? fullname;
-  final bool isSubUser; // أضفناها للتوافق مع التعديلات السابقة
+  final bool isSubUser; 
   SellerUserData({this.fullname, this.isSubUser = false});
 }
 
@@ -100,6 +101,14 @@ class _SellerSidebarState extends State<SellerSidebar> {
     _menuItems = items;
   }
 
+  // دالة مساعدة لفتح الرابط
+  void _launchPrivacyUrl() async {
+    final Uri url = Uri.parse('https://amrshipl83.github.io/aksabprivce/');
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      debugPrint('Could not launch $url');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Drawer(
@@ -118,7 +127,6 @@ class _SellerSidebarState extends State<SellerSidebar> {
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero,
-              // 🎯 التصحيح هنا: إضافة .cast<Widget>() لضمان النوع الصحيح
               children: _menuItems.map((item) {
                 return _SidebarItem(
                   icon: item['icon'] as IconData,
@@ -135,15 +143,28 @@ class _SellerSidebarState extends State<SellerSidebar> {
             ),
           ),
           const Divider(color: Colors.white10),
+          // المساحة الآمنة السفلية للأزرار الثابتة
           SafeArea(
             top: false,
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 2.h, vertical: 1.h),
-              child: TextButton.icon(
-                onPressed: widget.onLogout,
-                icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-                label: Text('تسجيل الخروج', style: TextStyle(color: Colors.redAccent, fontSize: 14.sp, fontWeight: FontWeight.bold)),
-                style: TextButton.styleFrom(minimumSize: Size(double.infinity, 6.h), alignment: Alignment.centerRight),
+              padding: EdgeInsets.symmetric(horizontal: 2.h, vertical: 0.5.h),
+              child: Column(
+                children: [
+                  // زر الخصوصية الجديد
+                  TextButton.icon(
+                    onPressed: _launchPrivacyUrl,
+                    icon: const Icon(Icons.privacy_tip_rounded, color: Color(0xffdee2e6)),
+                    label: Text('شروط الاستخدام والخصوصية', style: TextStyle(color: const Color(0xffdee2e6), fontSize: 13.sp, fontWeight: FontWeight.w600)),
+                    style: TextButton.styleFrom(minimumSize: Size(double.infinity, 5.h), alignment: Alignment.centerRight),
+                  ),
+                  // زر تسجيل الخروج
+                  TextButton.icon(
+                    onPressed: widget.onLogout,
+                    icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+                    label: Text('تسجيل الخروج', style: TextStyle(color: Colors.redAccent, fontSize: 14.sp, fontWeight: FontWeight.bold)),
+                    style: TextButton.styleFrom(minimumSize: Size(double.infinity, 6.h), alignment: Alignment.centerRight),
+                  ),
+                ],
               ),
             ),
           ),
@@ -153,7 +174,6 @@ class _SellerSidebarState extends State<SellerSidebar> {
   }
 }
 
-// 🎯 التأكد من وجود الكلاس هنا ليكون متاحاً للـ Build
 class _SidebarItem extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -220,4 +240,3 @@ class _SidebarItem extends StatelessWidget {
     );
   }
 }
-
