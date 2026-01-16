@@ -35,15 +35,13 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     });
 
     try {
-      String userRole;
+      String? userRole; // تغيير لنوع يقبل null للتأمين
       String phoneClean = _phone.trim();
       
       try {
-        // 🎯 المحاولة بالدومين الجديد أولاً (مثل حساب أحمد)
         debugPrint("Trying login with @aksab.com...");
         userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aksab.com", _password);
       } catch (e) {
-        // 🎯 إذا فشل، المحاولة بالدومين القديم (للحسابات السابقة)
         debugPrint("Aksab failed, trying @aswaq.com...");
         userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aswaq.com", _password);
       }
@@ -52,7 +50,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       try {
         await UserSession.loadSession();
         
-        // جلب بيانات الـ SubUser إذا كان الحساب موظفاً
         if (UserSession.isSubUser) {
           final subUserDoc = await FirebaseFirestore.instance
               .collection("subUsers")
@@ -71,12 +68,12 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       }
 
       if (!mounted) return;
-      _navigateToHome(userRole);
+      // نمرر الـ role المكتشف أو الـ role المحفوظ في الجلسة كخطة بديلة
+      _navigateToHome(userRole ?? UserSession.role);
 
     } catch (e) {
       debugPrint("Core Login Error: $e");
       if (FirebaseAuth.instance.currentUser != null) {
-        // إذا نجح الـ Auth تقنياً رغم وجود خطأ في الكود اللاحق، نكمل للدخول
         _navigateToHome(UserSession.role ?? 'seller');
         return;
       }
@@ -98,7 +95,10 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     }
   }
 
-  void _navigateToHome(String role) {
+  // 🎯 تحسين التوجيه لضمان الدخول حتى لو تأخرت بيانات الـ Role
+  void _navigateToHome(String? role) {
+    if (!mounted) return;
+    
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('✅ تم تسجيل الدخول بنجاح!'),
@@ -107,12 +107,15 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       ),
     );
     
-    String route = '/';
-    if (role == 'seller') {
-      route = '/sellerhome';
-    } else if (role == 'consumer') {
+    // الافتراضي هو seller لضمان دخول الموظفين والتجار
+    String route = '/sellerhome'; 
+    
+    if (role == 'consumer') {
       route = '/consumerhome';
+    } else if (role == 'seller') {
+      route = '/sellerhome';
     }
+    
     Navigator.of(context).pushNamedAndRemoveUntil(route, (route) => false);
   }
 
@@ -147,10 +150,13 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
             onPressed: () async {
               if (newPassController.text.length < 6) return;
               try {
+                // تحديث في Auth وفي Firestore
                 await FirebaseAuth.instance.currentUser?.updatePassword(newPassController.text.trim());
                 await FirebaseFirestore.instance.collection("subUsers").doc(phone).update({'mustChangePassword': false});
+                
                 await _sendNotificationDataToAWS();
                 if (!mounted) return;
+                // بعد تغيير الباسورد، نوجه لصفحة التاجر مباشرة
                 Navigator.of(context).pushNamedAndRemoveUntil('/sellerhome', (route) => false);
               } catch (e) {
                 debugPrint("Pass update error: $e");
@@ -208,8 +214,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           ),
           const SizedBox(height: 10),
           _buildSubmitButton(),
-          const SizedBox(height: 25),
-          _buildRegisterLink(),
+          // 🎯 تم حذف رابط "إنشاء حساب" من هنا لمنع التكرار مع Footer الصفحة الأساسية
           if (_errorMessage != null)
             Padding(
               padding: const EdgeInsets.only(top: 10),
@@ -238,16 +243,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('تسجيل الدخول', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
       ),
     );
-  }
-
-  Widget _buildRegisterLink() {
-    return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-      const Text('ليس لديك حساب؟'),
-      TextButton(
-        onPressed: () => Navigator.of(context).pushNamed('/register'),
-        child: Text('إنشاء حساب', style: TextStyle(color: primaryGreen, fontWeight: FontWeight.bold)),
-      ),
-    ]);
   }
 }
 
@@ -289,4 +284,3 @@ class _InputGroup extends StatelessWidget {
     );
   }
 }
-
