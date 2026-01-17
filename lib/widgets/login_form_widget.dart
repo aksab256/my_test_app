@@ -9,6 +9,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+// استيراد الشاشات لجلب الـ routeName الصحيح
+import 'package:my_test_app/screens/buyer/buyer_home_screen.dart';
+import 'package:my_test_app/screens/consumer/consumer_home_screen.dart';
+import 'package:my_test_app/screens/seller_screen.dart';
+
 class LoginFormWidget extends StatefulWidget {
   const LoginFormWidget({super.key});
   @override
@@ -24,7 +29,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   final AuthService _authService = AuthService();
   final Color primaryGreen = const Color(0xff28a745);
 
-  // 1. معالجة تسجيل الدخول الذكية (دعم aksab و aswaq)
   Future<void> _submitLogin() async {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
@@ -35,46 +39,39 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     });
 
     try {
-      String? userRole; // تغيير لنوع يقبل null للتأمين
+      String? userRole;
       String phoneClean = _phone.trim();
       
       try {
-        debugPrint("Trying login with @aksab.com...");
+        debugPrint("Attempting login via @aksab.com...");
         userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aksab.com", _password);
       } catch (e) {
-        debugPrint("Aksab failed, trying @aswaq.com...");
+        debugPrint("Aksab failed, attempting @aswaq.com...");
         userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aswaq.com", _password);
       }
 
-      // ب- تحديث الجلسة والعمليات الجانبية
-      try {
-        await UserSession.loadSession();
-        
-        if (UserSession.isSubUser) {
-          final subUserDoc = await FirebaseFirestore.instance
-              .collection("subUsers")
-              .doc(phoneClean)
-              .get();
-
-          if (subUserDoc.exists && subUserDoc.data()?['mustChangePassword'] == true) {
-            if (mounted) setState(() => _isLoading = false);
-            _showChangePasswordDialog(phoneClean);
-            return;
-          }
+      await UserSession.loadSession();
+      
+      // منطق الموظفين (Sub Users)
+      if (UserSession.isSubUser) {
+        final subUserDoc = await FirebaseFirestore.instance.collection("subUsers").doc(phoneClean).get();
+        if (subUserDoc.exists && subUserDoc.data()?['mustChangePassword'] == true) {
+          if (mounted) setState(() => _isLoading = false);
+          _showChangePasswordDialog(phoneClean);
+          return;
         }
-        _sendNotificationDataToAWS().catchError((e) => debugPrint("AWS Silent Error: $e"));
-      } catch (innerError) {
-        debugPrint("Secondary Sync Error: $innerError");
       }
 
+      _sendNotificationDataToAWS().catchError((e) => debugPrint("AWS Silent Error: $e"));
+
       if (!mounted) return;
-      // نمرر الـ role المكتشف أو الـ role المحفوظ في الجلسة كخطة بديلة
+      // نمرر الـ role المكتشف أو المخزن في الجلسة
       _navigateToHome(userRole ?? UserSession.role);
 
     } catch (e) {
       debugPrint("Core Login Error: $e");
       if (FirebaseAuth.instance.currentUser != null) {
-        _navigateToHome(UserSession.role ?? 'seller');
+        _navigateToHome(UserSession.role);
         return;
       }
       
@@ -83,39 +80,36 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           _isLoading = false;
           if (e.toString().contains('account-not-active')) {
             _errorMessage = 'هذا الحساب معلق، يرجى التواصل مع الإدارة';
-          } else if (e.toString().contains('invalid-credential') ||
-                     e.toString().contains('wrong-password') ||
-                     e.toString().contains('user-not-found')) {
-            _errorMessage = 'رقم الهاتف أو كلمة المرور غير صحيحة';
           } else {
-            _errorMessage = 'حدث خطأ غير متوقع، يرجى المحاولة لاحقاً';
+            _errorMessage = 'رقم الهاتف أو كلمة المرور غير صحيحة';
           }
         });
       }
     }
   }
 
-  // 🎯 تحسين التوجيه لضمان الدخول حتى لو تأخرت بيانات الـ Role
   void _navigateToHome(String? role) {
     if (!mounted) return;
     
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('✅ تم تسجيل الدخول بنجاح!'),
-        backgroundColor: primaryGreen,
-        duration: const Duration(seconds: 2),
-      ),
+      SnackBar(content: const Text('✅ تم تسجيل الدخول بنجاح!'), backgroundColor: primaryGreen),
     );
     
-    // الافتراضي هو seller لضمان دخول الموظفين والتجار
-    String route = '/sellerhome'; 
+    String route;
     
-    if (role == 'consumer') {
-      route = '/consumerhome';
+    // 🎯 التوجيه الصحيح بناءً على الأدوار الثلاثة
+    if (role == 'buyer') {
+      route = BuyerHomeScreen.routeName; // يذهب إلى /buyerHome
+    } else if (role == 'consumer') {
+      route = ConsumerHomeScreen.routeName; // يذهب إلى /consumerHome
     } else if (role == 'seller') {
-      route = '/sellerhome';
+      route = SellerScreen.routeName; // يذهب إلى /sellerhome
+    } else {
+      // افتراضي للموظفين أو الحالات غير المعروفة
+      route = SellerScreen.routeName; 
     }
     
+    debugPrint("Final Redirect: $route for role: $role");
     Navigator.of(context).pushNamedAndRemoveUntil(route, (route) => false);
   }
 
@@ -150,14 +144,12 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
             onPressed: () async {
               if (newPassController.text.length < 6) return;
               try {
-                // تحديث في Auth وفي Firestore
                 await FirebaseAuth.instance.currentUser?.updatePassword(newPassController.text.trim());
                 await FirebaseFirestore.instance.collection("subUsers").doc(phone).update({'mustChangePassword': false});
                 
-                await _sendNotificationDataToAWS();
                 if (!mounted) return;
-                // بعد تغيير الباسورد، نوجه لصفحة التاجر مباشرة
-                Navigator.of(context).pushNamedAndRemoveUntil('/sellerhome', (route) => false);
+                // بعد التغيير، نستخدم دالة التوجيه الذكية بدلاً من المسار الثابت
+                _navigateToHome(UserSession.role);
               } catch (e) {
                 debugPrint("Pass update error: $e");
               }
@@ -177,13 +169,14 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         const String apiUrl = "https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction";
         await http.post(Uri.parse(apiUrl),
             headers: {"Content-Type": "application/json"},
-            body: jsonEncode({"userId": uid, "fcmToken": token, "role": "seller"}));
+            body: jsonEncode({"userId": uid, "fcmToken": token, "role": UserSession.role ?? "seller"}));
       }
     } catch (e) {
       debugPrint("AWS Error: $e");
     }
   }
-
+  
+  // ... باقي كود build و _InputGroup (يظل كما هو) ...
   @override
   Widget build(BuildContext context) {
     return Form(
@@ -214,7 +207,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           ),
           const SizedBox(height: 10),
           _buildSubmitButton(),
-          // 🎯 تم حذف رابط "إنشاء حساب" من هنا لمنع التكرار مع Footer الصفحة الأساسية
           if (_errorMessage != null)
             Padding(
               padding: const EdgeInsets.only(top: 10),
