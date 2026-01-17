@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:my_test_app/theme/app_theme.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
 import 'package:my_test_app/widgets/trader_offer_card.dart';
-import 'package:my_test_app/screens/product_details_screen.dart';
+// تم إزالة استيراد صفحة التفاصيل لأننا لن نستخدمها هنا
 import 'package:my_test_app/widgets/buyer_mobile_nav_widget.dart';
 
 class TraderOffersScreen extends StatefulWidget {
@@ -18,15 +18,16 @@ class TraderOffersScreen extends StatefulWidget {
 }
 
 class _TraderOffersScreenState extends State<TraderOffersScreen> {
-  final int _selectedIndex = 0;
+  // ملاحظة: اجعل الـ index متوافق مع ترتيب أيقونة "عروض التاجر" إذا كانت موجودة
+  // أو اتركه كما هو ليعبر عن الحالة الحالية
+  final int _selectedIndex = 0; 
 
   void _onItemTapped(int index) {
-    if (index == _selectedIndex) return;
     switch (index) {
-      case 0: Navigator.pushReplacementNamed(context, '/traders'); break;
+      case 0: Navigator.pushNamed(context, '/buyerWallet'); break; // ✅ توجيه المحفظة (الأيقونة الأولى)
       case 1: Navigator.pushReplacementNamed(context, '/buyerHome'); break;
       case 2: Navigator.pushNamed(context, '/myOrders'); break;
-      case 3: Navigator.pushReplacementNamed(context, '/wallet'); break;
+      case 3: Navigator.pushReplacementNamed(context, '/traders'); break; // توجيه للتجار
     }
   }
 
@@ -37,7 +38,6 @@ class _TraderOffersScreenState extends State<TraderOffersScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        // إزالة السهم التلقائي لضبط التصميم يدوياً
         automaticallyImplyLeading: false, 
         toolbarHeight: 65,
         flexibleSpace: Container(
@@ -52,11 +52,9 @@ class _TraderOffersScreenState extends State<TraderOffersScreen> {
             ),
           ),
         ),
-        // ✅ تنظيف العنوان وإزالة الأيقونات غير الضرورية
         title: Row(
           children: [
             IconButton(
-              // استخدام سهم الرجوع التقليدي ليكون مألوفاً للمستخدم
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 22),
               onPressed: () => Navigator.of(context).pop(),
             ),
@@ -69,12 +67,9 @@ class _TraderOffersScreenState extends State<TraderOffersScreen> {
         elevation: 0,
       ),
 
-      // ✅ إضافة أيقونة السلة العائمة بنفس التصميم والعداد التلقائي
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: Consumer<CartProvider>(
         builder: (context, cartProvider, child) {
           final cartCount = cartProvider.cartTotalItems; 
-
           return Stack(
             alignment: Alignment.topRight,
             children: [
@@ -98,11 +93,7 @@ class _TraderOffersScreenState extends State<TraderOffersScreen> {
                     constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
                     child: Text(
                       '$cartCount',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -114,7 +105,6 @@ class _TraderOffersScreenState extends State<TraderOffersScreen> {
 
       body: OffersDataFetcher(sellerId: widget.sellerId), 
       
-      // توحيد الشريط السفلي مع استخدام cartTotalItems من البروفايدر مباشرة هناك
       bottomNavigationBar: Consumer<CartProvider>(
         builder: (context, cart, child) => BuyerMobileNavWidget(
           selectedIndex: _selectedIndex,
@@ -127,7 +117,6 @@ class _TraderOffersScreenState extends State<TraderOffersScreen> {
   }
 }
 
-// الجزء الخاص بجلب البيانات (Fetcher) يبقى كما هو مع تعديلات بسيطة للتناسق
 class OffersDataFetcher extends StatefulWidget {
   final String sellerId;
   const OffersDataFetcher({super.key, required this.sellerId});
@@ -227,12 +216,9 @@ class _OffersDataFetcherState extends State<OffersDataFetcher> {
                   return TraderOfferCard(
                     offerData: offers[index],
                     offerDocId: offers[index]['offerDocId'],
+                    // ✅ تم تعطيل التوجيه لصفحة التفاصيل كما طلبت
                     onTap: () {
-                      Navigator.pushNamed(
-                        context,
-                        ProductDetailsScreen.routeName,
-                        arguments: {'offerId': offers[index]['offerDocId']},
-                      );
+                      debugPrint("تم تعطيل الانتقال لصفحة التفاصيل");
                     },
                   );
                 },
