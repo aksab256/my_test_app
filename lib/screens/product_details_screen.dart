@@ -99,10 +99,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
       temp.add({
         ...data,
-        'id': doc.id,
+        'offerId': doc.id, // استخدام نفس المفتاح للثبات
         'displayPrice': extractedPrice,
         'displayUnit': unitName,
-        'sellerName': data['sellerName'] ?? 'تاجر غير معروف',
       });
     }
     _offers = temp;
@@ -114,39 +113,41 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     return double.tryParse(price.toString()) ?? 0.0;
   }
 
-  // ✅ الدالة المحدثة لتستخدم البروفايدر (نفس منطق الكود السابق)
-  void _addToCart(Map<String, dynamic> offer) async {
+  // ✅ دالة الإضافة مطابقة تماماً للكود الناجح في الملف السابق
+  void _addToCart(Map<String, dynamic> offer, int qty) async {
+    if (offer['offerId'] == null || qty == 0) return;
+    final String imageUrl = _productData?['imageUrls']?.isNotEmpty == true
+        ? _productData!['imageUrls'][0]
+        : '';
     try {
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
-      final String imageUrl = (_productData?['imageUrls'] as List?)?.isNotEmpty == true
-          ? _productData!['imageUrls'][0]
-          : '';
-
       await cartProvider.addItemToCart(
         productId: _currentProductId!,
         name: _productData?['name'] ?? 'منتج غير معروف',
-        offerId: offer['id'],
-        sellerId: offer['sellerId'],
-        sellerName: offer['sellerName'],
-        price: offer['displayPrice'],
+        offerId: offer['offerId']!,
+        sellerId: offer['sellerId']!,
+        sellerName: offer['sellerName']!,
+        price: offer['displayPrice'].toDouble(), 
         unit: offer['displayUnit'],
-        quantityToAdd: 1, // الكمية الافتراضية
+        unitIndex: 0, // الافتراضي لأول وحدة
+        quantityToAdd: qty,
         imageUrl: imageUrl,
         userRole: 'buyer',
+        minOrderQuantity: offer['minQty'] ?? 1,
         availableStock: offer['stock'] ?? 0,
-        minOrderQuantity: offer['minOrder'] ?? 1,
-        maxOrderQuantity: offer['maxOrder'] ?? 9999,
+        maxOrderQuantity: offer['maxQty'] ?? 9999,
+        mainId: _productData?['mainId'],
+        subId: _productData?['subId'],
       );
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('✅ تمت الإضافة للسلة', style: GoogleFonts.cairo()),
+          content: Text('✅ تم الإضافة للسلة', style: GoogleFonts.cairo(fontSize: 14.sp)),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 1),
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -155,25 +156,26 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(_productData?['name'] ?? 'تفاصيل المنتج', style: GoogleFonts.cairo()),
         backgroundColor: AppTheme.primaryGreen,
         foregroundColor: Colors.white,
       ),
-      
-      // ✅ أيقونة السلة العائمة الموحدة
+
+      // ✅ أيقونة السلة العائمة الموحدة مع العداد
       floatingActionButton: Consumer<CartProvider>(
-        builder: (context, cartProvider, child) {
-          final cartCount = cartProvider.cartTotalItems;
+        builder: (context, cart, child) {
+          final count = cart.cartTotalItems;
           return Stack(
             alignment: Alignment.topRight,
             children: [
               FloatingActionButton(
                 onPressed: () => Navigator.of(context).pushNamed('/cart'),
-                backgroundColor: const Color(0xFFFF7000), // لون برتقالي لتمييزها أو الأخضر حسب رغبتك
+                backgroundColor: const Color(0xFF4CAF50),
                 child: const Icon(Icons.shopping_cart, color: Colors.white),
               ),
-              if (cartCount > 0)
+              if (count > 0)
                 Positioned(
                   right: 0,
                   top: 0,
@@ -181,7 +183,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
                     constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
-                    child: Text('$cartCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                    child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                   ),
                 ),
             ],
@@ -202,7 +204,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   const SizedBox(height: 8),
                   Text(_productData?['description'] ?? '', style: GoogleFonts.cairo(color: Colors.grey), textAlign: TextAlign.right),
                   const Divider(height: 40),
-                  Text('العروض المتاحة', style: GoogleFonts.cairo(fontSize: 14.sp, fontWeight: FontWeight.bold), textAlign: TextAlign.right),
+                  Text('عروض التجار المتاحة', style: GoogleFonts.cairo(fontSize: 14.sp, fontWeight: FontWeight.bold), textAlign: TextAlign.right),
                   const SizedBox(height: 12),
                   if (_offers.isEmpty)
                     const Center(child: Text('لا توجد عروض حالياً'))
@@ -239,7 +241,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         child: Row(
           children: [
             ElevatedButton(
-              onPressed: () => _addToCart(offer),
+              onPressed: () => _addToCart(offer, 1), // نمرر كمية 1 كافتراضي
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primaryGreen,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -250,7 +252,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(offer['sellerName'], style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 12.sp)),
+                Text(offer['sellerName'] ?? 'تاجر غير معروف', style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 12.sp)),
                 Text('الوحدة: ${offer['displayUnit']}', style: GoogleFonts.cairo(fontSize: 10.sp, color: Colors.grey)),
                 Text('${offer['displayPrice']} ج.م', style: GoogleFonts.cairo(color: Colors.red, fontWeight: FontWeight.w900, fontSize: 13.sp)),
               ],
