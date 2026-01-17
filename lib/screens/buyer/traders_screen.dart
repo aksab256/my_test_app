@@ -8,7 +8,6 @@ import 'package:flutter/services.dart' show rootBundle;
 import '../../widgets/traders_header_widget.dart';
 import '../../widgets/traders_list_widget.dart';
 import '../../widgets/traders_filter_widget.dart';
-import '../../widgets/chat_support_widget.dart';
 import '../../widgets/buyer_mobile_nav_widget.dart';
 
 class Coordinates {
@@ -27,7 +26,7 @@ class TradersScreen extends StatefulWidget {
 
 class _TradersScreenState extends State<TradersScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final int _selectedIndex = 3; 
+  final int _selectedIndex = 3; // ترتيب أيقونة التجار في الـ Nav
 
   String _searchQuery = '';
   String _currentFilter = 'all';
@@ -49,16 +48,14 @@ class _TradersScreenState extends State<TradersScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
     
-    // 1. تحميل المناطق أولاً (fetchAndProcessAdministrativeAreas)
     await _fetchAndProcessGeoJson();
-    // 2. استخراج موقع المستخدم (USER LOCATION EXTRACTION)
     _userCoordinates = await _getUserLocation();
-    // 3. تحميل التجار (loads function)
     await _loadTraders();
 
     if (mounted) setState(() => _isLoading = false);
   }
 
+  // منطق معالجة المناطق الجغرافية (Polygon Data)
   Future<void> _fetchAndProcessGeoJson() async {
     try {
       final String jsonString = await rootBundle.loadString('assets/OSMB-bc319d822a17aa9ad1089fc05e7d4e752460f877.geojson');
@@ -99,10 +96,9 @@ class _TradersScreenState extends State<TradersScreen> {
     return null;
   }
 
-  // 🔥 الدالة المقابلة تماماً لـ async function loads() في الـ HTML
+  // تحميل التجار بناءً على منطق التغطية الجغرافية
   Future<void> _loadTraders() async {
     try {
-      // البحث في مجموعة "sellers" كما في الـ HTML
       final snapshot = await _db.collection("sellers")
           .where("status", isEqualTo: "active").get();
       
@@ -113,24 +109,20 @@ class _TradersScreenState extends State<TradersScreen> {
         final data = doc.data();
         final List? deliveryAreas = data['deliveryAreas'] as List?;
 
-        // 🎯 منطق التصفية (نفس الـ HTML بالحرف):
-        
-        // الحالة 1: موقع المشتري غير معروف
+        // الحالة 1: موقع المشتري غير معروف -> يعرض من يقدم توصيل شامل
         if (!isBuyerLocationKnown) {
           if (deliveryAreas == null || deliveryAreas.isEmpty) {
-            sellersServingArea.add(doc); // توصيل شامل
+            sellersServingArea.add(doc);
           }
           continue;
         }
 
-        // الحالة 2: موقع المشتري معروف
-        // 2.1 التاجر يوصل توصيل شامل
+        // الحالة 2: موقع المشتري معروف -> فحص التغطية الجغرافية
         if (deliveryAreas == null || deliveryAreas.isEmpty) {
-          sellersServingArea.add(doc);
+          sellersServingArea.add(doc); // توصيل شامل
           continue;
         }
 
-        // 2.2 التاجر لديه مناطق توصيل محددة
         bool isAreaMatch = deliveryAreas.any((areaName) {
           final areaPolygon = _areaCoordinatesMap[areaName];
           if (areaPolygon != null && areaPolygon.length >= 3) {
@@ -139,9 +131,7 @@ class _TradersScreenState extends State<TradersScreen> {
           return false;
         });
 
-        if (isAreaMatch) {
-          sellersServingArea.add(doc);
-        }
+        if (isAreaMatch) sellersServingArea.add(doc);
       }
 
       _activeSellers = sellersServingArea;
@@ -156,8 +146,6 @@ class _TradersScreenState extends State<TradersScreen> {
       final businessType = (doc.data() as Map)['businessType'];
       if (businessType != null && businessType.toString().trim().isNotEmpty) {
         categories.add(businessType.toString().trim());
-      } else {
-        categories.add("أخرى");
       }
     }
     return categories.toList()..sort();
@@ -179,7 +167,7 @@ class _TradersScreenState extends State<TradersScreen> {
     setState(() {
       _filteredTraders = _activeSellers.where((doc) {
         final data = doc.data() as Map<String, dynamic>;
-        final name = (data['merchantName'] ?? "تاجر غير معروف").toString().toLowerCase();
+        final name = (data['merchantName'] ?? "").toString().toLowerCase();
         final type = data['businessType']?.toString() ?? 'أخرى';
         return name.contains(_searchQuery.toLowerCase()) && 
                (_currentFilter == 'all' || type == _currentFilter);
@@ -190,7 +178,7 @@ class _TradersScreenState extends State<TradersScreen> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false, // تأمين زر الرجوع لمنع الخروج
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
         Navigator.pushReplacementNamed(context, '/buyerHome');
@@ -198,12 +186,20 @@ class _TradersScreenState extends State<TradersScreen> {
       child: Directionality(
         textDirection: TextDirection.rtl,
         child: Scaffold(
-          backgroundColor: const Color(0xFFf4f6f8),
+          backgroundColor: const Color(0xFFF8F9FA),
           appBar: AppBar(
-            elevation: 2,
-            backgroundColor: const Color(0xFF4CAF50),
+            elevation: 0,
+            flexibleSpace: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF4CAF50), Color(0xFF388E3C)],
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomLeft,
+                ),
+              ),
+            ),
             title: const Text('التجار المعتمدون', 
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Tajawal')),
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontFamily: 'Tajawal')),
             centerTitle: true,
           ),
           body: _isLoading 
@@ -221,11 +217,10 @@ class _TradersScreenState extends State<TradersScreen> {
                   ),
                   Expanded(
                     child: _filteredTraders.isEmpty 
-                      ? const Center(child: Text("لا يوجد تجار معتمدون يخدمون منطقتك حالياً."))
+                      ? _buildEmptyState()
                       : TradersListWidget(
                           traders: _filteredTraders,
                           onTraderTap: (doc) {
-                            // نفس مسار الـ HTML: trader-offers.html?sellerId=...
                             Navigator.pushNamed(context, '/traderOffers', arguments: doc.id);
                           },
                         ),
@@ -236,12 +231,26 @@ class _TradersScreenState extends State<TradersScreen> {
             selectedIndex: _selectedIndex,
             onItemSelected: (index) {
               if (index == 1) Navigator.pushReplacementNamed(context, '/buyerHome');
-              // أضف باقي المسارات هنا
+              if (index == 2) Navigator.pushNamed(context, '/myOrders');
             },
             cartCount: 0, 
             ordersChanged: false,
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.storefront_outlined, size: 80, color: Colors.grey[300]),
+          const SizedBox(height: 16),
+          const Text("لا يوجد تجار معتمدون يخدمون منطقتك حالياً.",
+            style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 16)),
+        ],
       ),
     );
   }
