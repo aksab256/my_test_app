@@ -19,14 +19,16 @@ class WalletScreen extends StatefulWidget {
 }
 
 class _WalletScreenState extends State<WalletScreen> {
-  // ✅ سنستخدم Future بسيط يتأكد من جاهزية البروفايدر
-  late Future<void> _initFuture;
 
   @override
   void initState() {
     super.initState();
-    // ننتظر مدة قصيرة جداً للتأكد من أن سياق التطبيق (Context) جاهز
-    _initFuture = Future.delayed(const Duration(milliseconds: 500));
+    // جلب البيانات فور فتح الصفحة
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final cashbackProvider = Provider.of<CashbackProvider>(context, listen: false);
+      cashbackProvider.fetchCashbackBalance();
+      cashbackProvider.fetchAvailableOffers();
+    });
   }
 
   @override
@@ -49,7 +51,11 @@ class _WalletScreenState extends State<WalletScreen> {
               toolbarHeight: 70,
               title: Text(
                 'المحفظة والعروض',
-                style: GoogleFonts.cairo(fontSize: 20.sp, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.cairo(
+                  fontSize: 20.sp,
+                  fontWeight: FontWeight.bold, 
+                  color: Colors.white
+                ),
               ),
               centerTitle: true,
               bottom: TabBar(
@@ -62,22 +68,13 @@ class _WalletScreenState extends State<WalletScreen> {
                 ],
               ),
             ),
-            // ✅ ننتظر الـ Future الصغير للتأكد من استقرار البيانات
-            body: FutureBuilder(
-              future: _initFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: AppTheme.primaryGreen));
-                }
-                return SafeArea(
-                  child: TabBarView(
-                    children: [
-                      _buildCashbackTab(context),
-                      const GiftsTab(),
-                    ],
-                  ),
-                );
-              }
+            body: SafeArea(
+              child: TabBarView(
+                children: [
+                  _buildCashbackTab(),
+                  const GiftsTab(),
+                ],
+              ),
             ),
             bottomNavigationBar: BuyerMobileNavWidget(
               selectedIndex: 3,
@@ -94,95 +91,99 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
-  // كل الدوال بالأسفل هي دوالك الأصلية بدون أي تغيير في المسميات
-  Widget _buildCashbackTab(BuildContext context) {
-    final buyerData = Provider.of<BuyerDataProvider>(context);
-    final cashbackProvider = Provider.of<CashbackProvider>(context);
-
-    return Column(
-      children: [
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(horizontal: 20.sp, vertical: 20.sp),
-          decoration: const BoxDecoration(
-            color: AppTheme.primaryGreen,
-            borderRadius: BorderRadius.only(bottomLeft: Radius.circular(30), bottomRight: Radius.circular(30)),
-          ),
-          child: Column(
-            children: [
-              Text(
-                'أهلاً، ${buyerData.loggedInUser?.fullname ?? 'زائر'}',
-                style: GoogleFonts.cairo(fontSize: 16.sp, color: Colors.white70),
+  Widget _buildCashbackTab() {
+    // استخدام Consumer هنا هو السر! بمجرد أن ينادي البروفايدر notifyListeners، سيتحدث هذا الجزء فوراً
+    return Consumer2<BuyerDataProvider, CashbackProvider>(
+      builder: (context, buyerData, cashbackProvider, child) {
+        return Column(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(horizontal: 20.sp, vertical: 20.sp),
+              decoration: const BoxDecoration(
+                color: AppTheme.primaryGreen,
+                borderRadius: BorderRadius.only(bottomLeft: Radius.circular(30), bottomRight: Radius.circular(30)),
               ),
-              SizedBox(height: 12.sp),
-              _buildBalanceCard(cashbackProvider),
-            ],
-          ),
-        ),
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: () => Provider.of<CashbackProvider>(context, listen: false).fetchAvailableOffers(),
-            child: _buildCashbackGoalsList(),
-          ),
-        ),
-      ],
+              child: Column(
+                children: [
+                  Text(
+                    'أهلاً، ${buyerData.loggedInUser?.fullname ?? 'زائر'}',
+                    style: GoogleFonts.cairo(fontSize: 16.sp, color: Colors.white70),
+                  ),
+                  SizedBox(height: 12.sp),
+                  _buildBalanceCard(cashbackProvider),
+                ],
+              ),
+            ),
+            
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  await cashbackProvider.fetchCashbackBalance();
+                  await cashbackProvider.fetchAvailableOffers();
+                },
+                child: _buildCashbackGoalsList(cashbackProvider),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
   Widget _buildBalanceCard(CashbackProvider provider) {
-    return FutureBuilder<double>(
-      future: provider.fetchCashbackBalance(),
-      builder: (context, snapshot) {
-        double balance = snapshot.data ?? 0.0;
-        return Container(
-          padding: EdgeInsets.all(15.sp),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white24),
+    return Container(
+      padding: EdgeInsets.all(15.sp),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('رصيدك المتاح: ', style: GoogleFonts.cairo(fontSize: 18.sp, color: Colors.white)),
+          Text(
+            '${provider.availableBalance.toStringAsFixed(2)} ج',
+            style: GoogleFonts.cairo(
+              fontSize: 22.sp, 
+              fontWeight: FontWeight.w900, 
+              color: const Color(0xFFFFD700) 
+            ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('رصيدك المتاح: ', style: GoogleFonts.cairo(fontSize: 18.sp, color: Colors.white)),
-              Text('${balance.toStringAsFixed(2)} ج',
-                style: GoogleFonts.cairo(fontSize: 22.sp, fontWeight: FontWeight.w900, color: const Color(0xFFFFD700))),
-            ],
-          ),
-        );
-      },
+        ],
+      ),
     );
   }
 
-  Widget _buildCashbackGoalsList() {
-    return Consumer<CashbackProvider>(
-      builder: (context, provider, _) {
-        return FutureBuilder<List<Map<String, dynamic>>>(
-          future: provider.fetchAvailableOffers(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final goals = snapshot.data ?? [];
-            if (goals.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.receipt_long_outlined, size: 60.sp, color: Colors.grey[300]),
-                    Text('لا توجد عروض حالياً', style: GoogleFonts.cairo(fontSize: 18.sp, color: Colors.grey)),
-                  ],
-                ),
-              );
-            }
-            return ListView.builder(
-              padding: EdgeInsets.fromLTRB(15.sp, 15.sp, 15.sp, 30.sp),
-              itemCount: goals.length,
-              itemBuilder: (context, index) => _buildGoalCard(goals[index]),
-            );
-          },
-        );
-      },
+  Widget _buildCashbackGoalsList(CashbackProvider provider) {
+    if (provider.isLoading) {
+      return const Center(child: CircularProgressIndicator(color: AppTheme.primaryGreen));
+    }
+
+    final goals = provider.offersList;
+
+    if (goals.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(height: 10.h),
+          Center(
+            child: Column(
+              children: [
+                Icon(Icons.receipt_long_outlined, size: 60.sp, color: Colors.grey[300]),
+                Text('لا توجد عروض حالياً', style: GoogleFonts.cairo(fontSize: 18.sp, color: Colors.grey)),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(15.sp, 15.sp, 15.sp, 30.sp),
+      itemCount: goals.length,
+      itemBuilder: (context, index) => _buildGoalCard(goals[index]),
     );
   }
 
@@ -206,27 +207,42 @@ class _WalletScreenState extends State<WalletScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: Text(goal['description'] ?? 'عرض كاش باك',
-                    style: GoogleFonts.cairo(fontSize: 18.sp, fontWeight: FontWeight.bold, color: AppTheme.primaryGreen)),
+                  child: Text(
+                    goal['description'] ?? 'عرض كاش باك',
+                    style: GoogleFonts.cairo(fontSize: 18.sp, fontWeight: FontWeight.bold, color: AppTheme.primaryGreen),
+                  ),
                 ),
-                Text('${goal['value']}${goal['type'] == 'percentage' ? '%' : 'ج'}',
-                  style: GoogleFonts.cairo(fontSize: 20.sp, fontWeight: FontWeight.w900, color: Colors.orange[800])),
+                Text(
+                  '${goal['value']}${goal['type'] == 'percentage' ? '%' : 'ج'}',
+                  style: GoogleFonts.cairo(fontSize: 20.sp, fontWeight: FontWeight.w900, color: Colors.orange[800]),
+                ),
               ],
             ),
             SizedBox(height: 10.sp),
-            Text(isCumulative ? "هدف تراكمي: ${goal['minAmount']} ج" : "كاش باك فوري: ${goal['minAmount']} ج",
-                style: GoogleFonts.cairo(fontSize: 15.sp, color: Colors.black87, fontWeight: FontWeight.w600)),
+            Text(
+              isCumulative 
+                ? "هدف تراكمي: اشترِ بمجموع ${goal['minAmount']} ج"
+                : "كاش باك فوري على كل طلب بـ ${goal['minAmount']} ج",
+              style: GoogleFonts.cairo(fontSize: 15.sp, color: Colors.black87, fontWeight: FontWeight.w600),
+            ),
             if (isCumulative) ...[
               SizedBox(height: 15.sp),
               ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: LinearProgressIndicator(value: progressPercent, minHeight: 12, backgroundColor: Colors.grey[200], color: progressColor),
+                child: LinearProgressIndicator(
+                  value: progressPercent,
+                  minHeight: 12,
+                  backgroundColor: Colors.grey[200],
+                  valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+                ),
               ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('المحقَّق: ${currentProgress.toStringAsFixed(0)} ج', style: GoogleFonts.cairo(fontSize: 14.sp)),
-                  Text('%${(progressPercent * 100).toStringAsFixed(0)}', style: GoogleFonts.cairo(fontSize: 16.sp, color: progressColor, fontWeight: FontWeight.bold)),
+                  Text('المحقَّق: ${currentProgress.toStringAsFixed(0)} ج', 
+                    style: GoogleFonts.cairo(fontSize: 14.sp, fontWeight: FontWeight.bold)),
+                  Text('%${(progressPercent * 100).toStringAsFixed(0)}', 
+                    style: GoogleFonts.cairo(fontSize: 16.sp, color: progressColor, fontWeight: FontWeight.bold)),
                 ],
               ),
             ],
@@ -234,9 +250,11 @@ class _WalletScreenState extends State<WalletScreen> {
             Row(
               children: [
                 Icon(Icons.calendar_month, size: 16.sp, color: Colors.redAccent),
-                Text(" متبقي ${goal['daysRemaining']} يوم", style: GoogleFonts.cairo(fontSize: 14.sp, color: Colors.redAccent)),
+                Text(" متبقي ${goal['daysRemaining']} يوم", 
+                  style: GoogleFonts.cairo(fontSize: 14.sp, color: Colors.redAccent, fontWeight: FontWeight.bold)),
                 const Spacer(),
-                Text(goal['sellerName'] ?? 'كل التجار', style: GoogleFonts.cairo(fontSize: 14.sp, color: Colors.blueGrey)),
+                Text(goal['sellerName'] ?? 'كل التجار', 
+                  style: GoogleFonts.cairo(fontSize: 14.sp, color: Colors.blueGrey, fontWeight: FontWeight.w600)),
               ],
             ),
           ],
