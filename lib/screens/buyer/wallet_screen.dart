@@ -19,26 +19,14 @@ class WalletScreen extends StatefulWidget {
 }
 
 class _WalletScreenState extends State<WalletScreen> {
-  late Future<void> _initDataFuture;
+  // ✅ أضفنا هذا المتغير للتأكد من تحميل بيانات المستخدم أولاً
+  late Future<void> _userInitialData;
 
   @override
   void initState() {
     super.initState();
-    // ✅ نقوم بتهيئة البيانات مرة واحدة عند تشغيل الصفحة
-    _initDataFuture = _refreshAllData();
-  }
-
-  Future<void> _refreshAllData() async {
-    final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
-    final cashbackProvider = Provider.of<CashbackProvider>(context, listen: false);
-    
-    // 1. التأكد من تحميل بيانات المستخدم (الاسم والمعرف)
-    await buyerProvider.loadUserData();
-    // 2. جلب رصيد الكاش باك والعروض المتوفرة للمستخدم
-    await Future.wait([
-      cashbackProvider.fetchCashbackBalance(),
-      cashbackProvider.fetchAvailableOffers(),
-    ]);
+    // نقوم بالتأكد من تحميل بيانات المستخدم لمرة واحدة فقط عند فتح الشاشة
+    _userInitialData = Provider.of<BuyerDataProvider>(context, listen: false).loadUserData();
   }
 
   @override
@@ -79,9 +67,9 @@ class _WalletScreenState extends State<WalletScreen> {
                 ],
               ),
             ),
-            // ✅ استخدام FutureBuilder هنا يضمن أن الواجهة لن تظهر "فاضية" بل ستظهر مؤشر تحميل حتى تكتمل البيانات
+            // ✅ ننتظر تحميل بيانات المستخدم "فقط" قبل عرض التبويبات
             body: FutureBuilder(
-              future: _initDataFuture,
+              future: _userInitialData,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator(color: AppTheme.primaryGreen));
@@ -94,7 +82,7 @@ class _WalletScreenState extends State<WalletScreen> {
                     ],
                   ),
                 );
-              },
+              }
             ),
             bottomNavigationBar: BuyerMobileNavWidget(
               selectedIndex: 3,
@@ -111,6 +99,7 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
+  // 👇 باقي الأكواد كما هي تماماً بدون أي تغيير في المعرفات
   Widget _buildCashbackTab(BuildContext context) {
     final buyerData = Provider.of<BuyerDataProvider>(context);
     final cashbackProvider = Provider.of<CashbackProvider>(context);
@@ -141,7 +130,7 @@ class _WalletScreenState extends State<WalletScreen> {
         
         Expanded(
           child: RefreshIndicator(
-            onRefresh: _refreshAllData,
+            onRefresh: () => Provider.of<CashbackProvider>(context, listen: false).fetchAvailableOffers(),
             child: _buildCashbackGoalsList(),
           ),
         ),
@@ -150,59 +139,66 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   Widget _buildBalanceCard(CashbackProvider provider) {
-    // نستخدم الرصيد المحمل مسبقاً في initState لضمان سرعة الاستجابة
-    return Container(
-      padding: EdgeInsets.all(15.sp),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white24),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'رصيدك المتاح: ',
-            style: GoogleFonts.cairo(fontSize: 18.sp, color: Colors.white),
+    return FutureBuilder<double>(
+      future: provider.fetchCashbackBalance(),
+      builder: (context, snapshot) {
+        double balance = snapshot.data ?? 0.0;
+        return Container(
+          padding: EdgeInsets.all(15.sp),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white24),
           ),
-          Text(
-            '${provider.availableBalance.toStringAsFixed(2)} ج',
-            style: GoogleFonts.cairo(
-              fontSize: 22.sp, 
-              fontWeight: FontWeight.w900, 
-              color: const Color(0xFFFFD700) 
-            ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'رصيدك المتاح: ',
+                style: GoogleFonts.cairo(fontSize: 18.sp, color: Colors.white),
+              ),
+              Text(
+                '${balance.toStringAsFixed(2)} ج',
+                style: GoogleFonts.cairo(
+                  fontSize: 22.sp, 
+                  fontWeight: FontWeight.w900, 
+                  color: const Color(0xFFFFD700) 
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildCashbackGoalsList() {
     return Consumer<CashbackProvider>(
       builder: (context, provider, _) {
-        final goals = provider.offersList; // نعتمد على القائمة المخزنة في البروفايدر
-
-        if (goals.isEmpty) {
-          return ListView( // نستخدم ListView ليتمكن المستخدم من السحب لأسفل للتحديث
-            physics: const AlwaysScrollableScrollPhysics(),
-            children: [
-              SizedBox(height: 15.h),
-              Center(
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: provider.fetchAvailableOffers(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final goals = snapshot.data ?? [];
+            if (goals.isEmpty) {
+              return Center(
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.receipt_long_outlined, size: 60.sp, color: Colors.grey[300]),
                     Text('لا توجد عروض حالياً', style: GoogleFonts.cairo(fontSize: 18.sp, color: Colors.grey)),
                   ],
                 ),
-              ),
-            ],
-          );
-        }
-        return ListView.builder(
-          padding: EdgeInsets.fromLTRB(15.sp, 15.sp, 15.sp, 30.sp),
-          itemCount: goals.length,
-          itemBuilder: (context, index) => _buildGoalCard(goals[index]),
+              );
+            }
+            return ListView.builder(
+              padding: EdgeInsets.fromLTRB(15.sp, 15.sp, 15.sp, 30.sp),
+              itemCount: goals.length,
+              itemBuilder: (context, index) => _buildGoalCard(goals[index]),
+            );
+          },
         );
       },
     );
@@ -229,6 +225,7 @@ class _WalletScreenState extends State<WalletScreen> {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: Text(
@@ -237,6 +234,7 @@ class _WalletScreenState extends State<WalletScreen> {
                       fontSize: 18.sp, 
                       fontWeight: FontWeight.bold, 
                       color: AppTheme.primaryGreen,
+                      height: 1.2
                     ),
                   ),
                 ),
@@ -253,13 +251,16 @@ class _WalletScreenState extends State<WalletScreen> {
                 ),
               ],
             ),
+            
             SizedBox(height: 10.sp),
+            
             Text(
               isCumulative 
                 ? "هدف تراكمي: اشترِ بمجموع ${goal['minAmount']} ج"
                 : "كاش باك فوري على كل طلب بـ ${goal['minAmount']} ج",
-              style: GoogleFonts.cairo(fontSize: 15.sp, color: Colors.black87),
+              style: GoogleFonts.cairo(fontSize: 15.sp, color: Colors.black87, fontWeight: FontWeight.w600),
             ),
+
             if (isCumulative) ...[
               SizedBox(height: 15.sp),
               ClipRRect(
@@ -276,27 +277,33 @@ class _WalletScreenState extends State<WalletScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('المحقَّق: ${currentProgress.toStringAsFixed(0)} ج', 
-                    style: GoogleFonts.cairo(fontSize: 14.sp, fontWeight: FontWeight.bold)),
+                    style: GoogleFonts.cairo(fontSize: 14.sp, color: Colors.grey[700], fontWeight: FontWeight.bold)),
                   Text('%${(progressPercent * 100).toStringAsFixed(0)}', 
                     style: GoogleFonts.cairo(fontSize: 16.sp, color: progressColor, fontWeight: FontWeight.bold)),
                 ],
               ),
             ],
+
             Padding(
               padding: EdgeInsets.symmetric(vertical: 12.sp),
               child: Divider(height: 1, color: Colors.grey[200]),
             ),
+
             Row(
               children: [
-                const Icon(Icons.calendar_month, size: 18, color: Colors.redAccent),
+                Icon(Icons.calendar_month, size: 16.sp, color: Colors.redAccent),
                 SizedBox(width: 5.sp),
-                Text("متبقي ${goal['daysRemaining']} يوم",
-                  style: GoogleFonts.cairo(fontSize: 14.sp, color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                Text(
+                  "متبقي ${goal['daysRemaining']} يوم",
+                  style: GoogleFonts.cairo(fontSize: 14.sp, color: Colors.redAccent, fontWeight: FontWeight.bold),
+                ),
                 const Spacer(),
-                const Icon(Icons.storefront, size: 18, color: Colors.blueGrey),
+                Icon(Icons.storefront, size: 16.sp, color: Colors.blueGrey),
                 SizedBox(width: 4.sp),
-                Text(goal['sellerName'] ?? 'كل التجار',
-                  style: GoogleFonts.cairo(fontSize: 14.sp, color: Colors.blueGrey, fontWeight: FontWeight.w600)),
+                Text(
+                  goal['sellerName'] ?? 'كل التجار',
+                  style: GoogleFonts.cairo(fontSize: 14.sp, color: Colors.blueGrey, fontWeight: FontWeight.w600),
+                ),
               ],
             ),
           ],
