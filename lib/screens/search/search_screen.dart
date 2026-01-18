@@ -1,127 +1,147 @@
-// lib/screens/search/search_screen.dart             
-import 'package:flutter/material.dart';              
-import 'package:cloud_firestore/cloud_firestore.dart';                                                    
-import 'package:provider/provider.dart';             
-import 'dart:async'; // نحتاجها في حال استخدام Debounce                                                                                                        
-// ✅ الاستيراد الصحيح لـ UserRole                   
-import 'package:my_test_app/models/user_role.dart';  
-// ✅ الاستيراد الصحيح لـ CategoryModel (يجب أن يبقى)
-import 'package:my_test_app/models/category_model.dart';                                                  
-// ✅ التعديل لحل التعارض: استيراد ProductModel وإخفاء CategoryModel منه                                  
-import 'package:my_test_app/models/product_model.dart' hide CategoryModel;                                                                                     
-// ⚠️ يجب التأكد من وجود ProductRepository.dart في مساره الصحيح.                                           
-import 'package:my_test_app/repositories/product_repository.dart';                                        
+// lib/screens/search/search_screen.dart
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import 'dart:async'; 
 
-class SearchScreen extends StatefulWidget {            
-  static const String routeName = '/search';                                                                
+import 'package:my_test_app/models/user_role.dart';
+import 'package:my_test_app/models/category_model.dart';
+import 'package:my_test_app/models/product_model.dart' hide CategoryModel;
+import 'package:my_test_app/repositories/product_repository.dart';
+
+// ✅ استيراد الشريط السفلي
+import 'package:my_test_app/widgets/category_bottom_nav_bar.dart';
+
+class SearchScreen extends StatefulWidget {
+  static const String routeName = '/search';
   final UserRole userRole;
-  
+
   const SearchScreen({super.key, required this.userRole});
-                                                       
-  @override                                            
-  State<SearchScreen> createState() => _SearchScreenState();                                              
+
+  @override
+  State<SearchScreen> createState() => _SearchScreenState();
 }
-                                                     
+
 class _SearchScreenState extends State<SearchScreen> {
-  final TextEditingController _searchController = TextEditingController();                                                                                       
+  final TextEditingController _searchController = TextEditingController();
+  
   // حالة الفلاتر
   String? _selectedMainCategory;
-  String? _selectedSubCategory;                        
+  String? _selectedSubCategory;
   ProductSortOption _selectedSort = ProductSortOption.nameAsc;
-                                                       
-  // قوائم التصنيفات                                   
+
+  // قوائم التصنيفات
   List<CategoryModel> _mainCategories = [];
   List<CategoryModel> _subCategories = [];
-  // حالة البحث                                        
-  List<ProductModel> _searchResults = [];
-  bool _isLoading = false;                             
-  bool _isInitial = true;                                                                                   
-  //Timer? _debounce;                                
   
+  // حالة البحث
+  List<ProductModel> _searchResults = [];
+  bool _isLoading = false;
+  bool _isInitial = true;
+  
+  // ✅ مؤقت لتأخير البحث أثناء الكتابة (Debounce) لتقليل استهلاك السيرفر
+  Timer? _debounce;
+
   @override
   void initState() {
-    super.initState();                                   
-    _fetchCategories();                                  
-    // ⚠️ لإطلاق البحث عند الكتابة: يجب تفعيل هذا السطر إذا كنت تستخدم Debounce                                
-    // _searchController.addListener(_debouncedSearch);                                                     
-  }                                                                                                         
-  
-  // @override
-  // void dispose() {                                  
-  //   _searchController.dispose();                    
-  //   // _debounce?.cancel();                         
-  //   super.dispose();                                
-  // }                                                                                                                                                           
-  
-  // --- دوال جلب البيانات ---                         
-  Future<void> _fetchCategories() async {                
-    final repo = ProductRepository();                    
-    try {                                                  
+    super.initState();
+    _fetchCategories();
+    // ✅ تفعيل مستمع الكتابة
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  // ✅ تفعيل الـ dispose بشكل كامل لتنظيف الذاكرة
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  // ✅ دالة مراقبة الكتابة
+  void _onSearchChanged() {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      if (_searchController.text.isNotEmpty) {
+        _performSearch();
+      }
+    });
+  }
+
+  // --- دوال جلب البيانات ---
+  Future<void> _fetchCategories() async {
+    final repo = ProductRepository();
+    try {
       final main = await repo.fetchMainCategories();
-      setState(() {                                          
-        _mainCategories = main;                              
-        // جلب الكل في البداية                               
-        _fetchSubCategories(null);                         
-      });                                                
-    } catch (e) {                                          
-      print("Error fetching categories: $e");
+      if (mounted) {
+        setState(() {
+          _mainCategories = main;
+          _fetchSubCategories(null);
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching categories: $e");
     }
   }
 
-  Future<void> _fetchSubCategories(String? mainCatId) async {                                                 
-    final repo = ProductRepository();                    
+  Future<void> _fetchSubCategories(String? mainCatId) async {
+    final repo = ProductRepository();
     try {
-      final sub = await repo.fetchSubCategories(mainCatId);                                                     
-      setState(() {
-        _subCategories = sub;
-      });                                                
-    } catch (e) {                                          
-      print("Error fetching sub categories: $e");        
-    }                                                  
-  }                                                                                                         
-  
-  // --- منطق البحث ---                                
-  void _debouncedSearch() {                              
-    if (!_isLoading) {                                     
-      _performSearch();
-    }                                                  
+      final sub = await repo.fetchSubCategories(mainCatId);
+      if (mounted) {
+        setState(() {
+          _subCategories = sub;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching sub categories: $e");
+    }
   }
-                                                       
-  Future<void> _performSearch() async {                  
+
+  Future<void> _performSearch() async {
+    if (!mounted) return;
+    
     setState(() {
-      _isLoading = true;                                   
-      _isInitial = false;                                
-    });                                                                                                       
+      _isLoading = true;
+      _isInitial = false;
+    });
+
+    final repo = ProductRepository();
+    final searchTerm = _searchController.text.trim();
     
-    final repo = ProductRepository();                    
-    final searchTerm = _searchController.text.trim();    
-    try {                                                  
-      final results = await repo.searchProducts(             
-        userRole: widget.userRole,                           
-        searchTerm: searchTerm,                              
-        mainCategoryId: _selectedMainCategory,               
-        subCategoryId: _selectedSubCategory,                 
-        sortOption: _selectedSort,                         
-      );                                                                                                        
-      
-      setState(() {                                          
-        _searchResults = results;                            
-        _isLoading = false;                                
-      });                                            
-    } catch (e) {                                          
-      print("Error searching products: $e");               
-      setState(() {
-        _searchResults = [];                                 
-        _isLoading = false;                                
-      });                                                
-    }                                                  
-  }                                                                                                         
-  
-  // --- بناء المكونات ---                             
-  Widget _buildProductCard(ProductModel product) {       
-    final displayPrice = product.displayPrice != null ? '${product.displayPrice!.toStringAsFixed(2)} ج' : 'غير متوفر';
+    try {
+      final results = await repo.searchProducts(
+        userRole: widget.userRole,
+        searchTerm: searchTerm,
+        mainCategoryId: _selectedMainCategory,
+        subCategoryId: _selectedSubCategory,
+        sortOption: _selectedSort,
+      );
+
+      if (mounted) {
+        setState(() {
+          _searchResults = results;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error searching products: $e");
+      if (mounted) {
+        setState(() {
+          _searchResults = [];
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // --- بناء المكونات ---
+  Widget _buildProductCard(ProductModel product) {
+    final displayPrice = product.displayPrice != null 
+        ? '${product.displayPrice!.toStringAsFixed(2)} ج' 
+        : 'غير متوفر';
     
-    // 🟢 [التصحيح]: استخلاص رابط الصورة من القائمة
     final imageUrl = product.imageUrls.isNotEmpty 
         ? product.imageUrls.first 
         : 'https://via.placeholder.com/100'; 
@@ -130,233 +150,198 @@ class _SearchScreenState extends State<SearchScreen> {
         ? '/product-offer-details/${product.id}'             
         : '/product-details/${product.id}';                                                                   
     
-    return Card(                                           
-      elevation: 3,                                        
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),                                   
-      child: InkWell(                                        
-        onTap: () => Navigator.pushNamed(context, linkTarget),                                                    
-        borderRadius: BorderRadius.circular(10),             
-        child: Padding(                                        
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: () => Navigator.pushNamed(context, linkTarget),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
           padding: const EdgeInsets.all(8.0),
-          child: Column(                                         
-            mainAxisAlignment: MainAxisAlignment.center,                                                              
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [                                            
-              ClipOval(                                              
-                child: Image.network(                                  
-                  imageUrl, // 🟢 استخدام الرابط المصحح
-                  width: 100, 
-                  height: 100, 
-                  fit: BoxFit.cover,                                                               
-                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.image, size: 100),
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.image, size: 50),
+                  ),
                 ),
-              ),                                                   
-              const SizedBox(height: 8),                           
+              ),
+              const SizedBox(height: 8),
               Text(
                 product.name,
-                textAlign: TextAlign.center,                         
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),                                        
-                maxLines: 2,                                         
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-              ),                                                   
-              const SizedBox(height: 5),                           
-              Text(                                                  
-                displayPrice,                                        
-                textAlign: TextAlign.center,                         
-                style: TextStyle(                                      
-                  fontWeight: FontWeight.bold,                         
-                  fontSize: 15,
-                  color: Theme.of(context).colorScheme.primary,                                                           
-                ),                                                 
               ),
-              const SizedBox(height: 8),                           
-              OutlinedButton.icon(
-                onPressed: () => Navigator.pushNamed(context, linkTarget),
-                icon: const Icon(Icons.visibility, size: 18),                                                             
-                label: const Text('عرض التفاصيل', style: TextStyle(fontSize: 12)),                                        
-                style: OutlinedButton.styleFrom(                       
-                  padding: const EdgeInsets.symmetric(vertical: 5),                                                         
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),                                    
-                  side: BorderSide(color: Theme.of(context).colorScheme.primary),                                         
-                ),                                                 
-              ),                                                 
-            ],                                                 
-          ),                                                 
-        ),                                                 
-      ),                                                 
-    );                                                 
-  }                                                  
-  
-  // 💡 [البديل المؤقت]: استبدال CustomDropdown بـ DropdownButton العادي                                    
-  Widget _buildFilterDropdown<T>({                       
+              const SizedBox(height: 4),
+              Text(
+                displayPrice,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: Theme.of(context).primaryColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterDropdown<T>({
     required T? value,
-    required String hintText,                            
-    required List<T> items,                              
-    required String Function(T) itemLabel,               
+    required String hintText,
+    required List<T> items,
+    required String Function(T) itemLabel,
     required T Function(T) itemValue,
-    required void Function(T?) onChanged,              
-  }) {                                                   
+    required void Function(T?) onChanged,
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),                                         
-      decoration: BoxDecoration(                             
-        border: Border.all(color: Colors.grey.shade300),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.grey.shade200),
         borderRadius: BorderRadius.circular(10),
-      ),                                                   
-      child: DropdownButtonHideUnderline(                    
+      ),
+      child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
-          isExpanded: true,                                    
+          isExpanded: true,
           value: value,
-          hint: Text(hintText),                                
-          items: items.map((item) {                              
-            return DropdownMenuItem<T>(                            
-              value: itemValue(item),                              
-              child: Text(itemLabel(item), overflow: TextOverflow.ellipsis),
-            );                                                 
+          hint: Text(hintText, style: const TextStyle(fontSize: 13)),
+          items: items.map((item) {
+            return DropdownMenuItem<T>(
+              value: itemValue(item),
+              child: Text(itemLabel(item), style: const TextStyle(fontSize: 13)),
+            );
           }).toList(),
           onChanged: onChanged,
-        ),                                                 
-      ),                                                 
-    );
-  }                                                                                                         
-  
-  Widget _buildFilters() {                               
-    return Padding(                                        
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10),                                      
-      child: Column(                                         
-        children: [                                            
-          // فلتر الأقسام الرئيسية
-          _buildFilterDropdown<CategoryModel>(                   
-            value: _selectedMainCategory != null && _mainCategories.any((c) => c.id == _selectedMainCategory)
-                ? _mainCategories.firstWhere((c) => c.id == _selectedMainCategory)                                        
-                : null,                                          
-            hintText: 'جميع الأقسام الرئيسية',                   
-            items: _mainCategories,                              
-            itemLabel: (cat) => cat.name,
-            itemValue: (cat) => cat,                             
-            onChanged: (CategoryModel? category) {
-              final value = category?.id;
-              setState(() {                                          
-                _selectedMainCategory = value;
-                _selectedSubCategory = null;                       
-              });                                                  
-              _fetchSubCategories(value);                          
-              _performSearch();                                  
-            },                                                 
-          ),                                                   
-          const SizedBox(height: 10),
-                                                               
-          // فلتر الأقسام الفرعية                              
-          _buildFilterDropdown<CategoryModel>(                   
-            value: _selectedSubCategory != null && _subCategories.any((c) => c.id == _selectedSubCategory)
-                ? _subCategories.firstWhere((c) => c.id == _selectedSubCategory)                                          
-                : null,                                          
-            hintText: 'جميع الأقسام الفرعية',
-            items: _subCategories,                               
-            itemLabel: (cat) => cat.name,                        
-            itemValue: (cat) => cat,
-            onChanged: (CategoryModel? category) {                 
-              setState(() => _selectedSubCategory = category?.id);                                                      
-              _performSearch();                                  
-            },                                                 
-          ),                                                   
-          const SizedBox(height: 10),                                                                               
-          // فلتر الفرز
-          _buildFilterDropdown<ProductSortOption>(               
-            value: _selectedSort,
-            hintText: 'الفرز',
-            items: ProductSortOption.values.toList(),            
-            itemLabel: (option) {
-              switch (option) {                                      
-                case ProductSortOption.nameAsc: return 'الاسم (أ - ي)';                                                   
-                case ProductSortOption.nameDesc: return 'الاسم (ي - أ)';
-                case ProductSortOption.priceAsc: return 'السعر (الأقل أولاً)';
-                case ProductSortOption.priceDesc: return 'السعر (الأعلى أولاً)';                                         
-              }
-            },
-            itemValue: (option) => option,
-            onChanged: (value) {
-              setState(() => _selectedSort = value ?? ProductSortOption.nameAsc);
-              _performSearch();                                  
-            },
-          ),                                                 
-        ],                                                 
+        ),
       ),
-    );                                                 
-  }                                                  
-  
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {                   
-    return Scaffold(                                       
-      appBar: AppBar(                                        
-        title: const Text('البحث في أسواق أكسب', style: TextStyle(color: Colors.white)),                          
-        backgroundColor: Theme.of(context).colorScheme.primary,                                                   
-        iconTheme: const IconThemeData(color: Colors.white),                                                      
-        actions: [                                             
-          IconButton(                                            
-            icon: const Icon(Icons.brightness_4),
-            onPressed: () {                                        
-              // منطق تبديل الثيم
-            },                                                 
-          ),
-        ],                                                 
-      ),                                                   
-      body: Column(                                          
-        children: [                                            
-          // شريط البحث
-          Container(                                             
-            padding: const EdgeInsets.all(16.0),                 
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,                  
-              boxShadow: [                                           
-                BoxShadow(                                             
-                  color: Theme.of(context).shadowColor.withOpacity(0.1),                                                    
-                  blurRadius: 5,                                     
-                ),                                                 
-              ],                                                 
-            ),                                                   
-            child: TextField(                                      
-              controller: _searchController,                       
-              onChanged: (_) => _debouncedSearch(),
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: const Text('البحث عن المنتجات', style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: true,
+        elevation: 0,
+      ),
+      body: Column(
+        children: [
+          // شريط البحث الثابت
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextField(
+              controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'ابحث عن منتج...',                         
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),                                      
-                prefixIcon: const Icon(Icons.search),              
+                hintText: 'اكتب اسم المنتج هنا...',
+                filled: true,
+                fillColor: Colors.white,
+                prefixIcon: const Icon(Icons.search, color: Colors.green),
+                suffixIcon: _searchController.text.isNotEmpty 
+                    ? IconButton(icon: const Icon(Icons.clear), onPressed: () => _searchController.clear())
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 15),
               ),
-            ),                                                 
-          ),                                                                                                        
-          // الفلاتر                                           
-          _buildFilters(),                           
-          
-          // منطقة النتائج                                     
-          Expanded(                                              
-            child: _isLoading                                        
-                ? const Center(child: CircularProgressIndicator())                                                        
-                : _searchResults.isEmpty                                 
+            ),
+          ),
+
+          // منطقة الفلاتر
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 160,
+                  child: _buildFilterDropdown<CategoryModel>(
+                    value: _selectedMainCategory != null && _mainCategories.any((c) => c.id == _selectedMainCategory)
+                        ? _mainCategories.firstWhere((c) => c.id == _selectedMainCategory) : null,
+                    hintText: 'القسم الرئيسي',
+                    items: _mainCategories,
+                    itemLabel: (cat) => cat.name,
+                    itemValue: (cat) => cat,
+                    onChanged: (cat) {
+                      setState(() {
+                        _selectedMainCategory = cat?.id;
+                        _selectedSubCategory = null;
+                      });
+                      _fetchSubCategories(cat?.id);
+                      _performSearch();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 160,
+                  child: _buildFilterDropdown<CategoryModel>(
+                    value: _selectedSubCategory != null && _subCategories.any((c) => c.id == _selectedSubCategory)
+                        ? _subCategories.firstWhere((c) => c.id == _selectedSubCategory) : null,
+                    hintText: 'القسم الفرعي',
+                    items: _subCategories,
+                    itemLabel: (cat) => cat.name,
+                    itemValue: (cat) => cat,
+                    onChanged: (cat) {
+                      setState(() => _selectedSubCategory = cat?.id);
+                      _performSearch();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 15),
+
+          // النتائج
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _searchResults.isEmpty
                     ? Center(
-                        child: Text(                                           
-                          _isInitial
-                              ? 'ابدأ البحث للعثور على ما تريد...'                                                                      
-                              : 'لا توجد منتجات مطابقة لبحثك أو فلاترك.',                                                           
-                          style: TextStyle(color: Theme.of(context).colorScheme.secondary),                                         
-                          textAlign: TextAlign.center,                                                                            
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.search_off, size: 80, color: Colors.grey[300]),
+                            const SizedBox(height: 10),
+                            Text(
+                              _isInitial ? 'ابدأ البحث الآن' : 'لم نجد نتائج لهذا البحث',
+                              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                            ),
+                          ],
                         ),
-                      )                                                  
+                      )
                     : GridView.builder(
-                        padding: const EdgeInsets.all(12),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(                                              
-                          crossAxisCount: 2,                                   
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,                                 
-                          childAspectRatio: 0.75,
-                        ),                                                   
-                        itemCount: _searchResults.length,                                                                         
-                        itemBuilder: (context, index) {
-                          return _buildProductCard(_searchResults[index]);
-                        },                                                 
+                        padding: const EdgeInsets.all(16),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 0.8,
+                        ),
+                        itemCount: _searchResults.length,
+                        itemBuilder: (context, index) => _buildProductCard(_searchResults[index]),
                       ),
           ),
-        ],                                                 
-      ),                                                 
-    );                                                 
-  }                                                  
+        ],
+      ),
+      // ✅ إضافة الشريط السفلي وربطه بأيقونة البحث (Index 3)
+      bottomNavigationBar: const CategoryBottomNavBar(),
+    );
+  }
 }
