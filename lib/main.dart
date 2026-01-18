@@ -10,7 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:latlong2/latlong.dart'; // تأكد من وجودها للتعامل مع الإحداثيات في المسارات
+import 'package:latlong2/latlong.dart'; 
 
 import 'package:my_test_app/firebase_options.dart';
 import 'package:my_test_app/theme/app_theme.dart';
@@ -24,6 +24,9 @@ import 'package:my_test_app/providers/cashback_provider.dart';
 import 'package:my_test_app/controllers/seller_dashboard_controller.dart';
 import 'package:my_test_app/models/logged_user.dart';
 import 'package:my_test_app/services/user_session.dart';
+
+// ✅ استيراد موديل الأدوار لاستخدامه في البحث
+import 'package:my_test_app/models/user_role.dart';
 
 // استيراد الشاشات
 import 'package:my_test_app/screens/login_screen.dart';
@@ -58,6 +61,9 @@ import 'package:my_test_app/screens/seller/add_offer_screen.dart';
 import 'package:my_test_app/screens/seller/create_gift_promo_screen.dart';
 import 'package:my_test_app/screens/delivery_area_screen.dart';
 import 'package:my_test_app/services/bubble_service.dart';
+
+// ✅ شاشة البحث
+import 'package:my_test_app/screens/search/search_screen.dart';
 
 // استيراد الصفحات الجديدة لخدمة "ابعتلي حد" والتتبع
 import 'package:my_test_app/screens/special_requests/abaatly_had_pro_screen.dart';
@@ -159,6 +165,14 @@ class MyApp extends StatelessWidget {
             CartScreen.routeName: (context) => const CartScreen(),
             CheckoutScreen.routeName: (context) => const CheckoutScreen(),
             MyOrdersScreen.routeName: (context) => const MyOrdersScreen(),
+            
+            // ✅ إضافة مسار شاشة البحث مع تمرير نوع المستخدم
+            SearchScreen.routeName: (context) => SearchScreen(
+              userRole: Provider.of<BuyerDataProvider>(context, listen: false).userRole == 'consumer' 
+                  ? UserRole.consumer 
+                  : UserRole.buyer
+            ),
+
             '/register': (context) => const NewClientScreen(),
             '/traders': (context) => const TradersScreen(),
             '/wallet': (context) => const WalletScreen(),
@@ -180,7 +194,6 @@ class MyApp extends StatelessWidget {
             '/create-gift': (context) => const CreateGiftPromoScreen(currentSellerId: ''),
             '/delivery-areas': (context) => const DeliveryAreaScreen(currentSellerId: ''),
 
-            // 🚚 مسار خدمة "ابعتلي حد" المطور
             '/abaatly-had': (context) {
               final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
               return AbaatlyHadProScreen(
@@ -189,7 +202,6 @@ class MyApp extends StatelessWidget {
               );
             },
 
-            // 📍 مسار تتبع الطلب الخاص (للفقاعة)
             '/customerTracking': (context) {
               final orderId = ModalRoute.of(context)?.settings.arguments as String? ?? '';
               return CustomerTrackingScreen(orderId: orderId);
@@ -351,4 +363,3 @@ class PostRegistrationMessageScreen extends StatelessWidget {
     );
   }
 }
-
