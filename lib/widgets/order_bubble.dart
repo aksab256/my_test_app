@@ -34,28 +34,38 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
     super.dispose();
   }
 
-  // دالة مسح الطلب محلياً وإخفاء الفقاعة
+  // مسح الطلب محلياً من الجهاز وإخفاء الفقاعة
   Future<void> _clearOrder() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('active_special_order_id');
     BubbleService.hide();
   }
 
-  // 🗑️ دالة إلغاء الطلب من طرف العميل في الفايربيز
-  Future<void> _cancelOrderInFirebase() async {
+  // 🛡️ منطق الإلغاء الذكي من الفقاعة (يرسل الحالات المخصصة للـ EC2)
+  Future<void> _handleSmartCancelFromBubble(String currentStatus) async {
+    bool isAccepted = currentStatus != 'pending';
+    String targetStatus = isAccepted 
+        ? 'cancelled_by_user_after_accept' 
+        : 'cancelled_by_user_before_accept';
+
+    // تحديث الفايربيز (الـ EC2 سيراقب هذه الحالات لاحقاً)
     try {
-      await FirebaseFirestore.instance
-          .collection('specialRequests')
-          .doc(widget.orderId)
-          .update({'status': 'cancelled'});
+      await FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).update({
+        'status': targetStatus,
+        'cancelledAt': FieldValue.serverTimestamp(),
+        'cancelledBy': 'customer'
+      });
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("✅ تم إلغاء الطلب بنجاح"), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(isAccepted ? "تم الإلغاء (سيتم مراجعة نقاطك)" : "تم إلغاء الطلب بنجاح"),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     } catch (e) {
-      debugPrint("Error cancelling order: $e");
+      debugPrint("Bubble Cancel Error: $e");
     }
   }
 
@@ -63,7 +73,6 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
     switch (vehicleType) {
       case 'pickup': return Icons.local_shipping;
       case 'jumbo': return Icons.fire_truck;
-      case 'motorcycle':
       default: return Icons.delivery_dining;
     }
   }
@@ -71,22 +80,17 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('specialRequests')
-          .doc(widget.orderId)
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || !snapshot.data!.exists) {
-          return const SizedBox.shrink();
-        }
+        if (!snapshot.hasData || !snapshot.data!.exists) return const SizedBox.shrink();
 
         var data = snapshot.data!.data() as Map<String, dynamic>;
         String status = data['status'] ?? 'pending';
         String? vehicleType = data['vehicleType'];
 
-        // 🛑 التحديث الذكي: الإخفاء التلقائي عند انتهاء الطلب أو عدم توفر مناديب
-        if (status == 'delivered' || 
-            status == 'cancelled' || 
+        // ✅ تحديث سلوك الإخفاء: أي حالة تحتوي على 'cancelled' تجعل الفقاعة تختفي
+        if (status.contains('cancelled') || 
+            status == 'delivered' || 
             status == 'rejected' || 
             status == 'no_drivers_available' || 
             status == 'expired') {
@@ -106,10 +110,7 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
               childWhenDragging: const SizedBox.shrink(),
               onDragEnd: (details) {
                 setState(() {
-                  position = Offset(
-                    details.offset.dx.clamp(5.w, 82.w),
-                    details.offset.dy.clamp(10.h, 85.h),
-                  );
+                  position = Offset(details.offset.dx.clamp(5.w, 82.w), details.offset.dy.clamp(10.h, 85.h));
                 });
               },
               child: GestureDetector(
@@ -130,114 +131,71 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
   }
 
   void _handleBubbleTap(BuildContext context) {
-    bool isAlreadyOpen = false;
-    navigatorKey.currentState?.popUntil((route) {
-      if (route.settings.name == '/customerTracking') isAlreadyOpen = true;
-      return true;
-    });
-
-    if (isAlreadyOpen) {
-      navigatorKey.currentState?.pop();
-    } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          settings: const RouteSettings(name: '/customerTracking'),
-          builder: (context) => CustomerTrackingScreen(orderId: widget.orderId),
-        ),
-      );
-    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        settings: const RouteSettings(name: '/customerTracking'),
+        builder: (context) => CustomerTrackingScreen(orderId: widget.orderId),
+      ),
+    );
   }
 
   void _showOptionsDialog(BuildContext context, String status) {
-    bool canCancel = status == 'pending'; 
+    bool isAccepted = status != 'pending';
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("إدارة الطلب الحالي"),
-        content: Text(canCancel 
-          ? "هل تريد إلغاء الطلب نهائياً أم إخفاء الفقاعة فقط؟" 
-          : "الطلب قيد التنفيذ الآن. يمكنك إخفاء الفقاعة من شاشتك فقط."),
-        actions: [
-          if (canCancel)
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text("إدارة الطلب"),
+          content: Text(isAccepted 
+            ? "⚠️ المندوب قبل الطلب. إلغاء الطلب الآن قد يخصم من نقاطك. هل تريد الاستمرار؟" 
+            : "هل تريد إلغاء الطلب نهائياً أم إخفاء هذه الفقاعة فقط؟"),
+          actions: [
             TextButton(
               onPressed: () {
                 Navigator.pop(ctx);
-                _cancelOrderInFirebase(); 
+                _handleSmartCancelFromBubble(status); 
               },
-              child: const Text("إلغاء الطلب نهائياً", 
-                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              child: const Text("إلغاء الطلب نهائياً", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
             ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _clearOrder(); 
-            },
-            child: const Text("إخفاء الفقاعة فقط"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("رجوع", style: TextStyle(color: Colors.grey)),
-          ),
-        ],
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _clearOrder(); 
+              },
+              child: const Text("إخفاء من الشاشة فقط"),
+            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("رجوع")),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildBubbleUI(bool isAccepted, bool isDragging, String? vehicleType) {
     return Container(
-      width: 16.w,
-      height: 16.w,
+      width: 16.w, height: 16.w,
       decoration: BoxDecoration(
-        gradient: isAccepted 
-            ? null 
-            : RadialGradient(
-                colors: [Colors.orange[800]!, Colors.orange[900]!],
-                center: Alignment.center,
-                radius: 0.8,
-              ),
+        gradient: isAccepted ? null : RadialGradient(colors: [Colors.orange[800]!, Colors.orange[900]!], radius: 0.8),
         color: isAccepted ? Colors.green[700] : null,
         shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: (isAccepted ? Colors.green : Colors.orange).withOpacity(0.5),
-            blurRadius: 15,
-            spreadRadius: 2,
-          )
-        ],
+        boxShadow: [BoxShadow(color: (isAccepted ? Colors.green : Colors.orange).withOpacity(0.5), blurRadius: 15)],
         border: Border.all(color: Colors.white, width: 2),
       ),
       child: Stack(
         alignment: Alignment.center,
         children: [
           if (!isAccepted)
-            const SizedBox(
-              width: 50, height: 50,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.5,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white30),
-              ),
-            ),
+            const SizedBox(width: 50, height: 50, child: CircularProgressIndicator(strokeWidth: 1.5, valueColor: AlwaysStoppedAnimation<Color>(Colors.white30))),
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                isAccepted ? _getVehicleIcon(vehicleType) : Icons.radar,
-                color: Colors.white,
-                size: 20.sp,
-              ),
+              Icon(isAccepted ? _getVehicleIcon(vehicleType) : Icons.radar, color: Colors.white, size: 20.sp),
               if (!isAccepted)
-                Text(
-                  "جاري البحث",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 6.5.sp,
-                    fontWeight: FontWeight.bold,
-                    decoration: TextDecoration.none,
-                  ),
-                ),
+                Text("جاري البحث", style: TextStyle(color: Colors.white, fontSize: 6.5.sp, fontWeight: FontWeight.bold, decoration: TextDecoration.none)),
             ],
           ),
         ],
