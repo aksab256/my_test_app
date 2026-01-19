@@ -5,68 +5,69 @@ import 'package:flutter/foundation.dart';
 class DeliveryService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  Future<double> calculateTripCost({
+  /// دالة حساب التكلفة التفصيلية بناءً على إعدادات كل مركبة
+  /// ترفع خطأ (Exception) في حال عدم وجود المستند لضمان دقة البيانات
+  Future<Map<String, double>> calculateDetailedTripCost({
     required double distanceInKm,
     required String vehicleType
   }) async {
     try {
-      // 1. توحيد اسم المستند (نستخدم نفس الاسم المرسل + Config)
-      // إذا كان motorcycle سيبحث عن motorcycleConfig
-      // إذا كان pickup سيبحث عن pickupConfig
+      // 1. تحديد اسم المستند بناءً على نوع المركبة
       String configDocName = "${vehicleType}Config";
+      
+      debugPrint("🚕 جاري جلب الإعدادات لمركبة: $configDocName");
 
-      // إذا كانت القيمة فارغة نضع افتراضي
-      if (vehicleType.isEmpty) {
-        configDocName = "deliveryConfig"; 
-      }
-
-      debugPrint("🚕 Calculating for: $configDocName | Distance: ${distanceInKm.toStringAsFixed(2)} km");
-
-      // 2. جلب الإعدادات
+      // 2. جلب الإعدادات من كولكشن appSettings
       var settingsDoc = await _db.collection('appSettings').doc(configDocName).get();
 
-      // قيم افتراضية (Fallback) في حالة عدم وجود المستند
-      double baseFare = 10.0;
-      double kmRate = 5.0;
-      double minFare = 15.0;
-      double serviceFee = 0.0;
-
-      if (settingsDoc.exists && settingsDoc.data() != null) {
-        final data = settingsDoc.data()!;
-        baseFare = (data['baseFare'] ?? 10.0).toDouble();
-        kmRate = (data['kmRate'] ?? 5.0).toDouble();
-        minFare = (data['minFare'] ?? 15.0).toDouble();
-        serviceFee = (data['serviceFee'] ?? 0.0).toDouble();
-        debugPrint("✅ Data Loaded: Base: $baseFare, Rate: $kmRate");
-      } else {
-        debugPrint("⚠️ Warning: Document $configDocName NOT FOUND. Using defaults.");
-        // إذا لم يجد motorcycleConfig جرب البحث في deliveryConfig كخيار أخير
-        if (configDocName == "motorcycleConfig") {
-           var backupDoc = await _db.collection('appSettings').doc('deliveryConfig').get();
-           if (backupDoc.exists) {
-              final data = backupDoc.data()!;
-              baseFare = (data['baseFare'] ?? 10.0).toDouble();
-              kmRate = (data['kmRate'] ?? 5.0).toDouble();
-              minFare = (data['minFare'] ?? 15.0).toDouble();
-           }
-        }
+      // 🛑 فحص وجود المستند: إذا لم يوجد يرمي خطأ فوراً ولا يكمل الحسبة
+      if (!settingsDoc.exists || settingsDoc.data() == null) {
+        throw Exception("خطأ حرج: مستند الإعدادات ($configDocName) غير موجود في Firebase. يرجى مراجعة لوحة التحكم.");
       }
 
-      // 3. الحسبة
-      double tripSubtotal = baseFare + (distanceInKm * kmRate);
+      final data = settingsDoc.data()!;
 
+      // 3. استخراج البيانات (مع التأكد من وجود الحقول الأساسية)
+      // ملاحظة: نستخدم ?? لرمي خطأ إذا كان الحقل نفسه مفقوداً داخل المستند
+      double baseFare = (data['baseFare'] as num).toDouble();
+      double kmRate = (data['kmRate'] as num).toDouble();
+      double minFare = (data['minFare'] as num).toDouble();
+      double serviceFeeFixed = (data['serviceFee'] ?? 0.0).toDouble(); // رسوم ثابتة إضافية (اختياري)
+      
+      // جلب نسبة العمولة (مثلاً 15.0 تعني 15%)
+      double serviceFeePercentage = (data['serviceFeePercentage'] as num).toDouble() / 100;
+
+      // 4. منطق الحسبة المالية
+      // أ- حساب صافي الرحلة الأساسي (العداد + المسافة)
+      double tripSubtotal = baseFare + (distanceInKm * kmRate);
+      
+      // ب- تطبيق الحد الأدنى للرحلة
       if (tripSubtotal < minFare) {
         tripSubtotal = minFare;
       }
 
-      double totalFinal = tripSubtotal + serviceFee;
-      return double.parse(totalFinal.toStringAsFixed(2));
+      // ج- حساب قيمة عمولة المنصة من صافي الرحلة
+      double commissionAmount = tripSubtotal * serviceFeePercentage;
+
+      // د- السعر الإجمالي الذي سيدفعه المستخدم
+      double totalForUser = tripSubtotal + commissionAmount + serviceFeeFixed;
+
+      debugPrint("✅ تم الحساب بنجاح: إجمالي العميل: $totalForUser | عمولة المنصة: $commissionAmount");
+
+      return {
+        'totalPrice': double.parse(totalForUser.toStringAsFixed(2)),      // السعر الشامل للعميل
+        'commissionAmount': double.parse(commissionAmount.toStringAsFixed(2)), // ما سيخصم من محفظة المندوب
+        'driverNet': double.parse(tripSubtotal.toStringAsFixed(2)),       // ما سيتبقى للمندوب في جيبه
+      };
+
     } catch (e) {
-      debugPrint("❌ Error in DeliveryService: $e");
-      return 15.0;
+      debugPrint("❌ فشل حساب التكلفة: $e");
+      // نعيد رمي الخطأ ليتم التعامل معه في الواجهة (إظهار رسالة خطأ للعميل)
+      rethrow;
     }
   }
 
+  /// دالة حساب المسافة بين نقطتين بالكيلومتر
   double calculateDistance(double startLat, double startLng, double endLat, double endLng) {
     double distanceInMeters = Geolocator.distanceBetween(startLat, startLng, endLat, endLng);
     return distanceInMeters / 1000;
