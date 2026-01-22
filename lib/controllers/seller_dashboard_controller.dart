@@ -18,7 +18,7 @@ class SellerDashboardController with ChangeNotifier {
   String? _sellerName;
   Map<String, dynamic>? _sellerData;
 
-  // Getters
+  // Getters (لا يتم تغييرها لضمان عمل الواجهات الحالية)
   SellerDashboardData get data => _data;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
@@ -42,7 +42,6 @@ class SellerDashboardController with ChangeNotifier {
   }
 
   Future<void> loadDashboardData(String sId) async {
-    // التحقق من المعرف
     final targetId = sId.isNotEmpty ? sId : sellerId;
     if (targetId.isEmpty) {
       _isLoading = false;
@@ -58,41 +57,44 @@ class SellerDashboardController with ChangeNotifier {
       // 1. جلب بيانات البائع الأساسية
       await fetchSellerData();
 
-      // 2. جلب الطلبات
-      final ordersSnapshot = await _db
-          .collection("orders")
-          .where("sellerId", isEqualTo: targetId)
-          .get();
+      // 2. جلب الطلبات من المجموعتين بالتوازي لسرعة الأداء
+      final results = await Future.wait([
+        _db.collection("orders").where("sellerId", isEqualTo: targetId).get(),
+        _db.collection("consumerorders").where("supermarketId", isEqualTo: targetId).get(),
+      ]);
 
       int totalOrders = 0;
       double completedSales = 0.0;
       int pendingOrders = 0;
       int newOrders = 0;
 
-      for (var doc in ordersSnapshot.docs) {
-        final orderData = doc.data();
-        totalOrders++;
+      // معالجة البيانات المجمعة
+      for (var snapshot in results) {
+        for (var doc in snapshot.docs) {
+          final orderData = doc.data();
+          totalOrders++;
 
-        final status = orderData['status']?.toString().toLowerCase().trim() ?? '';
+          final status = orderData['status']?.toString().toLowerCase().trim() ?? '';
 
-        // المبيعات المكتملة
-        if (status == 'delivered' || status == 'تم التوصيل') {
-          completedSales += (orderData['total'] is num) ? (orderData['total'] as num).toDouble() : 0.0;
-        } else {
-          // فحص الحالات غير المكتملة وغير الملغاة
-          const cancelledStatuses = {'ملغى', 'cancelled', 'rejected', 'failed'};
-          if (!cancelledStatuses.contains(status)) {
-            pendingOrders++;
+          // حساب المبيعات المكتملة (دعم اللغتين)
+          if (status == 'delivered' || status == 'تم التوصيل') {
+            completedSales += (orderData['total'] is num) ? (orderData['total'] as num).toDouble() : 0.0;
+          } else {
+            // فحص الحالات المعلقة (ليست ملغاة وليست مكتملة)
+            const cancelledStatuses = {'ملغى', 'cancelled', 'rejected', 'failed'};
+            if (!cancelledStatuses.contains(status)) {
+              pendingOrders++;
+            }
           }
-        }
 
-        // الطلبات الجديدة تماماً
-        if (status == 'new-order' || status == 'جديد' || status == 'new') {
-          newOrders++;
+          // الطلبات الجديدة تماماً
+          if (status == 'new-order' || status == 'جديد' || status == 'new') {
+            newOrders++;
+          }
         }
       }
 
-      // 3. تحديث البيانات النهائية
+      // 3. تحديث البيانات النهائية للكروت
       _data = SellerDashboardData(
         totalOrders: totalOrders,
         completedSalesAmount: completedSales,
