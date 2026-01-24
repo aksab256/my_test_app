@@ -34,21 +34,18 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
     super.dispose();
   }
 
-  // مسح الطلب محلياً من الجهاز وإخفاء الفقاعة
   Future<void> _clearOrder() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('active_special_order_id');
     BubbleService.hide();
   }
 
-  // 🛡️ منطق الإلغاء الذكي من الفقاعة (يرسل الحالات المخصصة للـ EC2)
   Future<void> _handleSmartCancelFromBubble(String currentStatus) async {
     bool isAccepted = currentStatus != 'pending';
     String targetStatus = isAccepted 
         ? 'cancelled_by_user_after_accept' 
         : 'cancelled_by_user_before_accept';
 
-    // تحديث الفايربيز (الـ EC2 سيراقب هذه الحالات لاحقاً)
     try {
       await FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).update({
         'status': targetStatus,
@@ -88,7 +85,6 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
         String status = data['status'] ?? 'pending';
         String? vehicleType = data['vehicleType'];
 
-        // ✅ تحديث سلوك الإخفاء: أي حالة تحتوي على 'cancelled' تجعل الفقاعة تختفي
         if (status.contains('cancelled') || 
             status == 'delivered' || 
             status == 'rejected' || 
@@ -130,14 +126,33 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
     );
   }
 
+  // ✅ التعديل الجوهري هنا لضمان فتح/قفل الصفحة ومنع التكرار
   void _handleBubbleTap(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        settings: const RouteSettings(name: '/customerTracking'),
-        builder: (context) => CustomerTrackingScreen(orderId: widget.orderId),
-      ),
-    );
+    final navState = navigatorKey.currentState;
+    if (navState == null) return;
+
+    bool isTrackingPageOpen = false;
+
+    // فحص إذا كانت صفحة التتبع هي المفتوحة حالياً
+    navState.popUntil((route) {
+      if (route.settings.name == '/customerTracking') {
+        isTrackingPageOpen = true;
+      }
+      return true; 
+    });
+
+    if (isTrackingPageOpen) {
+      // إذا كانت مفتوحة، نغلقها ونعود للشاشة السابقة
+      navState.pop();
+    } else {
+      // إذا لم تكن مفتوحة، نفتحها
+      navState.push(
+        MaterialPageRoute(
+          settings: const RouteSettings(name: '/customerTracking'),
+          builder: (context) => CustomerTrackingScreen(orderId: widget.orderId),
+        ),
+      );
+    }
   }
 
   void _showOptionsDialog(BuildContext context, String status) {
@@ -149,26 +164,26 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text("إدارة الطلب"),
+          title: const Text("إدارة الطلب", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
           content: Text(isAccepted 
             ? "⚠️ المندوب قبل الطلب. إلغاء الطلب الآن قد يخصم من نقاطك. هل تريد الاستمرار؟" 
-            : "هل تريد إلغاء الطلب نهائياً أم إخفاء هذه الفقاعة فقط؟"),
+            : "هل تريد إلغاء الطلب نهائياً أم إخفاء هذه الفقاعة فقط؟", style: const TextStyle(fontFamily: 'Cairo')),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.pop(ctx);
                 _handleSmartCancelFromBubble(status); 
               },
-              child: const Text("إلغاء الطلب نهائياً", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              child: const Text("إلغاء الطلب نهائياً", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
             ),
             TextButton(
               onPressed: () {
                 Navigator.pop(ctx);
                 _clearOrder(); 
               },
-              child: const Text("إخفاء من الشاشة فقط"),
+              child: const Text("إخفاء من الشاشة فقط", style: TextStyle(fontFamily: 'Cairo')),
             ),
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("رجوع")),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("رجوع", style: TextStyle(fontFamily: 'Cairo'))),
           ],
         ),
       ),
@@ -179,23 +194,51 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
     return Container(
       width: 16.w, height: 16.w,
       decoration: BoxDecoration(
+        // جردينت برتقالي في حالة البحث
         gradient: isAccepted ? null : RadialGradient(colors: [Colors.orange[800]!, Colors.orange[900]!], radius: 0.8),
+        // لون أخضر ثابت بمجرد القبول
         color: isAccepted ? Colors.green[700] : null,
         shape: BoxShape.circle,
-        boxShadow: [BoxShadow(color: (isAccepted ? Colors.green : Colors.orange).withOpacity(0.5), blurRadius: 15)],
+        boxShadow: [
+          BoxShadow(
+            color: (isAccepted ? Colors.green : Colors.orange).withOpacity(0.5), 
+            blurRadius: 15,
+            spreadRadius: 2
+          )
+        ],
         border: Border.all(color: Colors.white, width: 2),
       ),
       child: Stack(
         alignment: Alignment.center,
         children: [
           if (!isAccepted)
-            const SizedBox(width: 50, height: 50, child: CircularProgressIndicator(strokeWidth: 1.5, valueColor: AlwaysStoppedAnimation<Color>(Colors.white30))),
+            const SizedBox(
+              width: 50, height: 50, 
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5, 
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white30)
+              )
+            ),
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(isAccepted ? _getVehicleIcon(vehicleType) : Icons.radar, color: Colors.white, size: 20.sp),
+              // الأيقونة تتغير ديناميكياً
+              Icon(
+                isAccepted ? _getVehicleIcon(vehicleType) : Icons.radar, 
+                color: Colors.white, 
+                size: 20.sp
+              ),
               if (!isAccepted)
-                Text("جاري البحث", style: TextStyle(color: Colors.white, fontSize: 6.5.sp, fontWeight: FontWeight.bold, decoration: TextDecoration.none)),
+                Text(
+                  "جاري البحث", 
+                  style: TextStyle(
+                    color: Colors.white, 
+                    fontSize: 6.5.sp, 
+                    fontWeight: FontWeight.bold, 
+                    decoration: TextDecoration.none,
+                    fontFamily: 'Cairo'
+                  )
+                ),
             ],
           ),
         ],
