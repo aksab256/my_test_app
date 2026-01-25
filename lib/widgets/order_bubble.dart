@@ -34,12 +34,14 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
     super.dispose();
   }
 
+  // مسح الطلب محلياً من الجهاز وإخفاء الفقاعة
   Future<void> _clearOrder() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('active_special_order_id');
     BubbleService.hide();
   }
 
+  // 🛡️ منطق الإلغاء الذكي المعدل لضمان عدم توقف الشاشة
   Future<void> _handleSmartCancelFromBubble(String currentStatus) async {
     bool isAccepted = currentStatus != 'pending';
     String targetStatus = isAccepted 
@@ -47,13 +49,20 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
         : 'cancelled_by_user_before_accept';
 
     try {
+      // 1. تحديث الفايربيز بالحالة الجديدة
       await FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).update({
         'status': targetStatus,
         'cancelledAt': FieldValue.serverTimestamp(),
         'cancelledBy': 'customer'
       });
       
+      // 2. مسح بيانات الطلب وإخفاء الفقاعة من الـ Overlay
+      await _clearOrder();
+
       if (mounted) {
+        // 3. العودة للشاشة الرئيسية فوراً لتنظيف الـ Stack ومنع الشاشة السوداء
+        navigatorKey.currentState?.pushNamedAndRemoveUntil('/', (route) => false);
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(isAccepted ? "تم الإلغاء (سيتم مراجعة نقاطك)" : "تم إلغاء الطلب بنجاح"),
@@ -85,6 +94,7 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
         String status = data['status'] ?? 'pending';
         String? vehicleType = data['vehicleType'];
 
+        // تحديث سلوك الإخفاء: أي حالة تحتوي على 'cancelled' تجعل الفقاعة تختفي
         if (status.contains('cancelled') || 
             status == 'delivered' || 
             status == 'rejected' || 
@@ -126,14 +136,13 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
     );
   }
 
-  // ✅ التعديل الجوهري هنا لضمان فتح/قفل الصفحة ومنع التكرار
+  // ✅ منطق التبديل (Toggle) لفتح وإغلاق الصفحة
   void _handleBubbleTap(BuildContext context) {
     final navState = navigatorKey.currentState;
     if (navState == null) return;
 
     bool isTrackingPageOpen = false;
 
-    // فحص إذا كانت صفحة التتبع هي المفتوحة حالياً
     navState.popUntil((route) {
       if (route.settings.name == '/customerTracking') {
         isTrackingPageOpen = true;
@@ -142,10 +151,8 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
     });
 
     if (isTrackingPageOpen) {
-      // إذا كانت مفتوحة، نغلقها ونعود للشاشة السابقة
       navState.pop();
     } else {
-      // إذا لم تكن مفتوحة، نفتحها
       navState.push(
         MaterialPageRoute(
           settings: const RouteSettings(name: '/customerTracking'),
@@ -194,9 +201,7 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
     return Container(
       width: 16.w, height: 16.w,
       decoration: BoxDecoration(
-        // جردينت برتقالي في حالة البحث
         gradient: isAccepted ? null : RadialGradient(colors: [Colors.orange[800]!, Colors.orange[900]!], radius: 0.8),
-        // لون أخضر ثابت بمجرد القبول
         color: isAccepted ? Colors.green[700] : null,
         shape: BoxShape.circle,
         boxShadow: [
@@ -222,7 +227,6 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // الأيقونة تتغير ديناميكياً
               Icon(
                 isAccepted ? _getVehicleIcon(vehicleType) : Icons.radar, 
                 color: Colors.white, 
