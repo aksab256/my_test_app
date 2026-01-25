@@ -18,6 +18,7 @@ class OrderBubble extends StatefulWidget {
 class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStateMixin {
   Offset position = Offset(80.w, 70.h);
   late AnimationController _pulseController;
+  bool _ratingShown = false; // لمنع تكرار ظهور ديالوج التقييم
 
   @override
   void initState() {
@@ -40,7 +41,7 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
     BubbleService.hide();
   }
 
-  // 🛡️ إصلاح الشاشة السوداء: الترتيب الصحيح (قفل الديالوج -> تحديث الداتا -> العودة للرئيسية)
+  // 🛡️ الترتيب الصحيح للإلغاء لمنع الشاشة السوداء
   Future<void> _handleSmartCancelFromBubble(String currentStatus) async {
     bool isAccepted = currentStatus != 'pending';
     String targetStatus = isAccepted 
@@ -48,7 +49,6 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
         : 'cancelled_by_user_before_accept';
 
     try {
-      // 1. تحديث فايربيز أولاً
       await FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).update({
         'status': targetStatus,
         'cancelledAt': FieldValue.serverTimestamp(),
@@ -56,9 +56,7 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
       });
       
       if (mounted) {
-        // 2. العودة للشاشة الرئيسية فوراً لتنظيف الـ Stack (تجنب السواد)
         navigatorKey.currentState?.pushNamedAndRemoveUntil('/', (route) => false);
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(isAccepted ? "تم الإلغاء (سيتم مراجعة نقاطك)" : "تم إلغاء الطلب بنجاح"),
@@ -66,21 +64,97 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
           ),
         );
       }
-
-      // 3. مسح البيانات المحلية وإخفاء الفقاعة (آخر خطوة لضمان ثبات الخريطة أثناء القفل)
       await _clearOrder();
-
     } catch (e) {
       debugPrint("Bubble Cancel Error: $e");
     }
   }
 
-  IconData _getVehicleIcon(String? vehicleType) {
-    switch (vehicleType) {
-      case 'pickup': return Icons.local_shipping;
-      case 'jumbo': return Icons.fire_truck;
-      default: return Icons.delivery_dining;
-    }
+  // ⭐ نظام التقييم الاحترافي
+  void _showRatingDialog(String? driverId, String driverName) {
+    double selectedRating = 5.0;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+            title: Column(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Colors.green, size: 45.sp),
+                const SizedBox(height: 10),
+                const Text("وصل طلبك!", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text("كيف كانت تجربتك مع $driverName؟", textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'Cairo')),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (index) {
+                    return GestureDetector(
+                      onTap: () => setDialogState(() => selectedRating = index + 1.0),
+                      child: Icon(
+                        index < selectedRating ? Icons.star_rounded : Icons.star_outline_rounded,
+                        color: Colors.amber,
+                        size: 32.sp,
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 10),
+                Text(_getRatingText(selectedRating), style: TextStyle(color: Colors.orange[900], fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+              ],
+            ),
+            actions: [
+              Column(
+                children: [
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange[900],
+                      minimumSize: Size(60.w, 45),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    ),
+                    onPressed: () async {
+                      if (driverId != null) await _submitRating(driverId, selectedRating);
+                      Navigator.pop(ctx);
+                      _clearOrder();
+                    },
+                    child: const Text("إرسال التقييم", style: TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _clearOrder();
+                    },
+                    child: const Text("تخطي", style: TextStyle(color: Colors.grey, fontFamily: 'Cairo')),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _getRatingText(double rating) {
+    if (rating == 5) return "ممتاز جداً 🔥";
+    if (rating >= 4) return "جيد جداً 👍";
+    if (rating >= 3) return "مقبول 🙂";
+    return "ضعيف 😞";
+  }
+
+  Future<void> _submitRating(String driverId, double rating) async {
+    await FirebaseFirestore.instance.collection('freeDrivers').doc(driverId).update({
+      'totalStars': FieldValue.increment(rating),
+      'reviewsCount': FieldValue.increment(1),
+    });
   }
 
   @override
@@ -94,11 +168,15 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
         String status = data['status'] ?? 'pending';
         String? vehicleType = data['vehicleType'];
 
-        if (status.contains('cancelled') || 
-            status == 'delivered' || 
-            status == 'rejected' || 
-            status == 'no_drivers_available' || 
-            status == 'expired') {
+        // إذا تم التوصيل: اظهر التقييم بدل الإخفاء المباشر
+        if (status == 'delivered' && !_ratingShown) {
+          _ratingShown = true;
+          Future.microtask(() => _showRatingDialog(data['driverId'], data['driverName'] ?? "المندوب"));
+          return const SizedBox.shrink();
+        }
+
+        // الحالات الأخرى التي تتطلب الإخفاء الفوري
+        if (status.contains('cancelled') || status == 'rejected' || status == 'expired') {
           Future.microtask(() => _clearOrder());
           return const SizedBox.shrink();
         }
@@ -139,23 +217,19 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
     final navState = navigatorKey.currentState;
     if (navState == null) return;
 
-    bool isTrackingPageOpen = false;
+    bool isTrackingOpen = false;
     navState.popUntil((route) {
-      if (route.settings.name == '/customerTracking') {
-        isTrackingPageOpen = true;
-      }
+      if (route.settings.name == '/customerTracking') isTrackingOpen = true;
       return true; 
     });
 
-    if (isTrackingPageOpen) {
+    if (isTrackingOpen) {
       navState.pushNamedAndRemoveUntil('/', (route) => false);
     } else {
-      navState.push(
-        MaterialPageRoute(
-          settings: const RouteSettings(name: '/customerTracking'),
-          builder: (context) => CustomerTrackingScreen(orderId: widget.orderId),
-        ),
-      );
+      navState.push(MaterialPageRoute(
+        settings: const RouteSettings(name: '/customerTracking'),
+        builder: (context) => CustomerTrackingScreen(orderId: widget.orderId),
+      ));
     }
   }
 
@@ -168,24 +242,14 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text("إدارة الطلب", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
           content: Text(status != 'pending'
-            ? "⚠️ المندوب قبل الطلب. إلغاء الطلب الآن قد يخصم من نقاطك. هل تريد الاستمرار؟" 
-            : "هل تريد إلغاء الطلب نهائياً أم إخفاء هذه الفقاعة فقط؟", style: const TextStyle(fontFamily: 'Cairo')),
+            ? "⚠️ المندوب قبل الطلب. إلغاء الطلب الآن قد يخصم من نقاطك." 
+            : "هل تريد إلغاء الطلب نهائياً أم إخفاء الفقاعة؟", style: const TextStyle(fontFamily: 'Cairo')),
           actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(ctx).pop(); // ✅ أولاً: نقفل الديالوج بـ context الخاص به
-                _handleSmartCancelFromBubble(status); // ثانياً: ننظف الـ Stack ونلغي الطلب
-              },
-              child: const Text("إلغاء الطلب نهائياً", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(ctx).pop(); 
-                _clearOrder(); 
-              },
-              child: const Text("إخفاء من الشاشة فقط", style: TextStyle(fontFamily: 'Cairo')),
-            ),
-            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text("رجوع", style: TextStyle(fontFamily: 'Cairo'))),
+            TextButton(onPressed: () { Navigator.pop(ctx); _handleSmartCancelFromBubble(status); },
+              child: const Text("إلغاء نهائي", style: TextStyle(color: Colors.red, fontFamily: 'Cairo'))),
+            TextButton(onPressed: () { Navigator.pop(ctx); _clearOrder(); },
+              child: const Text("إخفاء فقط", style: TextStyle(fontFamily: 'Cairo'))),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("رجوع", style: TextStyle(fontFamily: 'Cairo'))),
           ],
         ),
       ),
@@ -199,49 +263,25 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
         gradient: isAccepted ? null : RadialGradient(colors: [Colors.orange[800]!, Colors.orange[900]!], radius: 0.8),
         color: isAccepted ? Colors.green[700] : null,
         shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: (isAccepted ? Colors.green : Colors.orange).withOpacity(0.5), 
-            blurRadius: 15,
-            spreadRadius: 2
-          )
-        ],
+        boxShadow: [BoxShadow(color: (isAccepted ? Colors.green : Colors.orange).withOpacity(0.5), blurRadius: 15, spreadRadius: 2)],
         border: Border.all(color: Colors.white, width: 2),
       ),
       child: Stack(
         alignment: Alignment.center,
         children: [
-          if (!isAccepted)
-            const SizedBox(
-              width: 50, height: 50, 
-              child: CircularProgressIndicator(
-                strokeWidth: 1.5, 
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white30)
-              )
-            ),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                isAccepted ? _getVehicleIcon(vehicleType) : Icons.radar, 
-                color: Colors.white, 
-                size: 20.sp
-              ),
-              if (!isAccepted)
-                Text(
-                  "جاري البحث", 
-                  style: TextStyle(
-                    color: Colors.white, 
-                    fontSize: 6.5.sp, 
-                    fontWeight: FontWeight.bold, 
-                    decoration: TextDecoration.none,
-                    fontFamily: 'Cairo'
-                  )
-                ),
-            ],
-          ),
+          if (!isAccepted) const SizedBox(width: 50, height: 50, child: CircularProgressIndicator(strokeWidth: 1.5, valueColor: AlwaysStoppedAnimation(Colors.white30))),
+          Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(isAccepted ? _getVehicleIcon(vehicleType) : Icons.radar, color: Colors.white, size: 20.sp),
+            if (!isAccepted) Text("جاري البحث", style: TextStyle(color: Colors.white, fontSize: 6.5.sp, fontWeight: FontWeight.bold, decoration: TextDecoration.none, fontFamily: 'Cairo')),
+          ]),
         ],
       ),
     );
+  }
+
+  IconData _getVehicleIcon(String? vehicleType) {
+    if (vehicleType == 'pickup') return Icons.local_shipping;
+    if (vehicleType == 'jumbo') return Icons.fire_truck;
+    return Icons.delivery_dining;
   }
 }
