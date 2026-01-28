@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class InvoiceDetailsScreen extends StatelessWidget {
   final String invoiceId;
@@ -12,215 +13,180 @@ class InvoiceDetailsScreen extends StatelessWidget {
     required this.invoiceData
   });
 
-  // دالة مطورة لفتح رابط الدفع مع رسائل توضيحية للمستخدم
-  Future<void> _openPaymentLink(BuildContext context) async {
-    final String? link = invoiceData['paymentLink'];
+  // 1. طلب الدفع الإلكتروني (تغيير الحالة لـ pay_now)
+  Future<void> _requestOnlinePayment(BuildContext context) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('pendingInvoices')
+          .doc(invoiceId)
+          .update({
+        'status': 'pay_now',
+        'paymentMethod': 'Online (Paymob)',
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('🎯 جاري تجهيز رابط الدفع.. لحظات ويظهر الزرار')),
+      );
+    } catch (e) {
+      print("Error updating invoice: $e");
+    }
+  }
 
-    if (link == null || link.isEmpty) {
+  // 2. طلب التحصيل النقدي (تغيير الحالة لـ cash_collection)
+  Future<void> _requestCashCollection(BuildContext context) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('pendingInvoices')
+          .doc(invoiceId)
+          .update({
+        'status': 'cash_collection',
+        'paymentMethod': 'Cash (Manual)',
+      });
+      
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('⏳ جاري تجهيز رابط الدفع بأمان، يرجى المحاولة بعد لحظات'),
-          backgroundColor: Colors.orange,
+          content: Text('✅ تم طلب تحصيل نقدي، سيصلك مندوبنا قريباً'),
+          backgroundColor: Colors.blue,
         ),
       );
-      return;
+    } catch (e) {
+      print("Error: $e");
     }
+  }
+
+  Future<void> _openPaymentLink(BuildContext context) async {
+    final String? link = invoiceData['paymentUrl']; // تم التحديث لـ paymentUrl
+    if (link == null || link.isEmpty) return;
 
     final Uri url = Uri.parse(link);
-    
-    // إشعار المستخدم بالانتقال لبوابة خارجية (مطلب هام لجوجل بلاي)
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('🔒 جاري الانتقال الآمن لبوابة Paymob لسداد فاتورتك...'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-
     try {
       if (await canLaunchUrl(url)) {
-        // الفتح في تطبيق خارجي لضمان أقصى درجات الأمان والتوافق
         await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        throw 'Could not launch $url';
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('❌ تعذر فتح بوابة الدفع، تأكد من وجود متصفح إنترنت على جهازك'),
-          backgroundColor: Colors.red,
-        ),
+        const SnackBar(content: Text('❌ تعذر فتح البوابة')),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    bool isPaid = invoiceData['status'] == 'paid';
-    bool hasLink = invoiceData['paymentLink'] != null && invoiceData['paymentLink'].toString().isNotEmpty;
+    String status = invoiceData['status'] ?? 'pending_payment';
+    bool isPaid = status == 'paid';
+    bool hasUrl = invoiceData['paymentUrl'] != null;
+    bool isCashRequested = status == 'cash_collection';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('تفاصيل الفاتورة', style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+        title: const Text('تفاصيل الفاتورة', style: TextStyle(fontFamily: 'Cairo')),
         backgroundColor: const Color(0xFF007bff),
-        foregroundColor: Colors.white,
         centerTitle: true,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildInfoCard(),
-            const SizedBox(height: 25),
-            
-            _buildSectionTitle("البيانات الأساسية"),
-            _buildInfoTile("رقم الفاتورة المرجعي", invoiceId.substring(0, 8).toUpperCase()),
-            _buildInfoTile("تاريخ الإصدار", _formatDate(invoiceData['creationDate'])),
-            if (invoiceData['paymentDate'] != null)
-              _buildInfoTile("تاريخ السداد", _formatDate(invoiceData['paymentDate'])),
-            
-            const Divider(height: 40),
-            
-            _buildSectionTitle("التفاصيل المالية"),
-            _buildInfoTile("إجمالي العمولة", "${invoiceData['totalCommission'] ?? 0} ج.م"),
-            _buildInfoTile("الضريبة المضافة", "${invoiceData['vatAmount'] ?? 0} ج.م"),
-            _buildInfoTile("صافي المبلغ المطلوب", "${invoiceData['finalAmount'] ?? 0} ج.م", isBold: true),
-            
-            const Divider(height: 40),
-            
-            _buildStatusRow(),
-            if (invoiceData['paymentMethod'] != null)
-              _buildInfoTile("طريقة السداد", "${invoiceData['paymentMethod']}"),
-
+            _buildInfoCard(status),
+            const SizedBox(height: 20),
+            _buildInfoTile("رقم الفاتورة", invoiceId.substring(0, 8).toUpperCase()),
+            _buildInfoTile("تاريخ الإصدار", _formatDate(invoiceData['createdAt'])),
+            const Divider(),
+            _buildInfoTile("المبلغ المطلوب", "${invoiceData['amount'] ?? 0} ج.م", isBold: true),
             const SizedBox(height: 30),
 
-            // جزء سداد الفاتورة مع رسالة الخصوصية والأمان
             if (!isPaid) ...[
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.security, size: 14, color: Colors.grey),
-                      SizedBox(width: 5),
-                      Text(
-                        "الدفع مشفر وآمن تماماً عبر بوابة Paymob المرخصة",
-                        style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.payment, color: Colors.white),
-                  style: ElevatedButton.styleFrom(
-                    // يتغير اللون للرمادي لو الرابط لسه مش جاهز
-                    backgroundColor: hasLink ? Colors.green : Colors.grey.shade400,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    elevation: hasLink ? 2 : 0,
-                  ),
-                  onPressed: hasLink ? () => _openPaymentLink(context) : null, 
-                  label: Text(
-                    hasLink ? "سداد الفاتورة الآن" : "جاري تجهيز الرابط...",
-                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)
-                  ),
-                ),
-              ),
-            ]
+              if (isCashRequested) 
+                _buildRequestedBanner("تم طلب تحصيل نقدي - المندوب في الطريق")
+              else if (hasUrl)
+                _buildPayButton(context)
+              else
+                _buildActionButtons(context),
+            ],
           ],
         ),
       ),
     );
   }
 
-  // الدوال المساعدة دون تغيير في الهوية البصرية
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
-    );
-  }
-
-  Widget _buildInfoCard() {
-    bool isPaid = invoiceData['status'] == 'paid';
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: isPaid ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: isPaid ? Colors.green : Colors.orange),
-      ),
-      child: Row(
-        children: [
-          Icon(isPaid ? Icons.check_circle : Icons.pending_actions, 
-               color: isPaid ? Colors.green : Colors.orange),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              isPaid ? "هذه الفاتورة مسددة بالكامل" : "هذه الفاتورة بانتظار السداد",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: isPaid ? Colors.green.shade900 : Colors.orange.shade900,
+  // أزرار الاختيار بين كاش أو فيزا
+  Widget _buildActionButtons(BuildContext context) {
+    return Column(
+      children: [
+        const Text("اختر وسيلة الدفع المناسبة لك:", style: TextStyle(color: Colors.grey)),
+        const SizedBox(height: 15),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.money),
+                label: const Text("سداد نقدي"),
+                onPressed: () => _requestCashCollection(context),
+                style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 15)),
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.credit_card),
+                label: const Text("دفع إلكتروني"),
+                onPressed: () => _requestOnlinePayment(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 15)
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPayButton(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 55,
+      child: ElevatedButton.icon(
+        icon: const Icon(Icons.vpn_key),
+        label: const Text("فتح رابط الدفع الآمن"),
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+        onPressed: () => _openPaymentLink(context),
       ),
     );
   }
 
-  Widget _buildStatusRow() {
-    bool isPaid = invoiceData['status'] == 'paid';
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        const Text("حالة الفاتورة", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: isPaid ? Colors.green : Colors.orange,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            isPaid ? "تم السداد" : "قيد الانتظار",
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-          ),
-        ),
-      ],
+  Widget _buildRequestedBanner(String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(10)),
+      child: Text(text, textAlign: TextAlign.center, style: TextStyle(color: Colors.blue.shade800, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  // --- المكونات المساعدة ---
+  Widget _buildInfoCard(String status) {
+    Color color = status == 'paid' ? Colors.green : (status == 'cash_collection' ? Colors.blue : Colors.orange);
+    String text = status == 'paid' ? "مسددة" : (status == 'cash_collection' ? "بانتظار التحصيل" : "بانتظار السداد");
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: color)),
+      child: Row(children: [Icon(Icons.info, color: color), const SizedBox(width: 10), Text(text, style: TextStyle(fontWeight: FontWeight.bold, color: color))]),
     );
   }
 
   Widget _buildInfoTile(String label, String value, {bool isBold = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: Colors.black54, fontSize: 14)),
-          Text(value, style: TextStyle(
-            fontWeight: isBold ? FontWeight.bold : FontWeight.w600, 
-            fontSize: isBold ? 16 : 15,
-            color: isBold ? Colors.green.shade700 : Colors.black87
-          )),
-        ],
-      ),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label), Text(value, style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.bold))]),
     );
   }
 
   String _formatDate(dynamic dateVal) {
-    if (dateVal == null) return "غير متوفر";
-    try {
-      if (dateVal is String) {
-        DateTime dt = DateTime.parse(dateVal);
-        return DateFormat('yyyy/MM/dd').format(dt);
-      }
-      return DateFormat('yyyy/MM/dd').format(dateVal.toDate());
-    } catch (e) {
-      return dateVal.toString();
-    }
+    if (dateVal == null) return "-";
+    if (dateVal is Timestamp) return DateFormat('yyyy/MM/dd HH:mm').format(dateVal.toDate());
+    return dateVal.toString();
   }
 }
