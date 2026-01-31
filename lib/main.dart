@@ -1,9 +1,4 @@
 // lib/main.dart
-import 'dart:async'; // 👈 لازم تضيف السطر ده فوق خالص
-import 'package:cloud_firestore/cloud_firestore.dart'; // 👈 لإصلاح خطأ DocumentSnapshot و FirebaseFirestore
-import 'package:firebase_auth/firebase_auth.dart';       // 👈 لإصلاح خطأ FirebaseAuth.instance.signOut
-
-
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
@@ -285,9 +280,6 @@ class AuthWrapper extends StatefulWidget {
 
 class _AuthWrapperState extends State<AuthWrapper> {
   Future<LoggedInUser?>? _userFuture;
-  
-  // 🟢 إضافة مراقب لحظي لحالة الحساب
-  StreamSubscription<DocumentSnapshot>? _statusListener;
 
   @override
   void initState() {
@@ -296,46 +288,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndShowActiveOrderBubble();
     });
-  }
-
-  // 🟢 دالة مراقبة الحالة: لو تغيرت في الفايرستور، يتم الخروج فوراً
-  void _startStatusListener(String userId, String role) {
-    _statusListener?.cancel(); // إلغاء أي مراقب سابق
-
-    // تحديد المجموعة (مستهلكين أم مستخدمين/تجار)
-    String collection = (role == 'consumer') ? 'consumers' : 'users';
-
-    _statusListener = FirebaseFirestore.instance
-        .collection(collection)
-        .doc(userId)
-        .snapshots()
-        .listen((snapshot) {
-      if (snapshot.exists) {
-        final data = snapshot.data() as Map<String, dynamic>;
-        
-        // 🚨 التحقق من حالة الحساب
-        if (data['status'] == 'inactive') {
-          _forceLogout();
-        }
-      }
-    });
-  }
-
-  // 🟢 دالة طرد المستخدم
-  void _forceLogout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('loggedUser');
-    await FirebaseAuth.instance.signOut();
-    _statusListener?.cancel();
-    
-    // العودة لصفحة الدخول ومسح السجل
-    navigatorKey.currentState?.pushNamedAndRemoveUntil(LoginScreen.routeName, (route) => false);
-  }
-
-  @override
-  void dispose() {
-    _statusListener?.cancel(); // تنظيف الذاكرة
-    super.dispose();
   }
 
   void _checkAndShowActiveOrderBubble() async {
@@ -353,10 +305,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
       try {
         await UserSession.loadSession();
         final user = LoggedInUser.fromJson(jsonDecode(userJson));
-        
-        // 🟢 تشغيل الحارس بمجرد تحميل الجلسة
-        _startStatusListener(user.id, user.role);
-
         await Provider.of<BuyerDataProvider>(context, listen: false)
             .initializeData(user.id, user.id, user.fullname);
         return user;
@@ -387,7 +335,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
     );
   }
 }
-
 
 class PostRegistrationMessageScreen extends StatelessWidget {
   const PostRegistrationMessageScreen({super.key});
