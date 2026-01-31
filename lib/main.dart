@@ -1,5 +1,8 @@
 // lib/main.dart
 import 'dart:async'; // 👈 لازم تضيف السطر ده فوق خالص
+import 'package:cloud_firestore/cloud_firestore.dart'; // 👈 لإصلاح خطأ DocumentSnapshot و FirebaseFirestore
+import 'package:firebase_auth/firebase_auth.dart';       // 👈 لإصلاح خطأ FirebaseAuth.instance.signOut
+
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
