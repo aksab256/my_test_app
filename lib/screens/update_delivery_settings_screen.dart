@@ -63,10 +63,11 @@ class _UpdateDeliverySettingsFormState extends State<UpdateDeliverySettingsForm>
     super.dispose();
   }
 
-  // 🔴 الكارت الذكي المطور: يتغير شكله بناءً على حالة الاشتراك
+  // 🔴 الكارت الذكي: تم تصحيح الوصول للحالة عبر الـ dealerProfile
   Widget _buildUpgradeAccountCard(DeliverySettingsProvider provider) {
-    // التحقق من حالة الصلاحية (بناءً على منطق اللمدا والفايربيز)
-    bool isExpired = provider.subscriptionStatus == 'expired';
+    // جلب الحالة من البروفايل الموجود في الـ provider
+    final String? status = provider.dealerProfile?.subscriptionStatus;
+    bool isExpired = status == 'expired';
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 500),
@@ -76,8 +77,8 @@ class _UpdateDeliverySettingsFormState extends State<UpdateDeliverySettingsForm>
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: isExpired 
-              ? [const Color(0xFFe74c3c), const Color(0xFFc0392b)] // أحمر تحذيري
-              : [const Color(0xFF2c3e50), const Color(0xFF4b6584)], // أزرق تطوير
+              ? [const Color(0xFFe74c3c), const Color(0xFFc0392b)] 
+              : [const Color(0xFF2c3e50), const Color(0xFF4b6584)], 
           begin: Alignment.centerRight,
           end: Alignment.centerLeft,
         ),
@@ -173,7 +174,6 @@ class _UpdateDeliverySettingsFormState extends State<UpdateDeliverySettingsForm>
               padding: const EdgeInsets.all(20.0),
               child: Column(
                 children: [
-                  // عرض كارت الترقية الذكي
                   _buildUpgradeAccountCard(provider),
 
                   Container(
@@ -236,44 +236,12 @@ class _UpdateDeliverySettingsFormState extends State<UpdateDeliverySettingsForm>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _buildTextField(
-                                    label: 'مواعيد العمل/التوصيل:',
-                                    controller: _hoursController,
-                                    placeholder: 'مثال: من 9 صباحاً إلى 11 مساءً',
-                                    required: true,
-                                  ),
-                                  _buildTextField(
-                                    label: 'رقم هاتف الواتساب:',
-                                    controller: _whatsappController,
-                                    placeholder: 'مثال: 00201XXXXXXXXX',
-                                    keyboardType: TextInputType.phone,
-                                    infoText: 'هذا الرقم سيظهر للمستهلكين للتواصل عبر الواتساب.',
-                                    required: true,
-                                  ),
-                                  _buildTextField(
-                                    label: 'رقم هاتف الدليفري:',
-                                    controller: _phoneController,
-                                    placeholder: 'مثال: 00201XXXXXXXXX',
-                                    keyboardType: TextInputType.phone,
-                                    infoText: 'هذا الرقم سيظهر للمستهلكين لإجراء مكالمات الدليفري. اتركه فارغاً لاستخدام رقم حسابك المسجل (${provider.dealerProfile?.phone ?? 'غير متوفر'}).',
-                                  ),
-                                  _buildNumberField(
-                                    label: 'مصاريف التوصيل (بالجنيه المصري):',
-                                    controller: _feeController,
-                                    placeholder: 'مثال: 15.00',
-                                    required: true,
-                                  ),
-                                  _buildNumberField(
-                                    label: 'الحد الأدنى للطلب (بالجنيه المصري): (اختياري)',
-                                    controller: _minOrderController,
-                                    placeholder: 'مثال: 50.00',
-                                  ),
-                                  _buildTextField(
-                                    label: 'وصف إضافي للسوبر ماركت (يظهر للمستهلك): (اختياري)',
-                                    controller: _descriptionController,
-                                    placeholder: 'مثال: نقدم أفضل الخضروات الطازجة والتوصيل السريع.',
-                                    isTextArea: true,
-                                  ),
+                                  _buildTextField(label: 'مواعيد العمل/التوصيل:', controller: _hoursController, placeholder: 'مثال: من 9 صباحاً إلى 11 مساءً', required: true),
+                                  _buildTextField(label: 'رقم هاتف الواتساب:', controller: _whatsappController, placeholder: 'مثال: 00201XXXXXXXXX', keyboardType: TextInputType.phone, infoText: 'هذا الرقم سيظهر للمستهلكين للتواصل عبر الواتساب.', required: true),
+                                  _buildTextField(label: 'رقم هاتف الدليفري:', controller: _phoneController, placeholder: 'مثال: 00201XXXXXXXXX', keyboardType: TextInputType.phone, infoText: 'هذا الرقم سيظهر للمستهلكين لإجراء مكالمات الدليفري.'),
+                                  _buildNumberField(label: 'مصاريف التوصيل (بالجنيه المصري):', controller: _feeController, placeholder: 'مثال: 15.00', required: true),
+                                  _buildNumberField(label: 'الحد الأدنى للطلب (بالجنيه المصري): (اختياري)', controller: _minOrderController, placeholder: 'مثال: 50.00'),
+                                  _buildTextField(label: 'وصف إضافي للسوبر ماركت (يظهر للمستهلك): (اختياري)', controller: _descriptionController, placeholder: 'مثال: نقدم أفضل الخضروات الطازجة والتوصيل السريع.', isTextArea: true),
                                 ],
                               ),
                             ),
@@ -285,8 +253,8 @@ class _UpdateDeliverySettingsFormState extends State<UpdateDeliverySettingsForm>
                               padding: const EdgeInsets.only(top: 20.0),
                               child: ElevatedButton(
                                 onPressed: () {
-                                  // منع الحفظ إذا كان الاشتراك منتهياً
-                                  if (provider.subscriptionStatus == 'expired') {
+                                  // تصحيح الوصول للحالة هنا أيضاً
+                                  if (provider.dealerProfile?.subscriptionStatus == 'expired') {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
                                         content: Text('عذراً، يجب تجديد الاشتراك لتتمكن من حفظ الإعدادات', style: TextStyle(fontFamily: 'Cairo')),
@@ -405,56 +373,28 @@ class _UpdateDeliverySettingsFormState extends State<UpdateDeliverySettingsForm>
     );
   }
 
-  Widget _buildTextField({
-    required String label,
-    required TextEditingController controller,
-    String? placeholder,
-    TextInputType keyboardType = TextInputType.text,
-    String? infoText,
-    bool isTextArea = false,
-    bool required = false,
-  }) {
+  Widget _buildTextField({required String label, required TextEditingController controller, String? placeholder, TextInputType keyboardType = TextInputType.text, String? infoText, bool isTextArea = false, bool required = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 15.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16, fontFamily: 'Cairo')),
-          if (infoText != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4.0, bottom: 4.0),
-              child: Text(infoText, style: const TextStyle(fontSize: 12, color: Color(0xFF666666), fontFamily: 'Cairo')),
-            ),
+          if (infoText != null) Padding(padding: const EdgeInsets.only(top: 4.0, bottom: 4.0), child: Text(infoText, style: const TextStyle(fontSize: 12, color: Color(0xFF666666), fontFamily: 'Cairo'))),
           const SizedBox(height: 8),
           TextFormField(
             controller: controller,
             keyboardType: keyboardType,
             maxLines: isTextArea ? 3 : 1,
-            decoration: InputDecoration(
-              hintText: placeholder,
-              contentPadding: const EdgeInsets.all(12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              fillColor: const Color(0xFFf5f7fa),
-              filled: true,
-            ),
-            validator: (value) {
-              if (required && (value == null || value.isEmpty)) {
-                return 'هذا الحقل مطلوب.';
-              }
-              return null;
-            },
+            decoration: InputDecoration(hintText: placeholder, contentPadding: const EdgeInsets.all(12), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), fillColor: const Color(0xFFf5f7fa), filled: true),
+            validator: (value) => (required && (value == null || value.isEmpty)) ? 'هذا الحقل مطلوب.' : null,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildNumberField({
-    required String label,
-    required TextEditingController controller,
-    String? placeholder,
-    bool required = false,
-  }) {
+  Widget _buildNumberField({required String label, required TextEditingController controller, String? placeholder, bool required = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 15.0),
       child: Column(
@@ -466,20 +406,10 @@ class _UpdateDeliverySettingsFormState extends State<UpdateDeliverySettingsForm>
             controller: controller,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
-            decoration: InputDecoration(
-              hintText: placeholder,
-              contentPadding: const EdgeInsets.all(12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              fillColor: const Color(0xFFf5f7fa),
-              filled: true,
-            ),
+            decoration: InputDecoration(hintText: placeholder, contentPadding: const EdgeInsets.all(12), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), fillColor: const Color(0xFFf5f7fa), filled: true),
             validator: (value) {
-              if (required && (value == null || value.isEmpty)) {
-                return 'هذا الحقل مطلوب.';
-              }
-              if (value != null && value.isNotEmpty && double.tryParse(value) == null) {
-                return 'الرجاء إدخال رقم صحيح.';
-              }
+              if (required && (value == null || value.isEmpty)) return 'هذا الحقل مطلوب.';
+              if (value != null && value.isNotEmpty && double.tryParse(value) == null) return 'الرجاء إدخال رقم صحيح.';
               return null;
             },
           ),
