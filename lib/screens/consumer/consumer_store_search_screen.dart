@@ -37,7 +37,6 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _promptLocationSelection());
   }
 
-  // دالة مطورة لتحديد أيقونة ولون المتجر بناءً على نوع النشاط لتمييز المتاجر [cite: 2025-10-03]
   Map<String, dynamic> _getStoreStyle(String? type) {
     switch (type) {
       case 'restaurant':
@@ -56,7 +55,6 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     }
   }
 
-  // دالة مساعدة لتحويل الـ ID لاسم مقروء بالعربية
   String _getStoreTypeName(String? id) {
     switch (id) {
       case 'restaurant': return 'مطعم / كافيه';
@@ -70,8 +68,6 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
 
   Future<void> _promptLocationSelection() async {
     final buyerDataProvider = Provider.of<BuyerDataProvider>(context, listen: false);
-    
-    // حل مشكلة ظهور الخيارات: التحقق من وجود إحداثيات مسجلة حقيقية [cite: 2025-10-03]
     final bool hasValidRegisteredLocation = (buyerDataProvider.userLat != null && 
                                              buyerDataProvider.userLng != null && 
                                              buyerDataProvider.userLat != 0);
@@ -106,6 +102,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     } catch (e) { return null; }
   }
 
+  // --- الدالة المعدلة بالكامل لتطبيق الفلترة الصارمة ---
   Future<void> _searchAndDisplayStores(LatLng location) async {
     setState(() { _isLoading = true; _loadingMessage = 'جاري رصد المتاجر...'; });
     try {
@@ -113,12 +110,25 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
       _mapMarkers.clear();
       _mapMarkers.add(Marker(point: location, width: 80, height: 80, child: _buildUserLocationMarker()));
 
-      // جلب البيانات من مجموعة deliverySupermarkets [cite: 2025-10-03]
-      final QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('deliverySupermarkets').get();
+      // الاستعلام مع شروط الحالة الأساسية
+      final QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('deliverySupermarkets')
+          .where('isActive', isEqualTo: true)
+          .where('isVisibleInStore', isEqualTo: true)
+          .get();
+
       final List<Map<String, dynamic>> foundStores = [];
+      final now = DateTime.now();
 
       for (var doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
+
+        // 1. فلاتر الصرامة: استبعاد البيانات الناقصة أو المنتهية
+        if (data['trialExpiryDate'] == null) continue; // استبعاد لو مفيش تاريخ انتهاء
+        
+        final DateTime expiry = (data['trialExpiryDate'] as Timestamp).toDate();
+        if (expiry.isBefore(now)) continue; // استبعاد لو الصلاحية انتهت
+
         LatLng? storeLoc;
         if (data['location'] is GeoPoint) {
           storeLoc = LatLng(data['location'].latitude, data['location'].longitude);
@@ -243,7 +253,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(25),
-              border: Border(right: BorderSide(color: style['color'], width: 6)), // تمييز جانبي ملون [cite: 2025-10-03]
+              border: Border(right: BorderSide(color: style['color'], width: 6)),
               boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15)],
             ),
             child: InkWell(
