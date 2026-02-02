@@ -1,4 +1,3 @@
-// lib/widgets/order_bubble.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,7 +17,7 @@ class OrderBubble extends StatefulWidget {
 class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStateMixin {
   Offset position = Offset(80.w, 70.h);
   late AnimationController _pulseController;
-  bool _ratingShown = false; // لمنع تكرار ظهور ديالوج التقييم
+  bool _ratingShown = false; 
 
   @override
   void initState() {
@@ -35,14 +34,12 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
     super.dispose();
   }
 
-  // ✅ تنظيف الطلب وإخفاء الفقاعة بأمان
   Future<void> _clearOrder() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('active_special_order_id');
     BubbleService.hide();
   }
 
-  // 🛡️ الترتيب الصحيح للإلغاء لمنع الشاشة السوداء
   Future<void> _handleSmartCancelFromBubble(String currentStatus) async {
     bool isAccepted = currentStatus != 'pending';
     String targetStatus = isAccepted 
@@ -57,10 +54,9 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
       });
       
       if (mounted) {
-        // ✅ إخفاء الفقاعة أولاً قبل أي عملية تنقل
+        // ✅ التعديل الأول: نخفي الفقاعة قبل ما نتحرك
         BubbleService.hide();
-        
-        // ✅ العودة للرئيسية باستخدام المفتاح العالمي لضمان التركيز (Focus)
+        // ✅ التعديل الثاني: نستخدم navigatorKey للرجوع للرئيسية لضمان عدم وجود سواد
         navigatorKey.currentState?.pushNamedAndRemoveUntil('/', (route) => false);
         
         ScaffoldMessenger.of(context).showSnackBar(
@@ -70,21 +66,16 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
           ),
         );
       }
-      
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('active_special_order_id');
-      
+      await _clearOrder();
     } catch (e) {
       debugPrint("Bubble Cancel Error: $e");
     }
   }
 
-  // ⭐ نظام التقييم الاحترافي
   void _showRatingDialog(String? driverId, String driverName) {
     double selectedRating = 5.0;
-
     showDialog(
-      context: navigatorKey.currentContext!, // استخدام سياق النافيجيتور لضمان الظهور
+      context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => Directionality(
@@ -165,7 +156,6 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
         'totalStars': FieldValue.increment(rating),
         'reviewsCount': FieldValue.increment(1),
       });
-
       await FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).update({
         'ratingByCustomer': rating,
         'ratedAt': FieldValue.serverTimestamp(),
@@ -213,7 +203,7 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
                 });
               },
               child: GestureDetector(
-                onTap: () => _handleBubbleTap(), // تم إزالة الـ context
+                onTap: () => _handleBubbleTap(context), // رجعنا الـ context زي ما كان
                 onLongPress: () => _showOptionsDialog(context, status),
                 child: isAccepted
                     ? _buildBubbleUI(isAccepted, false, vehicleType)
@@ -229,8 +219,7 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
     );
   }
 
-  // ✅ التنقل الآمن باستخدام الـ navigatorKey
-  void _handleBubbleTap() {
+  void _handleBubbleTap(BuildContext context) {
     final navState = navigatorKey.currentState;
     if (navState == null) return;
 
@@ -241,9 +230,9 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
     });
 
     if (isTrackingOpen) {
-      // إذا كانت مفتوحة، نرجع للرئيسية لتجنب السواد
       navState.pushNamedAndRemoveUntil('/', (route) => false);
     } else {
+      // ✅ التعديل الثالث: نفتح الشاشة بطريقة المسارات العادية عشان الـ arguments
       navState.pushNamed('/customerTracking', arguments: widget.orderId);
     }
   }
