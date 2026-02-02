@@ -5,42 +5,50 @@ import '../main.dart'; // لاستخدام الـ navigatorKey العالمي
 class BubbleService {
   static OverlayEntry? _overlayEntry;
 
-  // 1. دالة إظهار الفقاعة (تم تحسين جلب الـ Overlay)
+  // 1. دالة إظهار الفقاعة (تم إضافة Microtask لضمان استقرار الـ Navigation)
   static void show(String orderId) {
-    if (_overlayEntry != null) return;
+    // إذا كانت الفقاعة موجودة، نحذفها أولاً لتحديث البيانات
+    if (_overlayEntry != null) {
+      hide();
+    }
 
-    // جلب الـ context من الـ navigatorKey لضمان الوصول للـ Overlay الصحيح
-    final context = navigatorKey.currentContext;
-    if (context == null) return;
+    // استخدام Future.microtask يضمن تنفيذ الإظهار "بعد" اكتمال العمليات الحالية
+    // وهذا يمنع خطأ الـ Null Check ويسهل إرسال الطلب في الخلفية
+    Future.microtask(() {
+      final context = navigatorKey.currentContext;
+      if (context == null) return;
 
-    final overlay = Overlay.of(context);
+      try {
+        final overlay = Overlay.of(context);
 
-    _overlayEntry = OverlayEntry(
-      builder: (context) => OrderBubble(orderId: orderId),
-    );
+        _overlayEntry = OverlayEntry(
+          builder: (context) => OrderBubble(orderId: orderId),
+        );
 
-    overlay.insert(_overlayEntry!);
+        overlay.insert(_overlayEntry!);
+      } catch (e) {
+        debugPrint("❌ Error inserting bubble overlay: $e");
+      }
+    });
   }
 
-  // 2. دالة إخفاء الفقاعة (تم إضافة try-catch لمنع الكراش)
+  // 2. دالة إخفاء الفقاعة بأمان
   static void hide() {
     if (_overlayEntry != null) {
       try {
         _overlayEntry!.remove();
       } catch (e) {
-        debugPrint("Overlay already removed or not found: $e");
+        debugPrint("⚠️ Overlay already removed or not found: $e");
       }
       _overlayEntry = null;
     }
   }
 
   // 3. دالة العودة الآمنة (الحل السحري للشاشة السوداء)
-  // نستخدمها لما نحب نقفل الفقاعة ونرجع للتطبيق في نفس الوقت
   static void safeBackToApp() {
     hide(); // إخفاء الفقاعة أولاً
     
-    // إخبار الـ Navigator العالمي بالرجوع لأول شاشة مستقرة (الرئيسية)
-    // ده بيجبر الأندرويد يركز على التطبيق تاني ويلغي السواد
+    // إجبار الـ Navigator على العودة للرئيسية لضمان تركيز الشاشة (Focus)
     if (navigatorKey.currentState != null) {
       navigatorKey.currentState!.popUntil((route) => route.isFirst);
     }
