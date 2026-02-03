@@ -65,7 +65,7 @@ class ConsumerSideMenu extends StatelessWidget {
   }
 }
 
-// 2. شريط التنقل السفلي (Footer Nav) - النسخة المحدثة لربط التتبع
+// 2. شريط التنقل السفلي (Footer Nav) - النسخة الكاملة والمصلحة
 class ConsumerFooterNav extends StatelessWidget {
   final int cartCount;
   final int activeIndex;
@@ -75,7 +75,7 @@ class ConsumerFooterNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     
-    // الحالات التي يظهر فيها زر التتبع مفعلاً
+    // الحالات التي يظهر فيها زر التتبع مفعلاً للبحث عن طلب نشط
     final List<String> activeStatuses = ['pending', 'accepted', 'at_pickup', 'picked_up'];
 
     return BottomNavigationBar(
@@ -89,7 +89,7 @@ class ConsumerFooterNav extends StatelessWidget {
         const BottomNavigationBarItem(icon: Icon(Icons.store), label: 'المتجر'),
         const BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'طلباتي'),
         
-        // ✨ أيقونة "تتبع الطلب" الذكية (تراقب الحالة لحظياً)
+        // ✨ أيقونة "تتبع الطلب" الذكية (تم إصلاح منطق الألوان والحالات)
         BottomNavigationBarItem(
           icon: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -103,27 +103,43 @@ class ConsumerFooterNav extends StatelessWidget {
 
               bool hasOrder = snapshot.hasData && snapshot.data!.docs.isNotEmpty;
               Color iconColor = Colors.grey;
+              IconData iconData = Icons.radar;
               
               if (hasOrder) {
-                final lastStatus = snapshot.data!.docs.first['status'];
-                // أخضر لو تم التسليم، برتقالي لو جاري التنفيذ
-                iconColor = (lastStatus == 'delivered') ? Colors.green : Colors.orange;
+                // معالجة النص لضمان المطابقة
+                final String rawStatus = snapshot.data!.docs.first['status'] ?? 'pending';
+                final String lastStatus = rawStatus.toLowerCase().trim();
+                
+                if (lastStatus == 'pending') {
+                  iconColor = Colors.orange;
+                  iconData = Icons.hourglass_top_rounded;
+                } else if (lastStatus == 'accepted' || lastStatus == 'at_pickup') {
+                  iconColor = Colors.blue;
+                  iconData = Icons.directions_bike_rounded;
+                } else if (lastStatus == 'picked_up') {
+                  iconColor = Colors.indigo;
+                  iconData = Icons.local_shipping_rounded;
+                } else if (lastStatus == 'delivered') {
+                  iconColor = Colors.green;
+                  iconData = Icons.check_circle_rounded;
+                } else if (lastStatus.contains('cancelled')) {
+                  iconColor = Colors.red;
+                  iconData = Icons.cancel_rounded;
+                }
               }
 
               return Stack(
                 alignment: Alignment.center,
                 children: [
-                  Icon(Icons.radar, color: iconColor, size: hasOrder ? 28 : 24),
-                  if (hasOrder)
+                  Icon(iconData, color: iconColor, size: 28),
+                  // نقطة تنبيه حمراء طالما أن الطلب لم ينتهِ بعد
+                  if (hasOrder && !snapshot.data!.docs.first['status'].toString().contains('delivered') && !snapshot.data!.docs.first['status'].toString().contains('cancelled'))
                     Positioned(
-                      top: 0,
-                      right: 0,
+                      top: -2,
+                      right: -2,
                       child: Container(
-                        width: 8, height: 8,
-                        decoration: BoxDecoration(
-                          color: iconColor == Colors.green ? Colors.green : Colors.red, 
-                          shape: BoxShape.circle
-                        ),
+                        width: 10, height: 10,
+                        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle, border: Border.fromBorderSide(BorderSide(color: Colors.white, width: 1))),
                       ),
                     ),
                 ],
@@ -146,9 +162,9 @@ class ConsumerFooterNav extends StatelessWidget {
       onTap: (index) async {
         if (index == activeIndex) return;
 
-        if (index == 2) { // منطق فتح صفحة التتبع
+        if (index == 2) { 
           try {
-            // 1. محاولة جلب طلب نشط أولاً
+            // البحث عن طلب نشط
             final activeSnap = await FirebaseFirestore.instance
                 .collection('specialRequests')
                 .where('userId', isEqualTo: user?.uid)
@@ -162,29 +178,28 @@ class ConsumerFooterNav extends StatelessWidget {
               return;
             }
 
-            // 2. إذا لم يوجد، جلب آخر طلب تم تسليمه
+            // البحث عن آخر طلب مكتمل لعرض تقييمه أو حالته النهائية
             final deliveredSnap = await FirebaseFirestore.instance
                 .collection('specialRequests')
                 .where('userId', isEqualTo: user?.uid)
-                .where('status', isEqualTo: 'delivered')
-                .orderBy('completedAt', descending: true)
+                .orderBy('createdAt', descending: true)
                 .limit(1)
                 .get();
 
             if (deliveredSnap.docs.isNotEmpty) {
               if (context.mounted) Navigator.pushNamed(context, '/customerTracking', arguments: deliveredSnap.docs.first.id);
             } else {
-              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("لا توجد طلبات حالية لتتبعها")));
+              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("لا توجد طلبات سابقة لتتبعها")));
             }
           } catch (e) {
-            debugPrint("❌ Error: $e");
-            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("خطأ في الاتصال، تأكد من تحديث الفهرس")));
+            debugPrint("❌ Navigation Error: $e");
+            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("جاري تحديث البيانات، حاول مرة أخرى")));
           }
           return;
         }
 
         final routes = ['/consumerhome', '/consumer-purchases', '', '/cart', '/myDetails'];
-        if (routes[index].isNotEmpty) {
+        if (index < routes.length && routes[index].isNotEmpty) {
           Navigator.pushNamed(context, routes[index]);
         }
       },
@@ -241,7 +256,8 @@ class ConsumerCategoriesBanner extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 30, 
-                    backgroundImage: NetworkImage(category.imageUrl)
+                    backgroundImage: NetworkImage(category.imageUrl),
+                    backgroundColor: Colors.grey[200],
                   ),
                   const SizedBox(height: 5),
                   Text(category.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
@@ -254,4 +270,3 @@ class ConsumerCategoriesBanner extends StatelessWidget {
     );
   }
 }
-
