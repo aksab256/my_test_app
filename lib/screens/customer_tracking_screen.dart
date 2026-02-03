@@ -14,6 +14,78 @@ class CustomerTrackingScreen extends StatelessWidget {
 
   final String mapboxToken = "pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw";
 
+  // دالة إظهار نافذة التقييم
+  void _showRatingDialog(BuildContext context, String driverId) {
+    double selectedRating = 5;
+    TextEditingController commentController = TextEditingController();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false, 
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text("تقييم تجربة التوصيل", textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text("لقد تم تسليم طلبك بنجاح! قيم المندوب للمساعدة في تحسين الخدمة."),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (index) {
+                    return IconButton(
+                      icon: Icon(
+                        index < selectedRating ? Icons.star_rounded : Icons.star_outline_rounded,
+                        color: Colors.amber,
+                        size: 35,
+                      ),
+                      onPressed: () => setState(() => selectedRating = index + 1.0),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: commentController,
+                  decoration: InputDecoration(
+                    hintText: "ملاحظاتك (اختياري)...",
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    filled: true,
+                    fillColor: Colors.grey[50],
+                  ),
+                  maxLines: 2,
+                ),
+              ],
+            ),
+            actions: [
+              Center(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF43A047),
+                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))
+                  ),
+                  onPressed: () async {
+                    // تحديث الطلب: إضافة التقييم هو اللي هيقفل الأيقونة
+                    await FirebaseFirestore.instance.collection('specialRequests').doc(orderId).update({
+                      'rating': selectedRating,
+                      'customerComment': commentController.text,
+                      'status': 'delivered' // نخليها دليفريد زي ما هي بس نعتمد ع حقل الراتينج
+                    });
+                    if (context.mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+                  },
+                  child: const Text("تأكيد التقييم", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleSmartCancel(BuildContext context, String currentStatus) async {
     bool isAccepted = currentStatus != 'pending';
     String targetStatus = isAccepted 
@@ -67,8 +139,17 @@ class CustomerTrackingScreen extends StatelessWidget {
 
         var orderData = orderSnapshot.data!.data() as Map<String, dynamic>;
         String status = orderData['status'] ?? "pending";
+        bool isRated = orderData.containsKey('rating');
+
+        // ✨ لو الطلب اتسلم لسه ماتقيمش اظهر النافذة
+        if (status == 'delivered' && !isRated) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showRatingDialog(context, orderData['driverId'] ?? "");
+          });
+        }
         
-        if (status.contains('cancelled') || status == 'delivered') {
+        // لو ملغي أو تم التقييم اخرج للشاشة الرئيسية
+        if (status.contains('cancelled') || (status == 'delivered' && isRated)) {
            WidgetsBinding.instance.addPostFrameCallback((_) {
             if (context.mounted) Navigator.of(context).popUntil((route) => route.isFirst);
           });
@@ -135,6 +216,7 @@ class CustomerTrackingScreen extends StatelessWidget {
     );
   }
 
+  // ... (بقية الـ Widgets كما هي في الكود الأصلي)
   Widget _buildUnifiedBottomPanel(BuildContext context, String status, Map<String, dynamic> order, Map<String, dynamic>? driver, String code) {
     double progress = 0.1;
     String statusDesc = "بانتظار قبول مندوب...";
@@ -202,7 +284,7 @@ class CustomerTrackingScreen extends StatelessWidget {
             
             if (status == 'pending' || status == 'accepted' || status == 'at_pickup')
               Padding(
-                padding: const EdgeInsets.only(top: 10), // ✅ السطر المصحح
+                padding: const EdgeInsets.only(top: 10),
                 child: TextButton(
                   onPressed: () => _handleSmartCancel(context, status),
                   child: const Text("إلغاء الطلب", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
