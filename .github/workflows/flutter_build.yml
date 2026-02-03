@@ -29,23 +29,32 @@ jobs:
       - name: 📦 Install Dependencies
         run: flutter pub get
 
-      - name: 🔑 Decode release.keystore
+      - name: 🔑 Decode aksab_new.keystore
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
         run: |
-          echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > android/release.keystore
+          # فك تشفير المفتاح الجديد في المسار الصح داخل مجلد app
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > android/app/aksab_new.keystore
 
-      - name: 🏗️ Build Release APK (Only)
+      - name: 🏗️ Build Release APK
         env:
+          # ربط البيئة بالسيكريتات الجديدة اللي حطيناها في جيت هوب
           KEYSTORE_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ALIAS_NAME }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD_ALIAS }}
-        run: flutter build apk --release
+        run: |
+          # إنشاء ملف key.properties مؤقتاً عشان الجريدل يشوف المفاتيح
+          echo "storePassword=$KEYSTORE_PASSWORD" > android/key.properties
+          echo "keyPassword=$KEY_PASSWORD" >> android/key.properties
+          echo "keyAlias=$KEY_ALIAS" >> android/key.properties
+          echo "storeFile=aksab_new.keystore" >> android/key.properties
+          
+          flutter build apk --release
 
       - name: 📤 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: fast-release-apk
+          name: aksab-signed-apk
           path: build/app/outputs/flutter-apk/app-release.apk
 
       - name: 🔍 Show SHA Fingerprints
@@ -53,3 +62,4 @@ jobs:
           cd android
           chmod +x gradlew
           ./gradlew signingReport
+
