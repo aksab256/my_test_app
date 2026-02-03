@@ -33,7 +33,6 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
   void initState() {
     super.initState();
     _checkInitialPoints();
-    // تم نقل طلب الإشعارات ليحدث بعد الترحيب
   }
 
   void _checkInitialPoints() async {
@@ -48,10 +47,8 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
     }
   }
 
-  // 🔔 رسالة تمهيدية قبل طلب الإذن الرسمي
   Future<void> _requestNotificationPermissions() async {
     if (!mounted) return;
-    
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -59,7 +56,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text("تفعيل التنبيهات", style: TextStyle(fontWeight: FontWeight.bold)),
+          title: const Text("تفعيل التنبيهات"),
           content: const Text("يرجى السماح بالتنبيهات لتصلك تحديثات طلباتك وعروضنا الحصرية أولاً بأول."),
           actions: [
             TextButton(
@@ -75,7 +72,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
                   }, SetOptions(merge: true));
                 }
               },
-              child: const Text("موافق", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+              child: const Text("موافق", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -93,7 +90,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
         points: points, 
         onDismiss: () {
           overlayEntry.remove();
-          _requestNotificationPermissions(); // اطلب الإشعارات بعد اختفاء الترحيب
+          _requestNotificationPermissions();
         },
       ),
     );
@@ -107,7 +104,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
       Future.microtask(() { if (mounted) _showCelebrationOverlay(points); });
       await prefs.setBool('welcome_anim_shown_v2', true);
     } else {
-      _requestNotificationPermissions(); // لو مش أول مرة، اطلب الإشعارات عادي
+      _requestNotificationPermissions();
     }
   }
 
@@ -125,7 +122,6 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -154,16 +150,11 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
               );
             }
           ),
-          actions: [
-            _buildNotificationIcon(user?.uid),
-            _buildPointsStream(user?.uid),
-            const SizedBox(width: 5),
-          ],
+          actions: [_buildNotificationIcon(user?.uid), _buildPointsStream(user?.uid), const SizedBox(width: 5)],
         ),
         body: SafeArea(
           child: RefreshIndicator(
             onRefresh: () async => setState(() {}),
-            color: softGreen,
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
               child: Column(
@@ -185,12 +176,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
         floatingActionButton: FloatingActionButton(
           heroTag: "consumer_home_chat_btn",
           onPressed: () {
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (context) => const ChatSupportWidget(),
-            );
+            showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (context) => const ChatSupportWidget());
           },
           backgroundColor: softGreen,
           child: const Icon(Icons.support_agent, color: Colors.white, size: 30),
@@ -205,9 +191,8 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
       child: InkWell(
         onTap: () => Navigator.pushNamed(context, ConsumerStoreSearchScreen.routeName),
-        borderRadius: BorderRadius.circular(40),
         child: Container(
-          height: 100, // زيادة الارتفاع قليلاً للمساحة الآمنة
+          height: 100,
           decoration: BoxDecoration(
             gradient: LinearGradient(colors: [softGreen, const Color(0xFF43A047)]),
             borderRadius: BorderRadius.circular(45),
@@ -222,18 +207,18 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("اكتشف المحلات القريبة", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)), // تكبير الخط
-                    Text("تفعيل رادار البحث الذكي", style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)), // تكبير الخط
+                  children: const [
+                    Text("اكتشف المحلات القريبة", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
+                    Text("تفعيل رادار البحث الذكي", style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
               const Icon(Icons.chevron_left, color: Colors.white),
               const SizedBox(width: 20)
-            ]
-          )
-        )
-      )
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -253,9 +238,9 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("ابعتلي حد", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)), // تكبير الخط
-                  Text("مندوب توصيل خاص بك", style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14, fontWeight: FontWeight.bold)), // تكبير الخط
+                children: const [
+                  Text("ابعتلي حد", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+                  Text("مندوب توصيل خاص بك", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -264,18 +249,18 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.orange[900],
+                padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 15),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), // تكبير الزرار
               ),
-              child: const Text("اطلب الآن", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)), // تكبير خط الزرار
-            )
-          ]
-        )
-      )
+              child: const Text("اطلب الآن", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  // ... باقي الـ Widgets (الإشعارات واللقطات) تبقى كما هي منظمة ...
+  // ✅ تم تصحيح الـ Type هنا لضمان نجاح الـ Build
   Widget _buildNotificationIcon(String? uid) {
     if (uid == null) return const SizedBox.shrink();
     return StreamBuilder<QuerySnapshot>(
@@ -284,9 +269,19 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
         int count = snapshot.hasData ? snapshot.data!.docs.length : 0;
         return PopupMenuButton<int>(
           icon: Stack(children: [Icon(Icons.notifications_none, color: softGreen, size: 28), if (count > 0) Positioned(right: 0, top: 0, child: CircleAvatar(radius: 7, backgroundColor: Colors.red, child: Text('$count', style: const TextStyle(fontSize: 8, color: Colors.white))))]),
-          itemBuilder: (ctx) => snapshot.data!.docs.map((d) => PopupMenuItem(child: Text(d['title'] ?? 'إشعار'))).toList(),
+          itemBuilder: (ctx) {
+             if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+               return [const PopupMenuItem<int>(value: 0, child: Text("لا توجد إشعارات"))];
+             }
+             return snapshot.data!.docs.map((d) {
+               return PopupMenuItem<int>(
+                 value: 1,
+                 child: Text(d['title'] ?? 'إشعار', style: const TextStyle(fontSize: 12)),
+               );
+             }).toList();
+          },
         );
-      }
+      },
     );
   }
 
@@ -319,6 +314,6 @@ class _CelebrationWidgetState extends State<_CelebrationWidget> with SingleTicke
   void dispose() { _controller.dispose(); super.dispose(); }
   @override
   Widget build(BuildContext context) { 
-    return Material(color: Colors.black54, child: Center(child: ScaleTransition(scale: _scale, child: Container(margin: const EdgeInsets.all(30), padding: const EdgeInsets.all(30), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30)), child: Column(mainAxisSize: MainAxisSize.min, children: [Text("🎉", style: TextStyle(fontSize: 40.sp)), const SizedBox(height: 20), Text("هدية ترحيبية!", style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.bold, color: Colors.orange)), const SizedBox(height: 10), Text("لقد حصلت على ${widget.points} نقطة", style: TextStyle(fontSize: 16.sp)), const SizedBox(height: 30), ElevatedButton(onPressed: widget.onDismiss, child: const Text("استمتع الآن"))]))))); 
+    return Material(color: Colors.black45, child: Center(child: ScaleTransition(scale: _scale, child: Container(margin: const EdgeInsets.all(30), padding: const EdgeInsets.all(30), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30)), child: Column(mainAxisSize: MainAxisSize.min, children: [Text("🎉", style: TextStyle(fontSize: 40.sp)), const SizedBox(height: 20), Text("هدية ترحيبية!", style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.bold, color: Colors.orange)), const SizedBox(height: 10), Text("لقد حصلت على ${widget.points} نقطة", style: TextStyle(fontSize: 16.sp)), const SizedBox(height: 30), ElevatedButton(onPressed: widget.onDismiss, child: const Text("استمتع الآن"))]))))); 
   }
 }
