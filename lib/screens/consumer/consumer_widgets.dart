@@ -65,7 +65,7 @@ class ConsumerSideMenu extends StatelessWidget {
   }
 }
 
-// 2. شريط التنقل السفلي (Footer Nav) - النسخة الكاملة والمصلحة
+// 2. شريط التنقل السفلي (Footer Nav) - النسخة المعتمدة والمصححة
 class ConsumerFooterNav extends StatelessWidget {
   final int cartCount;
   final int activeIndex;
@@ -89,7 +89,7 @@ class ConsumerFooterNav extends StatelessWidget {
         const BottomNavigationBarItem(icon: Icon(Icons.store), label: 'المتجر'),
         const BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'طلباتي'),
         
-        // ✨ أيقونة "تتبع الطلب" الذكية (تم إصلاح منطق الألوان والحالات)
+        // ✨ أيقونة "تتبع الطلب" - تم تصحيح منطق قراءة الحالة فقط
         BottomNavigationBarItem(
           icon: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -106,9 +106,9 @@ class ConsumerFooterNav extends StatelessWidget {
               IconData iconData = Icons.radar;
               
               if (hasOrder) {
-                // معالجة النص لضمان المطابقة
+                // التصحيح هنا: نضمن أن النص يُقرأ بشكل صحيح مهما كانت حالة الحروف
                 final String rawStatus = snapshot.data!.docs.first['status'] ?? 'pending';
-                final String lastStatus = rawStatus.toLowerCase().trim();
+                final String lastStatus = rawStatus.toString().toLowerCase().trim();
                 
                 if (lastStatus == 'pending') {
                   iconColor = Colors.orange;
@@ -132,8 +132,10 @@ class ConsumerFooterNav extends StatelessWidget {
                 alignment: Alignment.center,
                 children: [
                   Icon(iconData, color: iconColor, size: 28),
-                  // نقطة تنبيه حمراء طالما أن الطلب لم ينتهِ بعد
-                  if (hasOrder && !snapshot.data!.docs.first['status'].toString().contains('delivered') && !snapshot.data!.docs.first['status'].toString().contains('cancelled'))
+                  // نقطة تنبيه حمراء للطلبات غير المنتهية
+                  if (hasOrder && 
+                      !snapshot.data!.docs.first['status'].toString().toLowerCase().contains('delivered') && 
+                      !snapshot.data!.docs.first['status'].toString().toLowerCase().contains('cancelled'))
                     Positioned(
                       top: -2,
                       right: -2,
@@ -164,7 +166,6 @@ class ConsumerFooterNav extends StatelessWidget {
 
         if (index == 2) { 
           try {
-            // البحث عن طلب نشط
             final activeSnap = await FirebaseFirestore.instance
                 .collection('specialRequests')
                 .where('userId', isEqualTo: user?.uid)
@@ -178,22 +179,20 @@ class ConsumerFooterNav extends StatelessWidget {
               return;
             }
 
-            // البحث عن آخر طلب مكتمل لعرض تقييمه أو حالته النهائية
-            final deliveredSnap = await FirebaseFirestore.instance
+            final lastSnap = await FirebaseFirestore.instance
                 .collection('specialRequests')
                 .where('userId', isEqualTo: user?.uid)
                 .orderBy('createdAt', descending: true)
                 .limit(1)
                 .get();
 
-            if (deliveredSnap.docs.isNotEmpty) {
-              if (context.mounted) Navigator.pushNamed(context, '/customerTracking', arguments: deliveredSnap.docs.first.id);
+            if (lastSnap.docs.isNotEmpty) {
+              if (context.mounted) Navigator.pushNamed(context, '/customerTracking', arguments: lastSnap.docs.first.id);
             } else {
               if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("لا توجد طلبات سابقة لتتبعها")));
             }
           } catch (e) {
-            debugPrint("❌ Navigation Error: $e");
-            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("جاري تحديث البيانات، حاول مرة أخرى")));
+            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("جاري تحديث البيانات...")));
           }
           return;
         }
