@@ -65,7 +65,7 @@ class ConsumerSideMenu extends StatelessWidget {
   }
 }
 
-// 2. شريط التنقل السفلي (Footer Nav) - النسخة المعتمدة والمصححة
+// 2. شريط التنقل السفلي (Footer Nav) - النسخة النهائية المصلحة
 class ConsumerFooterNav extends StatelessWidget {
   final int cartCount;
   final int activeIndex;
@@ -74,9 +74,6 @@ class ConsumerFooterNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    
-    // الحالات التي يظهر فيها زر التتبع مفعلاً للبحث عن طلب نشط
-    final List<String> activeStatuses = ['pending', 'accepted', 'at_pickup', 'picked_up'];
 
     return BottomNavigationBar(
       currentIndex: activeIndex == -1 ? 0 : activeIndex,
@@ -89,59 +86,61 @@ class ConsumerFooterNav extends StatelessWidget {
         const BottomNavigationBarItem(icon: Icon(Icons.store), label: 'المتجر'),
         const BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'طلباتي'),
         
-        // ✨ أيقونة "تتبع الطلب" - تم تصحيح منطق قراءة الحالة فقط
+        // ✨ أيقونة "تتبع الطلب" الذكية - حل مشكلة التحديث والفهرس
         BottomNavigationBarItem(
           icon: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('specialRequests')
                 .where('userId', isEqualTo: user?.uid)
-                .orderBy('createdAt', descending: true) 
-                .limit(1)
-                .snapshots(),
+                .snapshots(), // مراقبة حية بدون شروط تعيق الفهرس
             builder: (context, snapshot) {
-              if (snapshot.hasError) return const Icon(Icons.radar, color: Colors.grey);
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return const Icon(Icons.radar, color: Colors.grey, size: 28);
+              }
 
-              bool hasOrder = snapshot.hasData && snapshot.data!.docs.isNotEmpty;
-              Color iconColor = Colors.grey;
-              IconData iconData = Icons.radar;
+              // ترتيب يدوي لأحدث طلب لضمان استجابة الأيقونة فوراً
+              var docs = snapshot.data!.docs.toList();
+              docs.sort((a, b) {
+                Timestamp t1 = a['createdAt'] ?? Timestamp.now();
+                Timestamp t2 = b['createdAt'] ?? Timestamp.now();
+                return t2.compareTo(t1);
+              });
+
+              final lastOrder = docs.first.data() as Map<String, dynamic>;
+              final String status = (lastOrder['status'] ?? 'pending').toString().toLowerCase().trim();
               
-              if (hasOrder) {
-                // التصحيح هنا: نضمن أن النص يُقرأ بشكل صحيح مهما كانت حالة الحروف
-                final String rawStatus = snapshot.data!.docs.first['status'] ?? 'pending';
-                final String lastStatus = rawStatus.toString().toLowerCase().trim();
-                
-                if (lastStatus == 'pending') {
-                  iconColor = Colors.orange;
-                  iconData = Icons.hourglass_top_rounded;
-                } else if (lastStatus == 'accepted' || lastStatus == 'at_pickup') {
-                  iconColor = Colors.blue;
-                  iconData = Icons.directions_bike_rounded;
-                } else if (lastStatus == 'picked_up') {
-                  iconColor = Colors.indigo;
-                  iconData = Icons.local_shipping_rounded;
-                } else if (lastStatus == 'delivered') {
-                  iconColor = Colors.green;
-                  iconData = Icons.check_circle_rounded;
-                } else if (lastStatus.contains('cancelled')) {
-                  iconColor = Colors.red;
-                  iconData = Icons.cancel_rounded;
-                }
+              Color iconColor = Colors.orange;
+              IconData iconData = Icons.hourglass_top_rounded;
+
+              if (status == 'accepted' || status == 'at_pickup') {
+                iconColor = Colors.blue;
+                iconData = Icons.directions_bike_rounded;
+              } else if (status == 'picked_up') {
+                iconColor = Colors.indigo;
+                iconData = Icons.local_shipping_rounded;
+              } else if (status == 'delivered') {
+                iconColor = Colors.green;
+                iconData = Icons.check_circle_rounded;
+              } else if (status.contains('cancelled')) {
+                iconColor = Colors.red;
+                iconData = Icons.cancel_rounded;
               }
 
               return Stack(
                 alignment: Alignment.center,
                 children: [
                   Icon(iconData, color: iconColor, size: 28),
-                  // نقطة تنبيه حمراء للطلبات غير المنتهية
-                  if (hasOrder && 
-                      !snapshot.data!.docs.first['status'].toString().toLowerCase().contains('delivered') && 
-                      !snapshot.data!.docs.first['status'].toString().toLowerCase().contains('cancelled'))
+                  if (status != 'delivered' && !status.contains('cancelled'))
                     Positioned(
                       top: -2,
                       right: -2,
                       child: Container(
                         width: 10, height: 10,
-                        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle, border: Border.fromBorderSide(BorderSide(color: Colors.white, width: 1))),
+                        decoration: BoxDecoration(
+                          color: Colors.red, 
+                          shape: BoxShape.circle, 
+                          border: Border.all(color: Colors.white, width: 1.5)
+                        ),
                       ),
                     ),
                 ],
@@ -166,33 +165,35 @@ class ConsumerFooterNav extends StatelessWidget {
 
         if (index == 2) { 
           try {
-            final activeSnap = await FirebaseFirestore.instance
+            final snap = await FirebaseFirestore.instance
                 .collection('specialRequests')
                 .where('userId', isEqualTo: user?.uid)
-                .where('status', whereIn: activeStatuses)
-                .orderBy('createdAt', descending: true)
-                .limit(1)
                 .get();
 
-            if (activeSnap.docs.isNotEmpty) {
-              if (context.mounted) Navigator.pushNamed(context, '/customerTracking', arguments: activeSnap.docs.first.id);
-              return;
-            }
+            if (snap.docs.isNotEmpty) {
+              var docs = snap.docs.toList();
+              docs.sort((a, b) {
+                Timestamp t1 = a['createdAt'] ?? Timestamp.now();
+                Timestamp t2 = b['createdAt'] ?? Timestamp.now();
+                return t2.compareTo(t1);
+              });
 
-            final lastSnap = await FirebaseFirestore.instance
-                .collection('specialRequests')
-                .where('userId', isEqualTo: user?.uid)
-                .orderBy('createdAt', descending: true)
-                .limit(1)
-                .get();
-
-            if (lastSnap.docs.isNotEmpty) {
-              if (context.mounted) Navigator.pushNamed(context, '/customerTracking', arguments: lastSnap.docs.first.id);
+              if (context.mounted) {
+                Navigator.pushNamed(context, '/customerTracking', arguments: docs.first.id);
+              }
             } else {
-              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("لا توجد طلبات سابقة لتتبعها")));
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("لا توجد طلبات حالية لتتبعها"), backgroundColor: Colors.black87),
+                );
+              }
             }
           } catch (e) {
-            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("جاري تحديث البيانات...")));
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("حدث خطأ أثناء تحميل البيانات")),
+              );
+            }
           }
           return;
         }
