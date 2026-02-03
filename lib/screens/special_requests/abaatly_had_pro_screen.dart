@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:sizer/sizer.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:my_test_app/screens/consumer/consumer_widgets.dart'; // استيراد الشريط السفلي
+import 'package:my_test_app/screens/consumer/consumer_widgets.dart'; 
 import 'location_picker_screen.dart';
 
 class AbaatlyHadProScreen extends StatefulWidget {
@@ -24,12 +24,9 @@ class AbaatlyHadProScreen extends StatefulWidget {
 
 class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
   final TextEditingController _pickupController = TextEditingController();
-  final TextEditingController _dropoffController = TextEditingController();
 
   LatLng? _pickupCoords;
-  LatLng? _dropoffCoords;
   bool _pickupConfirmed = false;
-  bool _dropoffConfirmed = false;
   late LatLng _liveLocation;
 
   @override
@@ -55,28 +52,22 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
     });
   }
 
-  Future<void> _pickLocation(bool isPickup) async {
+  Future<void> _pickLocation() async {
     final LatLng? result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => LocationPickerScreen(
           initialLocation: _liveLocation, 
-          title: isPickup ? "حدد مكان الاستلام" : "حدد مكان التسليم",
+          title: "حدد مكان الاستلام",
         ),
       ),
     );
 
     if (result != null) {
       setState(() {
-        if (isPickup) {
-          _pickupCoords = result;
-          _pickupController.text = "تم تحديد مكان الاستلام ✅";
-          _pickupConfirmed = true;
-        } else {
-          _dropoffCoords = result;
-          _dropoffController.text = "تم تحديد وجهة التسليم ✅";
-          _dropoffConfirmed = true;
-        }
+        _pickupCoords = result;
+        _pickupController.text = "تم تحديد مكان الاستلام ✅";
+        _pickupConfirmed = true;
       });
     }
   }
@@ -89,65 +80,46 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
         backgroundColor: const Color(0xFFFBFBFB),
         appBar: AppBar(
           title: Text("إعداد مسار التوصيل", 
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18.sp, color: Colors.black)),
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20.sp, color: Colors.black)), // تكبير عنوان الأب بار
           centerTitle: true,
           backgroundColor: Colors.white,
           elevation: 0.5,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black, size: 25), 
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black, size: 28), 
             onPressed: () => Navigator.pop(context)
           ),
         ),
         body: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 25),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // كارت الاستلام
+              // كارت الاستلام - الوحيد المطلوب الآن
               _buildLocationCard(
                 label: "من أين سيستلم المندوب؟",
                 controller: _pickupController,
                 icon: Icons.location_on,
                 color: const Color(0xFF43A047),
                 isConfirmed: _pickupConfirmed,
-                onTap: () => _pickLocation(true),
-              ),
-              
-              // سهم الربط بتصميم أنيق
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Icon(Icons.south_rounded, color: Colors.grey[300], size: 40),
-                ),
+                onTap: () => _pickLocation(),
               ),
 
-              // كارت التسليم
-              _buildLocationCard(
-                label: "أين سيتم تسليم الشحنة؟",
-                controller: _dropoffController,
-                icon: Icons.flag_rounded,
-                color: const Color(0xFFE53935),
-                isConfirmed: _dropoffConfirmed,
-                onTap: () => _pickLocation(false),
-              ),
-
-              const SizedBox(height: 35),
+              const SizedBox(height: 40),
               
-              // قسم الشروط بتنسيق أوضح
+              // قسم الشروط بتنسيق أوضح وخط أكبر
               _buildTermsSection(),
               
-              const SizedBox(height: 30),
+              const SizedBox(height: 40),
               
-              // زر التأكيد يظهر فقط عند اكتمال البيانات
-              if (_pickupConfirmed && _dropoffConfirmed)
+              // زر التأكيد يظهر عند تحديد الموقع
+              if (_pickupConfirmed)
                 _buildConfirmButton(),
               
-              const SizedBox(height: 50), // مساحة إضافية للسكرول
+              const SizedBox(height: 60), 
             ],
           ),
         ),
-        // ✨ إضافة الشريط السفلي لضمان تتبع أي طلبات أخرى قائمة
         bottomNavigationBar: const ConsumerFooterNav(cartCount: 0, activeIndex: -1),
       ),
     );
@@ -167,18 +139,18 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(22),
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(25), // زيادة البادينج الداخلي
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(22),
             border: Border.all(
-              color: isConfirmed ? color.withOpacity(0.5) : Colors.transparent, 
-              width: 2
+              color: isConfirmed ? color.withOpacity(0.6) : Colors.grey.withOpacity(0.2), 
+              width: 2.5
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04), 
-                blurRadius: 20, 
+                color: Colors.black.withOpacity(0.06), 
+                blurRadius: 25, 
                 offset: const Offset(0, 10)
               )
             ],
@@ -186,25 +158,25 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(15),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(18),
                 ),
-                child: Icon(icon, color: color, size: 28),
+                child: Icon(icon, color: color, size: 32), // تكبير الأيقونة
               ),
-              const SizedBox(width: 15),
+              const SizedBox(width: 20),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 11.sp, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 5),
+                    Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 13.sp, fontWeight: FontWeight.bold)), // تكبير الخط
+                    const SizedBox(height: 8),
                     Text(
                       controller.text.isEmpty ? "اضغط للتحديد من الخريطة" : controller.text, 
                       style: TextStyle(
                         fontWeight: FontWeight.w900, 
-                        fontSize: 13.sp, 
+                        fontSize: 15.sp, // تكبير الخط الأساسي
                         color: isConfirmed ? Colors.black : Colors.orange[800]
                       )
                     ),
@@ -214,7 +186,7 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
               Icon(
                 isConfirmed ? Icons.check_circle_rounded : Icons.add_location_alt_outlined, 
                 color: isConfirmed ? Colors.green : Colors.grey[300], 
-                size: 28
+                size: 32
               ),
             ],
           ),
@@ -225,22 +197,22 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
 
   Widget _buildTermsSection() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(25),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.amber.withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: Colors.amber.withOpacity(0.4), width: 1.5),
       ),
       child: Column(
         children: [
           Row(
             children: [
-              const Icon(Icons.gavel_rounded, color: Colors.amber, size: 24),
-              const SizedBox(width: 10),
-              Text("شروط الاستخدام والضمان", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14.sp)),
+              const Icon(Icons.gavel_rounded, color: Colors.amber, size: 30),
+              const SizedBox(width: 12),
+              Text("شروط الاستخدام والضمان", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16.sp)), // تكبير العنوان
             ],
           ),
-          const Divider(height: 30),
+          const Divider(height: 40),
           _buildTermItem("المسؤولية القانونية عن المحتوى تقع على طرفي العملية."),
           _buildTermItem("يُمنع نقل الأموال أو المواد المحظورة قانوناً."),
           _buildTermItem("كود التسليم هو توقيعك؛ لا تعطه للمندوب إلا بعد الفحص."),
@@ -252,13 +224,13 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
 
   Widget _buildTermItem(String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 18), // زيادة المسافة بين العناصر
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.circle, size: 8, color: Colors.amber[700]).paddingOnly(top: 8),
-          const SizedBox(width: 10),
-          Expanded(child: Text(text, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: Colors.black87, height: 1.3))),
+          Icon(Icons.circle, size: 10, color: Colors.amber[700]).paddingOnly(top: 10),
+          const SizedBox(width: 12),
+          Expanded(child: Text(text, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w700, color: Colors.black87, height: 1.4))), // تكبير خط الشروط
         ],
       ),
     );
@@ -267,28 +239,27 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
   Widget _buildConfirmButton() {
     return Container(
       width: double.infinity,
-      height: 65,
+      height: 70, // زيادة طول الزر
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         gradient: const LinearGradient(colors: [Color(0xFF43A047), Color(0xFF2E7D32)]),
-        boxShadow: [BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))],
+        boxShadow: [BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))],
       ),
       child: ElevatedButton(
         onPressed: () {
-          // هنا يتم الانتقال لصفحة تأكيد الطلب أو الدفع
+          // الانتقال للخطوة التالية
         }, 
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent, 
           shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22))
         ), 
-        child: Text("تأكيد المسار والمتابعة", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15.sp, color: Colors.white))
+        child: Text("تأكيد المسار والمتابعة", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17.sp, color: Colors.white)) // تكبير خط الزر
       ),
     );
   }
 }
 
-// إضافة بسيطة لتسهيل الـ Padding في الـ TermItem
 extension OnWidget on Widget {
   Widget paddingOnly({double top = 0}) => Padding(padding: EdgeInsets.only(top: top), child: this);
 }
