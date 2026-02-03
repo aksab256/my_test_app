@@ -260,3 +260,4 @@ class ConsumerCategoriesBanner extends StatelessWidget {
     );
   }
 }
+
