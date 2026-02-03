@@ -1,5 +1,3 @@
-// lib/screens/consumer/consumer_widgets.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -67,7 +65,7 @@ class ConsumerSideMenu extends StatelessWidget {
   }
 }
 
-// 2. شريط التنقل السفلي (Footer Nav) - تم إضافة الترتيب لضمان جلب أحدث طلب
+// 2. شريط التنقل السفلي (Footer Nav) - النسخة المحدثة لربط التتبع
 class ConsumerFooterNav extends StatelessWidget {
   final int cartCount;
   final int activeIndex;
@@ -78,7 +76,7 @@ class ConsumerFooterNav extends StatelessWidget {
     final user = FirebaseAuth.instance.currentUser;
     
     // الحالات التي يظهر فيها زر التتبع مفعلاً
-    final List<String> trackingStatuses = ['pending', 'accepted', 'at_pickup', 'picked_up', 'delivered'];
+    final List<String> activeStatuses = ['pending', 'accepted', 'at_pickup', 'picked_up'];
 
     return BottomNavigationBar(
       currentIndex: activeIndex == -1 ? 0 : activeIndex,
@@ -91,46 +89,37 @@ class ConsumerFooterNav extends StatelessWidget {
         const BottomNavigationBarItem(icon: Icon(Icons.store), label: 'المتجر'),
         const BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'طلباتي'),
         
-        // ✨ أيقونة "تتبع الطلب" الذكية
+        // ✨ أيقونة "تتبع الطلب" الذكية (تراقب الحالة لحظياً)
         BottomNavigationBarItem(
           icon: StreamBuilder<QuerySnapshot>(
-            // تم إضافة الترتيب التنازلي هنا لضمان فتح الطلب الصحيح
             stream: FirebaseFirestore.instance
                 .collection('specialRequests')
                 .where('userId', isEqualTo: user?.uid)
-                .where('status', whereIn: trackingStatuses)
                 .orderBy('createdAt', descending: true) 
+                .limit(1)
                 .snapshots(),
             builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                // 🛠️ علامة UI: لو ظهرت "!" في الـ Console، يعني محتاج تضغط على رابط الاندكس
-                debugPrint("❌ Firebase Error: ${snapshot.error}");
-                return const Icon(Icons.radar, color: Colors.grey);
-              }
+              if (snapshot.hasError) return const Icon(Icons.radar, color: Colors.grey);
 
-              bool hasActiveOrder = snapshot.hasData && snapshot.data!.docs.isNotEmpty;
+              bool hasOrder = snapshot.hasData && snapshot.data!.docs.isNotEmpty;
               Color iconColor = Colors.grey;
               
-              if (hasActiveOrder) {
+              if (hasOrder) {
                 final lastStatus = snapshot.data!.docs.first['status'];
+                // أخضر لو تم التسليم، برتقالي لو جاري التنفيذ
                 iconColor = (lastStatus == 'delivered') ? Colors.green : Colors.orange;
               }
 
               return Stack(
                 alignment: Alignment.center,
                 children: [
-                  Icon(
-                    Icons.radar,
-                    color: iconColor,
-                    size: hasActiveOrder ? 28 : 24,
-                  ),
-                  if (hasActiveOrder)
+                  Icon(Icons.radar, color: iconColor, size: hasOrder ? 28 : 24),
+                  if (hasOrder)
                     Positioned(
                       top: 0,
                       right: 0,
                       child: Container(
-                        width: 8,
-                        height: 8,
+                        width: 8, height: 8,
                         decoration: BoxDecoration(
                           color: iconColor == Colors.green ? Colors.green : Colors.red, 
                           shape: BoxShape.circle
@@ -157,34 +146,39 @@ class ConsumerFooterNav extends StatelessWidget {
       onTap: (index) async {
         if (index == activeIndex) return;
 
-        if (index == 2) {
+        if (index == 2) { // منطق فتح صفحة التتبع
           try {
-            final snapshot = await FirebaseFirestore.instance
+            // 1. محاولة جلب طلب نشط أولاً
+            final activeSnap = await FirebaseFirestore.instance
                 .collection('specialRequests')
                 .where('userId', isEqualTo: user?.uid)
-                .where('status', whereIn: trackingStatuses)
-                .orderBy('createdAt', descending: true) // 👈 ترتيب ضروري جداً
+                .where('status', whereIn: activeStatuses)
+                .orderBy('createdAt', descending: true)
                 .limit(1)
                 .get();
 
-            if (snapshot.docs.isNotEmpty) {
-              final orderId = snapshot.docs.first.id;
-              if (context.mounted) Navigator.pushNamed(context, '/customerTracking', arguments: orderId);
+            if (activeSnap.docs.isNotEmpty) {
+              if (context.mounted) Navigator.pushNamed(context, '/customerTracking', arguments: activeSnap.docs.first.id);
+              return;
+            }
+
+            // 2. إذا لم يوجد، جلب آخر طلب تم تسليمه
+            final deliveredSnap = await FirebaseFirestore.instance
+                .collection('specialRequests')
+                .where('userId', isEqualTo: user?.uid)
+                .where('status', isEqualTo: 'delivered')
+                .orderBy('completedAt', descending: true)
+                .limit(1)
+                .get();
+
+            if (deliveredSnap.docs.isNotEmpty) {
+              if (context.mounted) Navigator.pushNamed(context, '/customerTracking', arguments: deliveredSnap.docs.first.id);
             } else {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("لا توجد طلبات نشطة حالياً")),
-                );
-              }
+              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("لا توجد طلبات حالية لتتبعها")));
             }
           } catch (e) {
-            debugPrint("❌ Error fetching tracking order: $e");
-            // تنبيه للمبرمج في حالة نقص الاندكس
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("خطأ في الاتصال، تأكد من إعدادات الاندكس")),
-              );
-            }
+            debugPrint("❌ Error: $e");
+            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("خطأ في الاتصال، تأكد من تحديث الفهرس")));
           }
           return;
         }
