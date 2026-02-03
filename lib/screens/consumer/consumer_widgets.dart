@@ -65,7 +65,7 @@ class ConsumerSideMenu extends StatelessWidget {
   }
 }
 
-// 2. شريط التنقل السفلي (Footer Nav) - النسخة النهائية المصلحة
+// 2. شريط التنقل السفلي (Footer Nav) - النسخة النهائية المعتمدة
 class ConsumerFooterNav extends StatelessWidget {
   final int cartCount;
   final int activeIndex;
@@ -86,19 +86,19 @@ class ConsumerFooterNav extends StatelessWidget {
         const BottomNavigationBarItem(icon: Icon(Icons.store), label: 'المتجر'),
         const BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'طلباتي'),
         
-        // ✨ أيقونة "تتبع الطلب" الذكية - حل مشكلة التحديث والفهرس
+        // ✨ أيقونة "تتبع الطلب" الذكية - تغلق تلقائياً بعد التقييم
         BottomNavigationBarItem(
           icon: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('specialRequests')
                 .where('userId', isEqualTo: user?.uid)
-                .snapshots(), // مراقبة حية بدون شروط تعيق الفهرس
+                .snapshots(),
             builder: (context, snapshot) {
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return const Icon(Icons.radar, color: Colors.grey, size: 28);
               }
 
-              // ترتيب يدوي لأحدث طلب لضمان استجابة الأيقونة فوراً
+              // ترتيب يدوي لأحدث طلب
               var docs = snapshot.data!.docs.toList();
               docs.sort((a, b) {
                 Timestamp t1 = a['createdAt'] ?? Timestamp.now();
@@ -108,11 +108,20 @@ class ConsumerFooterNav extends StatelessWidget {
 
               final lastOrder = docs.first.data() as Map<String, dynamic>;
               final String status = (lastOrder['status'] ?? 'pending').toString().toLowerCase().trim();
+              final bool isRated = lastOrder.containsKey('rating'); // فحص وجود التقييم
               
-              Color iconColor = Colors.orange;
-              IconData iconData = Icons.hourglass_top_rounded;
+              Color iconColor = Colors.grey;
+              IconData iconData = Icons.radar;
 
-              if (status == 'accepted' || status == 'at_pickup') {
+              // منطق تغيير الأيقونة بناءً على الحالة والتقييم
+              if (status.contains('cancelled') || isRated) {
+                // لو الطلب ملغي أو اتقيم خلاص يرجع رادار رمادي
+                iconColor = Colors.grey;
+                iconData = Icons.radar;
+              } else if (status == 'pending') {
+                iconColor = Colors.orange;
+                iconData = Icons.hourglass_top_rounded;
+              } else if (status == 'accepted' || status == 'at_pickup') {
                 iconColor = Colors.blue;
                 iconData = Icons.directions_bike_rounded;
               } else if (status == 'picked_up') {
@@ -121,16 +130,14 @@ class ConsumerFooterNav extends StatelessWidget {
               } else if (status == 'delivered') {
                 iconColor = Colors.green;
                 iconData = Icons.check_circle_rounded;
-              } else if (status.contains('cancelled')) {
-                iconColor = Colors.red;
-                iconData = Icons.cancel_rounded;
               }
 
               return Stack(
                 alignment: Alignment.center,
                 children: [
                   Icon(iconData, color: iconColor, size: 28),
-                  if (status != 'delivered' && !status.contains('cancelled'))
+                  // نقطة التنبيه تظهر فقط لو فيه طلب نشط ولم يتم تقييمه
+                  if (!isRated && !status.contains('cancelled') && status != 'none')
                     Positioned(
                       top: -2,
                       right: -2,
