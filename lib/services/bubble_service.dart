@@ -1,54 +1,52 @@
 import 'package:flutter/material.dart';
 import '../widgets/order_bubble.dart';
-import '../main.dart'; // لاستخدام الـ navigatorKey العالمي
+import '../main.dart'; 
 
 class BubbleService {
   static OverlayEntry? _overlayEntry;
 
-  // 1. دالة إظهار الفقاعة (تم إضافة Microtask لضمان استقرار الـ Navigation)
   static void show(String orderId) {
-    // إذا كانت الفقاعة موجودة، نحذفها أولاً لتحديث البيانات
-    if (_overlayEntry != null) {
-      hide();
-    }
+    if (_overlayEntry != null) hide();
 
-    // استخدام Future.microtask يضمن تنفيذ الإظهار "بعد" اكتمال العمليات الحالية
-    // وهذا يمنع خطأ الـ Null Check ويسهل إرسال الطلب في الخلفية
-    Future.microtask(() {
-      final context = navigatorKey.currentContext;
-      if (context == null) return;
+    // تأخير بسيط جداً (100 مللي ثانية) عشان نضمن إن الـ Pop خلص والـ Navigator استقر
+    Future.delayed(const Duration(milliseconds: 100), () {
+      // ✅ بنجيب الـ Context من الـ currentState مباشرة
+      final context = navigatorKey.currentState?.overlay?.context;
+      
+      if (context == null) {
+        debugPrint("❌ Bubble Error: Could not find overlay context");
+        return;
+      }
 
       try {
-        final overlay = Overlay.of(context);
+        // ✅ استخدام rootOverlay: true هو السر عشان تظهر فوق كل حاجة
+        final overlay = Overlay.of(context, rootOverlay: true);
 
         _overlayEntry = OverlayEntry(
           builder: (context) => OrderBubble(orderId: orderId),
         );
 
         overlay.insert(_overlayEntry!);
+        debugPrint("✅ Bubble Inserted Successfully for Order: $orderId");
       } catch (e) {
-        debugPrint("❌ Error inserting bubble overlay: $e");
+        debugPrint("❌ Bubble Insertion Failed: $e");
       }
     });
   }
 
-  // 2. دالة إخفاء الفقاعة بأمان
   static void hide() {
     if (_overlayEntry != null) {
       try {
         _overlayEntry!.remove();
       } catch (e) {
-        debugPrint("⚠️ Overlay already removed or not found: $e");
+        debugPrint("⚠️ Overlay already removed: $e");
       }
       _overlayEntry = null;
     }
   }
 
-  // 3. دالة العودة الآمنة (الحل السحري للشاشة السوداء)
   static void safeBackToApp() {
-    hide(); // إخفاء الفقاعة أولاً
-    
-    // إجبار الـ Navigator على العودة للرئيسية لضمان تركيز الشاشة (Focus)
+    hide();
     if (navigatorKey.currentState != null) {
       navigatorKey.currentState!.popUntil((route) => route.isFirst);
     }
