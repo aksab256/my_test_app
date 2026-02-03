@@ -146,7 +146,7 @@ class ConsumerFooterNav extends StatelessWidget {
 
           if (snapshot.docs.isNotEmpty) {
             final orderId = snapshot.docs.first.id;
-            if (context.mounted) Navigator.pushNamed(context, '/track-order', arguments: orderId);
+            if (context.mounted) Navigator.pushNamed(context, '/customerTracking', arguments: orderId);
           } else {
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
