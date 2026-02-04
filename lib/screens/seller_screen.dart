@@ -39,26 +39,87 @@ class _SellerScreenState extends State<SellerScreen> {
     });
   }
 
+  // ✅ إعداد الإشعارات مع الإفصاح المسبق المتوافق مع جوجل بلاي
   void _setupNotifications() async {
     try {
       FirebaseMessaging messaging = FirebaseMessaging.instance;
-      NotificationSettings settings = await messaging.requestPermission(alert: true, badge: true, sound: true);
+      
+      // فحص حالة الإذن الحالية
+      NotificationSettings currentSettings = await messaging.getNotificationSettings();
 
-      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        String? token = await messaging.getToken();
-        String? uid = UserSession.userId;
-
-        if (token != null && uid != null) {
-          String collection = (UserSession.isSubUser) ? 'subUsers' : 'sellers';
-          await FirebaseFirestore.instance.collection(collection).doc(uid).set({
-            'notificationToken': token,
-            'fcmToken': token,
-            'lastUpdate': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+      if (currentSettings.authorizationStatus == AuthorizationStatus.notDetermined) {
+        if (!mounted) return;
+        
+        // إظهار رسالة الإفصاح قبل طلب النظام
+        bool proceed = await _showNotificationDisclosure();
+        
+        if (proceed) {
+          NotificationSettings settings = await messaging.requestPermission(
+            alert: true, badge: true, sound: true,
+          );
+          _updateFcmToken(settings);
         }
+      } else {
+        _updateFcmToken(currentSettings);
       }
     } catch (e) {
       debugPrint("🚨 خطأ في إعداد الإشعارات: $e");
+    }
+  }
+
+  // 🛡️ دالة الإفصاح البارز
+  Future<bool> _showNotificationDisclosure() async {
+    return await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.notifications_active, color: Color(0xff28a745)),
+              SizedBox(width: 10),
+              Text("تفعيل الإشعارات", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text(
+            "يقوم تطبيق أسواق أكسب بجمع بيانات الإشعارات لإرسال تنبيهات فورية حول الطلبات الجديدة، تحديثات حالة الشحن، والرسائل الإدارية لضمان متابعة عملك بدقة.",
+            style: TextStyle(fontFamily: 'Cairo', fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("ليس الآن", style: TextStyle(color: Colors.grey, fontFamily: 'Cairo')),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xff28a745),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("موافق وتفعيل", style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
+            ),
+          ],
+        ),
+      ),
+    ) ?? false;
+  }
+
+  // دالة تحديث التوكن
+  void _updateFcmToken(NotificationSettings settings) async {
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      String? token = await FirebaseMessaging.instance.getToken();
+      String? uid = UserSession.userId;
+
+      if (token != null && uid != null) {
+        String collection = (UserSession.isSubUser) ? 'subUsers' : 'sellers';
+        await FirebaseFirestore.instance.collection(collection).doc(uid).set({
+          'notificationToken': token,
+          'fcmToken': token,
+          'lastUpdate': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
     }
   }
 
@@ -83,11 +144,10 @@ class _SellerScreenState extends State<SellerScreen> {
     final controller = Provider.of<SellerDashboardController>(context);
 
     return PopScope(
-      canPop: false, // نمنع الخروج التلقائي لتفعيل المنطق الخاص بنا
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
 
-        // 1. العودة للشاشة الرئيسية إذا كان المستخدم في شاشة فرعية
         if (_activeRoute != 'نظرة عامة') {
           setState(() {
             _activeRoute = 'نظرة عامة';
@@ -96,15 +156,12 @@ class _SellerScreenState extends State<SellerScreen> {
           return;
         }
 
-        // 2. منطق الضغط المزدوج للخروج (Double Tap to Exit)
         final now = DateTime.now();
         final isWarningTarget = _lastPressedAt == null || 
             now.difference(_lastPressedAt!) > const Duration(seconds: 2);
 
         if (isWarningTarget) {
           _lastPressedAt = now;
-          
-          // إظهار رسالة تنبيه Toast احترافية
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: const Text(
@@ -122,7 +179,6 @@ class _SellerScreenState extends State<SellerScreen> {
           return;
         }
 
-        // 3. الخروج الفعلي من التطبيق دون تسجيل خروج (Stay Logged In)
         if (context.mounted) {
           SystemNavigator.pop(); 
         }
@@ -173,7 +229,6 @@ class _SellerScreenState extends State<SellerScreen> {
     );
   }
 
-  // ميثود منفصلة لبناء جرس الإشعارات لتنظيف الكود
   Widget _buildNotificationBell() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
