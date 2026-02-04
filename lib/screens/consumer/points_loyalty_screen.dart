@@ -256,45 +256,95 @@ class _PointsLoyaltyScreenState extends State<PointsLoyaltyScreen> {
       },
     );
   }
+Widget _buildEarningRules() {
+  return StreamBuilder<DocumentSnapshot>(
+    stream: FirebaseFirestore.instance.collection('appSettings').doc('points').snapshots(),
+    builder: (context, snapshot) {
+      if (!snapshot.hasData || !snapshot.data!.exists) return const SizedBox();
 
-  Widget _buildEarningRules() {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('appSettings').doc('points').snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || !snapshot.data!.exists) return const SizedBox();
+      final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+      final List<dynamic> rules = data['earningRules'] ?? [];
+      // فلترة القواعد النشطة فقط
+      final activeRules = rules.where((rule) => rule['isActive'] == true).toList();
 
-        final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
-        final List<dynamic> rules = data['earningRules'] ?? [];
-        final activeRules = rules.where((rule) => rule['isActive'] == true).toList();
+      return Column(
+        children: activeRules.map((rule) {
+          IconData iconData = FontAwesomeIcons.circleInfo;
+          
+          // استخراج القيم من Firestore
+          final String type = rule['type'] ?? '';
+          final dynamic value = rule['value'] ?? 0;
+          String description = rule['description'] ?? '';
 
-        return Column(
-          children: activeRules.map((rule) {
-            IconData iconData = FontAwesomeIcons.circleInfo;
-            String desc = rule['description'] ?? 'قاعدة كسب نقاط';
+          // بناء نص مخصص لو الوصف فاضي في قاعدة البيانات
+          if (description.isEmpty) {
+            if (type == 'on_new_customer_registration') {
+              description = "اكسب $value نقطة هديّة عند تسجيل حسابك لأول مرة";
+              iconData = FontAwesomeIcons.userPlus;
+            } else if (type == 'per_currency_unit') {
+              description = "اكسب $value نقطة مقابل كل جنيه مصري من مشترياتك";
+              iconData = FontAwesomeIcons.coins;
+            } else {
+              description = "اكسب $value نقطة إضافية عند استخدام التطبيق";
+            }
+          }
 
-            if (rule['type'] == 'per_currency_unit') iconData = FontAwesomeIcons.coins;
-            if (rule['type'] == 'on_new_customer_registration') iconData = FontAwesomeIcons.userPlus;
-
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.7),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white),
-              ),
-              child: Row(
-                children: [
-                  Icon(iconData, color: primaryBlue, size: 20),
-                  const SizedBox(width: 15),
-                  Expanded(child: Text(desc, style: TextStyle(fontSize: 14, color: darkGrey))),
-                ],
-              ),
-            );
-          }).toList(),
-        );
-      },
-    );
-  }
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.white, // تغيير اللون لأبيض صريح ليظهر بوضوح
+              borderRadius: BorderRadius.circular(15),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                )
+              ],
+              border: Border.all(color: primaryBlue.withOpacity(0.1)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: primaryBlue.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(iconData, color: primaryBlue, size: 18),
+                ),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 14, 
+                      color: darkGrey, 
+                      fontWeight: FontWeight.w600,
+                      height: 1.3
+                    ),
+                  ),
+                ),
+                // إضافة ملصق صغير للقيمة
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: successGreen.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    "+$value",
+                    style: TextStyle(color: successGreen, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      );
+    },
+  );
 }
 
+  
