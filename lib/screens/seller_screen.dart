@@ -1,6 +1,6 @@
 // lib/screens/seller_screen.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // ✅ مطلوب لعملية إغلاق التطبيق
+import 'package:flutter/services.dart'; 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -23,8 +23,6 @@ class SellerScreen extends StatefulWidget {
 class _SellerScreenState extends State<SellerScreen> {
   String _activeRoute = 'نظرة عامة';
   Widget _activeScreen = const SellerOverviewScreen();
-  
-  // ✅ متغير للتحكم في توقيت الضغط المزدوج
   DateTime? _lastPressedAt;
 
   @override
@@ -39,21 +37,23 @@ class _SellerScreenState extends State<SellerScreen> {
     });
   }
 
-  // ✅ إعداد الإشعارات مع الإفصاح المسبق المتوافق مع جوجل بلاي
+  // ✅ نظام الإشعارات المطور لضمان طلب الإذن والإفصاح
   void _setupNotifications() async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      bool hasShownDisclosure = prefs.getBool('hasShownNotificationDisclosure') ?? false;
+
       FirebaseMessaging messaging = FirebaseMessaging.instance;
-      
-      // فحص حالة الإذن الحالية
       NotificationSettings currentSettings = await messaging.getNotificationSettings();
 
-      if (currentSettings.authorizationStatus == AuthorizationStatus.notDetermined) {
+      // إذا لم يوافق المستخدم بعد ولم تظهر الرسالة التوضيحية
+      if (!hasShownDisclosure && currentSettings.authorizationStatus != AuthorizationStatus.authorized) {
         if (!mounted) return;
         
-        // إظهار رسالة الإفصاح قبل طلب النظام
         bool proceed = await _showNotificationDisclosure();
         
         if (proceed) {
+          await prefs.setBool('hasShownNotificationDisclosure', true);
           NotificationSettings settings = await messaging.requestPermission(
             alert: true, badge: true, sound: true,
           );
@@ -67,7 +67,6 @@ class _SellerScreenState extends State<SellerScreen> {
     }
   }
 
-  // 🛡️ دالة الإفصاح البارز
   Future<bool> _showNotificationDisclosure() async {
     return await showDialog(
       context: context,
@@ -106,7 +105,6 @@ class _SellerScreenState extends State<SellerScreen> {
     ) ?? false;
   }
 
-  // دالة تحديث التوكن
   void _updateFcmToken(NotificationSettings settings) async {
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
       String? token = await FirebaseMessaging.instance.getToken();
