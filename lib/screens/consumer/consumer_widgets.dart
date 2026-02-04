@@ -65,7 +65,7 @@ class ConsumerSideMenu extends StatelessWidget {
   }
 }
 
-// 2. شريط التنقل السفلي (Footer Nav) - النسخة النهائية المعتمدة
+// 2. شريط التنقل السفلي (Footer Nav) - النسخة الاحترافية المحدثة
 class ConsumerFooterNav extends StatelessWidget {
   final int cartCount;
   final int activeIndex;
@@ -86,7 +86,7 @@ class ConsumerFooterNav extends StatelessWidget {
         const BottomNavigationBarItem(icon: Icon(Icons.store), label: 'المتجر'),
         const BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'طلباتي'),
         
-        // ✨ أيقونة "تتبع الطلب" الذكية - تغلق تلقائياً بعد التقييم
+        // ✨ أيقونة "تتبع الطلب" الذكية والمستقرة
         BottomNavigationBarItem(
           icon: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -94,11 +94,15 @@ class ConsumerFooterNav extends StatelessWidget {
                 .where('userId', isEqualTo: user?.uid)
                 .snapshots(),
             builder: (context, snapshot) {
+              // منع "الرعشة" اللحظية أثناء التحميل
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Icon(Icons.radar, color: Colors.grey, size: 28);
+              }
+
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return const Icon(Icons.radar, color: Colors.grey, size: 28);
               }
 
-              // ترتيب يدوي لأحدث طلب
               var docs = snapshot.data!.docs.toList();
               docs.sort((a, b) {
                 Timestamp t1 = a['createdAt'] ?? Timestamp.now();
@@ -108,39 +112,37 @@ class ConsumerFooterNav extends StatelessWidget {
 
               final lastOrder = docs.first.data() as Map<String, dynamic>;
               final String status = (lastOrder['status'] ?? 'pending').toString().toLowerCase().trim();
-              final bool isRated = lastOrder.containsKey('rating'); // فحص وجود التقييم
+              final bool isRated = lastOrder.containsKey('rating');
               
+              // تعريف الحالات المنتهية
+              final bool isFinished = status.contains('cancelled') || isRated || status == 'none';
+
               Color iconColor = Colors.grey;
               IconData iconData = Icons.radar;
 
-              // منطق تغيير الأيقونة بناءً على الحالة والتقييم
-              if (status.contains('cancelled') || isRated) {
-                // لو الطلب ملغي أو اتقيم خلاص يرجع رادار رمادي
-                iconColor = Colors.grey;
-                iconData = Icons.radar;
-              } else if (status == 'pending') {
-                iconColor = Colors.orange;
-                iconData = Icons.hourglass_top_rounded;
-              } else if (status == 'accepted' || status == 'at_pickup') {
-                iconColor = Colors.blue;
-                iconData = Icons.directions_bike_rounded;
-              } else if (status == 'picked_up') {
-                iconColor = Colors.indigo;
-                iconData = Icons.local_shipping_rounded;
-              } else if (status == 'delivered') {
-                iconColor = Colors.green;
-                iconData = Icons.check_circle_rounded;
+              if (!isFinished) {
+                if (status == 'pending') {
+                  iconColor = Colors.orange;
+                  iconData = Icons.hourglass_top_rounded;
+                } else if (status == 'accepted' || status == 'at_pickup') {
+                  iconColor = Colors.blue;
+                  iconData = Icons.directions_bike_rounded;
+                } else if (status == 'picked_up') {
+                  iconColor = Colors.indigo;
+                  iconData = Icons.local_shipping_rounded;
+                } else if (status == 'delivered') {
+                  iconColor = Colors.green;
+                  iconData = Icons.check_circle_rounded;
+                }
               }
 
               return Stack(
                 alignment: Alignment.center,
                 children: [
                   Icon(iconData, color: iconColor, size: 28),
-                  // نقطة التنبيه تظهر فقط لو فيه طلب نشط ولم يتم تقييمه
-                  if (!isRated && !status.contains('cancelled') && status != 'none')
+                  if (!isFinished)
                     Positioned(
-                      top: -2,
-                      right: -2,
+                      top: -2, right: -2,
                       child: Container(
                         width: 10, height: 10,
                         decoration: BoxDecoration(
@@ -185,13 +187,32 @@ class ConsumerFooterNav extends StatelessWidget {
                 return t2.compareTo(t1);
               });
 
+              final lastOrder = docs.first.data() as Map<String, dynamic>;
+              final String status = (lastOrder['status'] ?? 'pending').toString().toLowerCase().trim();
+              final bool isRated = lastOrder.containsKey('rating');
+
+              // التحقق مما إذا كان الطلب قابلاً للتتبع فعلياً
+              if (status.contains('cancelled') || isRated) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("لا توجد طلبات نشطة حالياً لمتابعتها"), 
+                      backgroundColor: Colors.black87,
+                      behavior: SnackBarBehavior.floating,
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+                return;
+              }
+
               if (context.mounted) {
                 Navigator.pushNamed(context, '/customerTracking', arguments: docs.first.id);
               }
             } else {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("لا توجد طلبات حالية لتتبعها"), backgroundColor: Colors.black87),
+                  const SnackBar(content: Text("لا توجد طلبات نشطة حالياً"), backgroundColor: Colors.black87),
                 );
               }
             }
