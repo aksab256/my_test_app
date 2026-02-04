@@ -6,7 +6,7 @@ import 'package:sizer/sizer.dart';
 class SellerOverviewScreen extends StatelessWidget {
   const SellerOverviewScreen({super.key});
 
-  // كارت إحصائيات ضخم وعريض
+  // كارت إحصائيات ضخم وعريض (تم إزالة السهم وتعديل التصميم ليكون إحصائي فقط)
   Widget _buildBigStatCard(BuildContext context, {
     required String title,
     required String value,
@@ -21,24 +21,32 @@ class SellerOverviewScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(25),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.1),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
+            color: color.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
           ),
         ],
-        border: Border.all(color: color.withOpacity(0.2), width: 1.5),
+        // خط جانبي ملون يعطي شكلاً جمالياً دون الحاجة لسهم
+        border: Border(
+          right: BorderSide(color: color.withOpacity(0.5), width: 5),
+          left: BorderSide(color: color.withOpacity(0.1), width: 1),
+          top: BorderSide(color: color.withOpacity(0.1), width: 1),
+          bottom: BorderSide(color: color.withOpacity(0.1), width: 1),
+        ),
       ),
       child: Row(
         children: [
+          // أيقونة دائرية
           Container(
             padding: const EdgeInsets.all(15),
             decoration: BoxDecoration(
               color: color.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: color, size: 35),
+            child: Icon(icon, color: color, size: 30.sp),
           ),
           const SizedBox(width: 20),
+          // النصوص
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -46,24 +54,26 @@ class SellerOverviewScreen extends StatelessWidget {
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 13.sp,
+                    fontSize: 12.sp,
                     color: Colors.grey.shade600,
                     fontWeight: FontWeight.bold,
+                    fontFamily: 'Cairo',
                   ),
                 ),
                 const SizedBox(height: 5),
                 Text(
                   value,
                   style: TextStyle(
-                    fontSize: 20.sp,
+                    fontSize: 18.sp,
                     fontWeight: FontWeight.w900,
                     color: color,
+                    fontFamily: 'Cairo',
                   ),
                 ),
               ],
             ),
           ),
-          Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey.shade300, size: 20),
+          // ✅ تم إزالة أيقونة arrow_forward_ios_rounded لضمان قبول جوجل بلاي
         ],
       ),
     );
@@ -82,16 +92,28 @@ class SellerOverviewScreen extends StatelessWidget {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(20.0),
-          child: Text(
-            controller.errorMessage!,
-            style: TextStyle(color: Colors.red, fontSize: 14.sp, fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, color: Colors.red, size: 40.sp),
+              const SizedBox(height: 10),
+              Text(
+                controller.errorMessage!,
+                style: TextStyle(color: Colors.red, fontSize: 13.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+                textAlign: TextAlign.center,
+              ),
+              TextButton(
+                onPressed: () => controller.loadDashboardData(controller.sellerId),
+                child: const Text("إعادة المحاولة", style: TextStyle(fontFamily: 'Cairo')),
+              )
+            ],
           ),
         ),
       );
     }
 
     return RefreshIndicator(
+      color: const Color(0xff28a745),
       onRefresh: () => controller.loadDashboardData(controller.sellerId),
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
@@ -103,19 +125,20 @@ class SellerOverviewScreen extends StatelessWidget {
             Text(
               controller.welcomeMessage,
               style: TextStyle(
-                fontSize: 20.sp,
+                fontSize: 18.sp,
                 fontWeight: FontWeight.w900,
                 color: Theme.of(context).colorScheme.primary,
+                fontFamily: 'Cairo',
               ),
             ),
             const SizedBox(height: 5),
             Text(
               "إليك ملخص نشاطك التجاري اليوم",
-              style: TextStyle(fontSize: 12.sp, color: Colors.grey),
+              style: TextStyle(fontSize: 11.sp, color: Colors.grey, fontFamily: 'Cairo'),
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 25),
 
-            // الكارتات الضخمة
+            // الكارتات الإحصائية (تم تعديلها)
             _buildBigStatCard(
               context,
               title: 'إجمالي المبيعات المكتملة',
@@ -144,9 +167,6 @@ class SellerOverviewScreen extends StatelessWidget {
               icon: Icons.pending_actions_rounded,
               color: Colors.orangeAccent,
             ),
-
-            // 🟢 تم إزالة جزء "مناطق التوصيل" من هنا لحل مشكلة النوع (TypeError) 🟢
-            // ولأنها موجودة بالفعل في صفحة مستقلة للإعدادات.
             
             const SizedBox(height: 20),
           ],
