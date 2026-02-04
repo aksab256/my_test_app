@@ -9,6 +9,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+// 🟢 [إضافة دقيقة]: استيراد البروفايدر لربط البيانات لحظياً
+import 'package:provider/provider.dart';
+import 'package:my_test_app/providers/buyer_data_provider.dart';
+
 // استيراد الشاشات لجلب الـ routeName الصحيح
 import 'package:my_test_app/screens/buyer/buyer_home_screen.dart';
 import 'package:my_test_app/screens/consumer/consumer_home_screen.dart';
@@ -50,8 +54,19 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aswaq.com", _password);
       }
 
+      // تحميل بيانات الجلسة في الذاكرة
       await UserSession.loadSession();
       
+      // 🟢 [التعديل السحري]: تحديث البروفايدر فوراً بالبيانات الجديدة المخزنة
+      // هذا السطر يمنع مشكلة "إغلاق وفتح التطبيق" ويجعل العنوان يظهر فوراً
+      if (mounted) {
+        await Provider.of<BuyerDataProvider>(context, listen: false).initializeData(
+          FirebaseAuth.instance.currentUser?.uid,
+          UserSession.ownerId,
+          UserSession.merchantName ?? "مستخدم أكسب"
+        );
+      }
+
       // منطق الموظفين (Sub Users)
       if (UserSession.isSubUser) {
         final subUserDoc = await FirebaseFirestore.instance.collection("subUsers").doc(phoneClean).get();
@@ -65,7 +80,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       _sendNotificationDataToAWS().catchError((e) => debugPrint("AWS Silent Error: $e"));
 
       if (!mounted) return;
-      // نمرر الـ role المكتشف أو المخزن في الجلسة
       _navigateToHome(userRole ?? UserSession.role);
 
     } catch (e) {
@@ -96,16 +110,13 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     );
     
     String route;
-    
-    // 🎯 التوجيه الصحيح بناءً على الأدوار الثلاثة
     if (role == 'buyer') {
-      route = BuyerHomeScreen.routeName; // يذهب إلى /buyerHome
+      route = BuyerHomeScreen.routeName;
     } else if (role == 'consumer') {
-      route = ConsumerHomeScreen.routeName; // يذهب إلى /consumerHome
+      route = ConsumerHomeScreen.routeName;
     } else if (role == 'seller') {
-      route = SellerScreen.routeName; // يذهب إلى /sellerhome
+      route = SellerScreen.routeName;
     } else {
-      // افتراضي للموظفين أو الحالات غير المعروفة
       route = SellerScreen.routeName; 
     }
     
@@ -148,7 +159,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
                 await FirebaseFirestore.instance.collection("subUsers").doc(phone).update({'mustChangePassword': false});
                 
                 if (!mounted) return;
-                // بعد التغيير، نستخدم دالة التوجيه الذكية بدلاً من المسار الثابت
                 _navigateToHome(UserSession.role);
               } catch (e) {
                 debugPrint("Pass update error: $e");
@@ -176,7 +186,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     }
   }
   
-  // ... باقي كود build و _InputGroup (يظل كما هو) ...
   @override
   Widget build(BuildContext context) {
     return Form(
