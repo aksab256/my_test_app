@@ -346,5 +346,6 @@ Widget _buildEarningRules() {
     },
   );
 }
+}
 
   
