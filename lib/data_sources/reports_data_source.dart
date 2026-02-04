@@ -1,11 +1,11 @@
 // lib/data_sources/reports_data_source.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart'; // لاستخدام Color
 import 'package:intl/intl.dart';
 import 'dart:developer' as developer;
 
-// 1. نماذج بيانات التقارير (Data Models)
+// --- 1. نماذج بيانات التقارير (Data Models) ---
+
 class SalesOverview {
   final double totalSales;
   final int totalOrders;
@@ -26,7 +26,7 @@ class StatusReport {
 }
 
 class MonthlySales {
-  final List<String> labels; // مثل "01/2025"
+  final List<String> labels; 
   final List<double> sales;
 
   MonthlySales({required this.labels, required this.sales});
@@ -44,7 +44,6 @@ class TopProduct {
   });
 }
 
-// نموذج بيانات شامل للتقرير الكامل
 class FullReportData {
   final SalesOverview overview;
   final StatusReport statusReport;
@@ -59,155 +58,158 @@ class FullReportData {
   });
 }
 
+// --- 2. فئة جلب البيانات (Data Source) ---
+
 class ReportsDataSource {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // تعريف حالات الطلب الثابتة (يجب أن تتطابق مع JavaScript)
+  // خريطة حالات الطلب (للعرض باللغة العربية)
   static const Map<String, String> ORDER_STATUSES_MAP = {
     'new-order': 'طلبات جديدة',
+    'pending': 'قيد الانتظار', // مضافة لدعم طلبات المستهلك
     'processing': 'قيد التنفيذ',
     'shipped': 'تم الشحن',
     'delivered': 'تم التوصيل',
     'cancelled': 'ملغاة',
   };
 
-  // الدالة الرئيسية لجلب ومعالجة جميع بيانات التقرير
   Future<FullReportData> loadFullReport(
       String sellerId, DateTime startDate, DateTime endDate) async {
-    // 1. تنفيذ الاستعلام من Firebase
-    final ordersQuery = _db
-        .collection("orders")
-        .where("sellerId", isEqualTo: sellerId)
-        // ⭐️⭐️ تصحيح استخدام where() باستخدام الوسائط المُسماة ⭐️⭐️
-        .where("orderDate", isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
-        .where("orderDate", isLessThanOrEqualTo: Timestamp.fromDate(endDate));
+    
+    final startTimestamp = Timestamp.fromDate(startDate);
+    final endTimestamp = Timestamp.fromDate(endDate);
 
-    final querySnapshot = await ordersQuery.get();
+    try {
+      // أ. استعلام طلبات الجملة
+      final b2bQuery = _db
+          .collection("orders")
+          .where("sellerId", isEqualTo: sellerId)
+          .where("orderDate", isGreaterThanOrEqualTo: startTimestamp)
+          .where("orderDate", isLessThanOrEqualTo: endTimestamp)
+          .get();
 
-    if (querySnapshot.docs.isEmpty) {
-      // لا ترمي خطأ لتجنب تعطل التطبيق بالكامل إذا لم تكن هناك طلبات، بل أعد تقريرًا فارغًا.
-      developer.log('No orders found for seller $sellerId in the selected period.');
-      return FullReportData(
-        overview: SalesOverview(totalSales: 0.0, totalOrders: 0, productsSold: 0),
-        statusReport: StatusReport(labels: [], counts: []),
-        monthlySales: MonthlySales(labels: [], sales: []),
-        topProducts: [],
-      );
-    }
+      // ب. استعلام طلبات المستهلكين
+      final b2cQuery = _db
+          .collection("consumerorders")
+          .where("supermarketId", isEqualTo: sellerId)
+          .where("orderDate", isGreaterThanOrEqualTo: startTimestamp)
+          .where("orderDate", isLessThanOrEqualTo: endTimestamp)
+          .get();
 
-    // 2. معالجة البيانات المجمعة
-    double totalSales = 0;
-    int totalOrders = 0;
-    int productsSold = 0;
-    final statusCounts = <String, int>{};
-    final monthlySales = <String, double>{};
-    final productSales = <String, Map<String, dynamic>>{};
+      // جلب البيانات من المجموعتين معاً
+      final results = await Future.wait([b2bQuery, b2cQuery]);
+      final b2bDocs = results[0].docs;
+      final b2cDocs = results[1].docs;
 
-    // تهيئة عدادات الحالات إلى صفر
-    ORDER_STATUSES_MAP.keys.forEach((status) => statusCounts[status] = 0);
-
-    for (var doc in querySnapshot.docs) {
-      final data = doc.data();
-      // التأكد من أن 'status' هو String و Trimed
-      final status = (data['status']?.toString().toLowerCase().trim() ?? 'unknown');
-
-      // أخذ الإجمالي من حقل 'total' والتأكد من أنه num
-      final orderTotal = (data['total'] as num?)?.toDouble() ?? 0.0;
-      final orderItems = data['items'] as List<dynamic>? ?? [];
-
-      // حساب حالة الطلبات
-      if (ORDER_STATUSES_MAP.containsKey(status)) {
-        statusCounts[status] = (statusCounts[status] ?? 0) + 1;
+      if (b2bDocs.isEmpty && b2cDocs.isEmpty) {
+        return _emptyReport();
       }
 
-      // حساب نظرة عامة والمبيعات الشهرية (لغير الملغاة)
-      if (status != 'cancelled') {
-        totalOrders++;
-        totalSales += orderTotal;
+      double totalSales = 0;
+      int totalOrders = 0;
+      int productsSoldCount = 0;
+      final statusCounts = <String, int>{};
+      final monthlySalesMap = <String, double>{};
+      final productSalesMap = <String, Map<String, dynamic>>{};
 
-        // حساب المبيعات الشهرية
-        if (data['orderDate'] is Timestamp) {
-          final date = (data['orderDate'] as Timestamp).toDate();
-          final monthYear = DateFormat('yyyy-MM').format(date);
-          monthlySales[monthYear] = (monthlySales[monthYear] ?? 0) + orderTotal;
+      // تهيئة العدادات
+      ORDER_STATUSES_MAP.keys.forEach((status) => statusCounts[status] = 0);
+
+      final allDocs = [...b2bDocs, ...b2cDocs];
+
+      for (var doc in allDocs) {
+        final data = doc.data() as Map<String, dynamic>;
+        
+        // 1. توحيد الحالة
+        String status = (data['status']?.toString().toLowerCase().trim() ?? 'unknown');
+        if (ORDER_STATUSES_MAP.containsKey(status)) {
+          statusCounts[status] = (statusCounts[status] ?? 0) + 1;
         }
 
-        // حساب المنتجات الأكثر مبيعاً
-        for (var item in orderItems) {
-          // استخدام اسم المنتج، أو اسم المنتج المترجم إذا وجد
-          final productName = item['name'] ?? item['translatedName'] ?? 'منتج غير معروف';
-          final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
-          // سعر الوحدة مضروباً في الكمية (إذا كان السعر متوفراً في حقل item)
-          final itemPrice = (item['price'] as num?)?.toDouble() ?? 0.0;
-          final itemTotal = itemPrice * quantity;
+        // 2. الحسابات المالية (فقط للطلبات غير الملغاة)
+        if (status != 'cancelled') {
+          totalOrders++;
+          
+          // توحيد مسمى حقل المبلغ (total للجملة و finalAmount للقطاعي)
+          final orderTotal = (data['total'] ?? data['finalAmount'] ?? 0.0) as num;
+          totalSales += orderTotal.toDouble();
 
-          if (!productSales.containsKey(productName)) {
-            productSales[productName] = {'quantity': 0, 'totalSales': 0.0};
+          // 3. معالجة التاريخ والشهور
+          DateTime? date;
+          if (data['orderDate'] is Timestamp) {
+            date = (data['orderDate'] as Timestamp).toDate();
+          } else if (data['orderDate'] is String) {
+            date = DateTime.tryParse(data['orderDate']);
           }
-          // التأكد من أن القيمة الحالية رقمية قبل الزيادة
-          productSales[productName]!['quantity'] = (productSales[productName]!['quantity'] as int) + quantity;
-          productSales[productName]!['totalSales'] = (productSales[productName]!['totalSales'] as double) + itemTotal;
-          productsSold += quantity;
+
+          if (date != null) {
+            final monthYear = DateFormat('yyyy-MM').format(date);
+            monthlySalesMap[monthYear] = (monthlySalesMap[monthYear] ?? 0) + orderTotal.toDouble();
+          }
+
+          // 4. معالجة المنتجات الأكثر مبيعاً
+          final orderItems = data['items'] as List<dynamic>? ?? [];
+          for (var item in orderItems) {
+            final productName = item['name'] ?? item['translatedName'] ?? 'منتج مجهول';
+            final quantity = (item['quantity'] ?? 0) as num;
+            final itemPrice = (item['price'] ?? 0.0) as num;
+
+            if (!productSalesMap.containsKey(productName)) {
+              productSalesMap[productName] = {'quantity': 0, 'totalSales': 0.0};
+            }
+            productSalesMap[productName]!['quantity'] += quantity.toInt();
+            productSalesMap[productName]!['totalSales'] += (itemPrice * quantity).toDouble();
+            productsSoldCount += quantity.toInt();
+          }
         }
       }
+
+      return FullReportData(
+        overview: SalesOverview(
+          totalSales: totalSales,
+          totalOrders: totalOrders,
+          productsSold: productsSoldCount,
+        ),
+        statusReport: _buildStatusReport(statusCounts),
+        monthlySales: _buildMonthlySales(monthlySalesMap),
+        topProducts: _buildTopProducts(productSalesMap),
+      );
+
+    } catch (e) {
+      developer.log('Error in ReportsDataSource: $e');
+      rethrow;
     }
+  }
 
-    // 3. بناء نماذج البيانات النهائية
+  // --- دوال المساعدة للتحويل النهائي ---
 
-    // تقرير حالة الطلبات
-    final statusReport = _buildStatusReport(statusCounts);
+  StatusReport _buildStatusReport(Map<String, int> statusCounts) {
+    // نأخذ الحالات التي تكررت مرة واحدة على الأقل
+    final activeEntries = ORDER_STATUSES_MAP.entries
+        .where((entry) => (statusCounts[entry.key] ?? 0) > 0)
+        .toList();
 
-    // تقرير المبيعات الشهرية
-    final monthlySalesReport = _buildMonthlySales(monthlySales);
-
-    // تقرير المنتجات الأكثر مبيعاً
-    final topProductsReport = _buildTopProducts(productSales);
-
-    // بناء التقرير الكامل
-    return FullReportData(
-      overview: SalesOverview(
-        totalSales: totalSales,
-        totalOrders: totalOrders,
-        productsSold: productsSold,
-      ),
-      statusReport: statusReport,
-      monthlySales: monthlySalesReport,
-      topProducts: topProductsReport,
+    return StatusReport(
+      labels: activeEntries.map((e) => e.value).toList(),
+      counts: activeEntries.map((e) => statusCounts[e.key]!).toList(),
     );
   }
 
-  // --- دوال مساعدة للبناء ---
-
-  StatusReport _buildStatusReport(Map<String, int> statusCounts) {
-    // تصفية الحالات التي لها عدد أكبر من صفر
-    final labels = ORDER_STATUSES_MAP.entries
-        .where((entry) => (statusCounts[entry.key] ?? 0) > 0)
-        .map((entry) => entry.value)
-        .toList();
-
-    final counts = ORDER_STATUSES_MAP.keys
-        .where((status) => (statusCounts[status] ?? 0) > 0)
-        .map((status) => statusCounts[status]!)
-        .toList();
-
-    return StatusReport(labels: labels, counts: counts);
-  }
-
-  MonthlySales _buildMonthlySales(Map<String, double> monthlySales) {
-    final sortedMonths = monthlySales.keys.toList()..sort();
-
-    final labels = sortedMonths.map((monthYear) {
-      final date = DateFormat('yyyy-MM').parse(monthYear);
+  MonthlySales _buildMonthlySales(Map<String, double> monthlySalesMap) {
+    final sortedMonths = monthlySalesMap.keys.toList()..sort();
+    final labels = sortedMonths.map((my) {
+      final date = DateFormat('yyyy-MM').parse(my);
       return DateFormat('MM/yyyy').format(date);
     }).toList();
 
-    final sales = sortedMonths.map((monthYear) => monthlySales[monthYear]!).toList();
-
-    return MonthlySales(labels: labels, sales: sales);
+    return MonthlySales(
+      labels: labels,
+      sales: sortedMonths.map((my) => monthlySalesMap[my]!).toList(),
+    );
   }
 
-  List<TopProduct> _buildTopProducts(Map<String, Map<String, dynamic>> productSales) {
-    final sortedProducts = productSales.entries.map((entry) {
+  List<TopProduct> _buildTopProducts(Map<String, Map<String, dynamic>> productSalesMap) {
+    final sortedProducts = productSalesMap.entries.map((entry) {
       return TopProduct(
         name: entry.key,
         quantity: entry.value['quantity'] as int,
@@ -216,7 +218,15 @@ class ReportsDataSource {
     }).toList()
     ..sort((a, b) => b.totalSales.compareTo(a.totalSales));
 
-    // يكتفي بأول 5 منتجات
     return sortedProducts.take(5).toList();
+  }
+
+  FullReportData _emptyReport() {
+    return FullReportData(
+      overview: SalesOverview(totalSales: 0.0, totalOrders: 0, productsSold: 0),
+      statusReport: StatusReport(labels: [], counts: []),
+      monthlySales: MonthlySales(labels: [], sales: []),
+      topProducts: [],
+    );
   }
 }
