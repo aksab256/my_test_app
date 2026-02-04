@@ -104,6 +104,16 @@ class _PointsLoyaltyScreenState extends State<PointsLoyaltyScreen> {
                   const SizedBox(height: 30),
                   _buildSectionHeader(Icons.auto_awesome, "كيف تكسب المزيد؟"),
                   _buildEarningRules(),
+                  
+                  // ✨ نص إخلاء المسؤولية المعتمد لجوجل بلاي
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 30, horizontal: 10),
+                    child: Text(
+                      "* نقاط الولاء هي برنامج مكافآت ترويجي خاص بمستخدمي تطبيق أسواق أكسب، ولا يمكن استبدالها نقداً خارج التطبيق أو تحويلها لأشخاص آخرين. تخضع الشروط والأحكام لسياسة المنصة.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey, fontSize: 11, height: 1.5, fontWeight: FontWeight.w500),
+                    ),
+                  ),
                 ],
               ),
             );
@@ -121,7 +131,7 @@ class _PointsLoyaltyScreenState extends State<PointsLoyaltyScreen> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         gradient: LinearGradient(colors: gradient),
-        boxShadow: [BoxShadow(color: gradient[1].withOpacity(0.3), blurRadius: 12)],
+        boxShadow: [BoxShadow(color: gradient[1].withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))],
       ),
       child: Column(
         children: [
@@ -161,18 +171,18 @@ class _PointsLoyaltyScreenState extends State<PointsLoyaltyScreen> {
 
         return Container(
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)]),
           child: Column(
             children: [
-              Text("كل $reqPoints نقطة = $cashVal جنيه", style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text("كل $reqPoints نقطة = $cashVal جنيه", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
                   onPressed: (_isRedeeming || !canRedeem) ? null : () => _redeemPoints(),
-                  style: ElevatedButton.styleFrom(backgroundColor: primaryBlue),
-                  child: _isRedeeming ? const CircularProgressIndicator(color: Colors.white) : Text(canRedeem ? "استبدل الآن" : "النقاط غير كافية"),
+                  style: ElevatedButton.styleFrom(backgroundColor: primaryBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  child: _isRedeeming ? const CircularProgressIndicator(color: Colors.white) : Text(canRedeem ? "استبدل الآن" : "النقاط غير كافية للاستبدال"),
                 ),
               ),
             ],
@@ -203,12 +213,12 @@ class _PointsLoyaltyScreenState extends State<PointsLoyaltyScreen> {
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(15),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: primaryBlue.withOpacity(0.1))),
               child: Row(
                 children: [
                   Icon(Icons.stars, color: primaryBlue, size: 20),
                   const SizedBox(width: 15),
-                  Expanded(child: Text(description)),
+                  Expanded(child: Text(description, style: const TextStyle(fontWeight: FontWeight.w500))),
                   Text("+$value", style: TextStyle(color: successGreen, fontWeight: FontWeight.bold)),
                 ],
               ),
