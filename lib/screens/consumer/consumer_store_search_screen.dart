@@ -34,13 +34,13 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
   @override
   void initState() {
     super.initState();
-    // تأخير بسيط لضمان بناء الشجرة وجاهزية البروفايدر
-    Future.delayed(const Duration(milliseconds: 500), () {
+    // تأخير بسيط لضمان تحميل بيانات البروفايدر بالكامل قبل فتح النافذة
+    Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted) _promptLocationSelection();
     });
   }
 
-  // --- 1. دالة الإفصاح البارز (متطلب جوجل بلاي) ---
+  // إفصاح جوجل بلاي (Prominent Disclosure)
   Future<bool> _showLocationExplanation() async {
     return await showDialog(
       context: context,
@@ -49,22 +49,10 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Row(
-            children: [
-              Icon(Icons.location_on, color: brandGreen),
-              const SizedBox(width: 10),
-              const Text("خدمات الموقع"),
-            ],
-          ),
-          content: const Text(
-            "نحتاج الوصول إلى موقعك لعرض المتاجر والخدمات القريبة منك وتحديد مسافة التوصيل بدقة. لن يتم مشاركة موقعك مع أي جهة خارجية.",
-            style: TextStyle(fontSize: 16),
-          ),
+          title: Row(children: [Icon(Icons.location_on, color: brandGreen), const SizedBox(width: 10), const Text("تحديد المواقع")]),
+          content: const Text("نحتاج للوصول إلى موقعك الجغرافي لنتمكن من عرض المتاجر القريبة منك وحساب مسافة التوصيل بدقة."),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text("موافق", style: TextStyle(color: brandGreen, fontWeight: FontWeight.bold, fontSize: 18)),
-            ),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text("موافق", style: TextStyle(color: brandGreen, fontWeight: FontWeight.bold, fontSize: 18))),
           ],
         ),
       ),
@@ -72,12 +60,11 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
   }
 
   Future<void> _promptLocationSelection() async {
-    // نستخدم Provider.of مرة واحدة للتأكد من وجود البيانات
+    // جلب البروفايدر بشكل مباشر لضمان أحدث بيانات
     final buyerDataProvider = Provider.of<BuyerDataProvider>(context, listen: false);
     
-    // فحص دقيق للبيانات المسجلة
-    final bool hasValidRegisteredLocation = (buyerDataProvider.userLat != null && 
-                                             buyerDataProvider.userLat != 0);
+    // شرط ظهور العنوان المسجل (إذا كان Lat لا يساوي صفر ولا يساوي null)
+    final bool hasValidRegisteredLocation = (buyerDataProvider.userLat != null && buyerDataProvider.userLat != 0);
 
     final selectedOption = await showModalBottomSheet<String>(
       context: context,
@@ -100,31 +87,22 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
 
   Future<Position?> _getCurrentLocation() async {
     LocationPermission permission = await Geolocator.checkPermission();
-    
-    // إذا كان الإذن مرفوضاً، نظهر الإفصاح أولاً قبل طلب الإذن (حسب سياسة جوجل)
     if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
       bool userAgreed = await _showLocationExplanation();
       if (!userAgreed) return null;
-      
       permission = await Geolocator.requestPermission();
-      if (permission != LocationPermission.whileInUse && permission != LocationPermission.always) {
-        return null; 
-      }
     }
 
     setState(() { _isLoading = true; _loadingMessage = 'تحديد موقعك...'; });
     try {
       return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-    } catch (e) { 
-      return null; 
-    } finally {
-      setState(() { _isLoading = false; });
-    }
+    } catch (e) { return null; }
+    finally { setState(() { _isLoading = false; }); }
   }
 
-  // --- دالة البحث (بقيت كما هي مع تحسين استقرارها) ---
+  // --- 🛡️ دالة المسح الجغرافي مع الفلترة الصارمة للباقات ---
   Future<void> _searchAndDisplayStores(LatLng location) async {
-    setState(() { _isLoading = true; _loadingMessage = 'جاري رصد المتاجر...'; });
+    setState(() { _isLoading = true; _loadingMessage = 'جاري رصد المتاجر النشطة...'; });
     try {
       _mapController.move(location, 14.5);
       _mapMarkers.clear();
@@ -141,11 +119,12 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
 
       for (var doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
+
+        // 🛑 الفلترة الصارمة: التحقق من باقة الدفع وتاريخ الصلاحية
+        if (data['trialExpiryDate'] == null) continue; // استبعاد لو مفيش حقل تاريخ انتهاء
         
-        // فلاتر الصلاحية
-        if (data['trialExpiryDate'] == null) continue;
         final DateTime expiry = (data['trialExpiryDate'] as Timestamp).toDate();
-        if (expiry.isBefore(now)) continue;
+        if (expiry.isBefore(now)) continue; // استبعاد لو الباقة منتهية الصلاحية
 
         LatLng? storeLoc;
         if (data['location'] is GeoPoint) {
@@ -177,43 +156,23 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     } catch (e) { setState(() { _isLoading = false; }); }
   }
 
-  // --- بناء القائمة بشكل Float (عائم) لتفادي مساحة الأمان ---
   Widget _buildLocationSelectionSheet(bool hasRegistered, BuyerDataProvider provider) {
     return Container(
-      margin: const EdgeInsets.all(20), // جعلها عائمة لتبدو أجمل
+      margin: const EdgeInsets.all(20),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 25),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20)]
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30)),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+          Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
           const SizedBox(height: 20),
-          const Text("أين تريد البحث؟", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 10),
-          const Text("اختر موقعاً لعرض المتاجر المتوفرة في نطاقك", style: TextStyle(color: Colors.grey, fontSize: 14)),
+          const Text("رادار المتاجر القريبة", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
           const SizedBox(height: 25),
-          
-          _buildOptionTile(
-            icon: Icons.my_location,
-            title: "موقعي الحالي الآن",
-            subtitle: "استخدام نظام GPS لتحديد مكانك",
-            onTap: () => Navigator.pop(context, 'current'),
-          ),
-          
+          _buildOptionTile(icon: Icons.my_location, title: "استخدام موقعي الحالي", subtitle: "تحديد مكانك اللحظي عبر الـ GPS", onTap: () => Navigator.pop(context, 'current')),
           if (hasRegistered) ...[
             const Divider(height: 30),
-            _buildOptionTile(
-              icon: Icons.home_rounded,
-              title: "عنواني المسجل",
-              subtitle: provider.userAddress ?? "العنوان المحفوظ في حسابك",
-              onTap: () => Navigator.pop(context, 'registered'),
-            ),
+            _buildOptionTile(icon: Icons.home_rounded, title: "عنواني المسجل", subtitle: provider.userAddress ?? "استخدام العنوان المحفوظ في حسابك", onTap: () => Navigator.pop(context, 'registered')),
           ],
-          const SizedBox(height: 10),
         ],
       ),
     );
@@ -229,15 +188,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
           children: [
             CircleAvatar(backgroundColor: brandGreen.withOpacity(0.1), child: Icon(icon, color: brandGreen)),
             const SizedBox(width: 15),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)), Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)])),
             const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
           ],
         ),
@@ -245,58 +196,12 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     );
   }
 
-  // ... (بقية دوال الـ Build للماركرز والكاروسيل تبقى كما هي)
-  // [أبقينا دوال BuildStoreMarker و RadarStatusCard كما هي لضمان استقرار التصميم]
-
-  @override
-  Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          backgroundColor: Colors.white.withOpacity(0.9),
-          elevation: 2,
-          toolbarHeight: 70,
-          leading: IconButton(
-            icon: Icon(Icons.arrow_back_ios, color: brandGreen, size: 28),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: const Text('رادار المحلات القريبة',
-              style: TextStyle(fontWeight: FontWeight.w900, color: Colors.black, fontSize: 19)),
-          centerTitle: true,
-        ),
-        body: Stack(
-          children: [
-            FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: _currentSearchLocation ?? const LatLng(31.2001, 29.9187),
-                initialZoom: 13.0,
-              ),
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token={accessToken}',
-                  additionalOptions: {'accessToken': mapboxToken},
-                ),
-                MarkerLayer(markers: _mapMarkers),
-              ],
-            ),
-            Positioned(top: 115, left: 15, right: 15, child: _buildRadarStatusCard()),
-            Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomStoresCarousel()),
-            if (_isLoading) _buildModernLoader(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // دوال الـ Build المساعدة (للتكملة)
+  // --- بقية الـ Widgets (Markers, Carousel, Style) مستقرة تماماً ---
   Widget _buildUserLocationMarker() => const Icon(Icons.person_pin_circle, color: Colors.blue, size: 50);
 
   Widget _buildStoreMarker(Map<String, dynamic> store) {
     final style = _getStoreStyle(store['storeType']);
-    return Icon(style['icon'], color: style['color'] as Color, size: 40);
+    return Icon(style['icon'], color: style['color'], size: 40);
   }
 
   Map<String, dynamic> _getStoreStyle(String? type) {
@@ -324,29 +229,13 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
   Widget _buildRadarStatusCard() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(25),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15)],
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(25), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15)]),
       child: Row(
         children: [
           Icon(Icons.radar, color: brandGreen, size: 30),
           const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text("نطاق البحث الذكي", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: darkText)),
-                Text("تغطية $_searchRadiusKm كم", style: const TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-          IconButton(
-            onPressed: () => _promptLocationSelection(),
-            icon: Icon(Icons.my_location, color: brandGreen, size: 28),
-          )
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [Text("نطاق البحث الذكي", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: darkText)), Text("تغطية $_searchRadiusKm كم", style: const TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.bold))])),
+          IconButton(onPressed: () => _promptLocationSelection(), icon: Icon(Icons.my_location, color: brandGreen, size: 28))
         ],
       ),
     );
@@ -367,12 +256,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
           return Container(
             width: 270,
             margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(25),
-              border: Border(right: BorderSide(color: style['color'], width: 6)),
-              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15)],
-            ),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(25), border: Border(right: BorderSide(color: style['color'], width: 6)), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15)]),
             child: InkWell(
               onTap: () => _showStoreDetailSheet(store),
               borderRadius: BorderRadius.circular(25),
@@ -380,23 +264,9 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
                 padding: const EdgeInsets.all(15),
                 child: Row(
                   children: [
-                    Container(
-                      width: 65, height: 65,
-                      decoration: BoxDecoration(color: (style['color'] as Color).withOpacity(0.1), borderRadius: BorderRadius.circular(18)),
-                      child: Icon(style['icon'], color: style['color'], size: 32),
-                    ),
+                    Container(width: 65, height: 65, decoration: BoxDecoration(color: (style['color'] as Color).withOpacity(0.1), borderRadius: BorderRadius.circular(18)), child: Icon(style['icon'], color: style['color'], size: 32)),
                     const SizedBox(width: 15),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(store['supermarketName'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
-                          Text(_getStoreTypeName(store['storeType']), style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.bold)),
-                          Text("يبعد ${store['distance']} كم", style: TextStyle(color: style['color'], fontWeight: FontWeight.bold, fontSize: 14)),
-                        ],
-                      ),
-                    ),
+                    Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [Text(store['supermarketName'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)), Text(_getStoreTypeName(store['storeType']), style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.bold)), Text("يبعد ${store['distance']} كم", style: TextStyle(color: style['color'], fontWeight: FontWeight.bold, fontSize: 14))])),
                   ],
                 ),
               ),
@@ -439,9 +309,39 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
   }
 
   Widget _buildModernLoader() {
-    return Container(
-      color: Colors.white.withOpacity(0.8),
-      child: Center(child: CircularProgressIndicator(color: brandGreen)),
+    return Container(color: Colors.white.withOpacity(0.8), child: Center(child: CircularProgressIndicator(color: brandGreen)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          backgroundColor: Colors.white.withOpacity(0.9),
+          elevation: 2,
+          toolbarHeight: 70,
+          leading: IconButton(icon: Icon(Icons.arrow_back_ios, color: brandGreen, size: 28), onPressed: () => Navigator.pop(context)),
+          title: const Text('رادار المحلات القريبة', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.black, fontSize: 19)),
+          centerTitle: true,
+        ),
+        body: Stack(
+          children: [
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(initialCenter: _currentSearchLocation ?? const LatLng(31.2001, 29.9187), initialZoom: 13.0),
+              children: [
+                TileLayer(urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token={accessToken}', additionalOptions: {'accessToken': mapboxToken}),
+                MarkerLayer(markers: _mapMarkers),
+              ],
+            ),
+            Positioned(top: 115, left: 15, right: 15, child: _buildRadarStatusCard()),
+            Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomStoresCarousel()),
+            if (_isLoading) _buildModernLoader(),
+          ],
+        ),
+      ),
     );
   }
 }
