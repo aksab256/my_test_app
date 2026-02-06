@@ -10,6 +10,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:latlong2/latlong.dart'; 
+import 'package:facebook_app_events/facebook_app_events.dart'; // ✅ إضافة مكتبة فيسبوك
 
 import 'package:my_test_app/firebase_options.dart';
 import 'package:my_test_app/theme/app_theme.dart';
@@ -68,6 +69,10 @@ void main() async {
   await initializeDateFormatting('ar', null);
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
+  // 🚀 تفعيل تتبع فتح التطبيق في فيسبوك
+  final facebookAppEvents = FacebookAppEvents();
+  facebookAppEvents.logEvent(name: 'fb_mobile_activate_app');
+
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
@@ -88,7 +93,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => ThemeNotifier(ThemeMode.system)),
+        ChangeNotifierProvider(create: (_) => ThemeNotifier(ThemeMode.light)), // ✅ تم الإجبار على الوضع الفاتح هنا
         ChangeNotifierProvider(create: (_) => BuyerDataProvider()),
         ChangeNotifierProvider(create: (_) => ManufacturersProvider()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
@@ -116,8 +121,6 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeNotifier = Provider.of<ThemeNotifier>(context);
-
     return Sizer(
       builder: (context, orientation, deviceType) {
         return MaterialApp(
@@ -131,19 +134,26 @@ class MyApp extends StatelessWidget {
             GlobalCupertinoLocalizations.delegate,
           ],
           supportedLocales: const [Locale('ar', 'EG')],
-          themeMode: themeNotifier.themeMode,
+          
+          // ✅ إجبار التطبيق على الوضع الفاتح وإلغاء الوضع الليلي تماماً
+          themeMode: ThemeMode.light, 
+          
           theme: ThemeData(
             brightness: Brightness.light,
             primaryColor: AppTheme.primaryGreen,
-            colorScheme: ColorScheme.light(primary: AppTheme.primaryGreen),
+            scaffoldBackgroundColor: Colors.white,
+            colorScheme: ColorScheme.light(
+              primary: AppTheme.primaryGreen,
+              surface: Colors.white,
+            ),
             textTheme: GoogleFonts.cairoTextTheme(ThemeData.light().textTheme),
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              iconTheme: IconThemeData(color: Colors.black),
+            ),
           ),
-          darkTheme: ThemeData(
-            brightness: Brightness.dark,
-            primaryColor: AppTheme.primaryGreen,
-            colorScheme: ColorScheme.dark(primary: AppTheme.primaryGreen),
-            textTheme: GoogleFonts.cairoTextTheme(ThemeData.dark().textTheme),
-          ),
+          
           initialRoute: '/',
           routes: {
             '/': (context) => const AuthWrapper(),
@@ -253,7 +263,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
       try {
         await UserSession.loadSession();
         final user = LoggedInUser.fromJson(jsonDecode(userJson));
-        // 🚀 التأمين العام: انتظر تحميل البيانات بالكامل قبل الدخول
         final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
         await buyerProvider.initializeData(user.id, user.id, user.fullname);
         return user;
