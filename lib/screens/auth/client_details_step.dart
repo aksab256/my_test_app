@@ -9,7 +9,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:sizer/sizer.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart'; // تأكد من وجودها في pubspec.yaml
 
 class ClientDetailsStep extends StatefulWidget {
   final Map<String, TextEditingController> controllers;
@@ -39,7 +39,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   final _formKey = GlobalKey<FormState>();
   late final MapController _mapController;
   
-  LatLng _selectedPosition = const LatLng(30.0444, 31.2357); // كبداية فقط
+  LatLng _selectedPosition = const LatLng(30.0444, 31.2357); 
   bool _locationPicked = false;
   bool _isUploading = false;
   bool _obscurePassword = true;
@@ -60,7 +60,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     _mapController = MapController();
   }
 
-  // ✅ الخطوة 1: رسالة الإفصاح (متطلب جوجل بلاي)
   Future<void> _handleMapOpeningSequence() async {
     bool? proceed = await showDialog<bool>(
       context: context,
@@ -86,14 +85,12 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     );
 
     if (proceed == true) {
-      // ✅ الخطوة 2: طلب إذن النظام
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
 
       if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-        // ✅ الخطوة 3: جلب الموقع وفتح الخريطة
         Position position = await Geolocator.getCurrentPosition();
         setState(() {
           _selectedPosition = LatLng(position.latitude, position.longitude);
@@ -103,7 +100,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     }
   }
 
-  // ✅ الخطوة 4: فتح الخريطة مع رسالة التوجيه
   void _openMapPicker() {
     showModalBottomSheet(
       context: context,
@@ -117,13 +113,12 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
             child: Column(
               children: [
                 Container(margin: const EdgeInsets.symmetric(vertical: 12), width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-                // رسالة التوجيه المطلوبة
                 Container(
                   width: double.infinity,
                   color: const Color(0xFFF0F7F3),
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   child: const Text(
-                    "لحظات.. حرك الخريطة لتغيير مكان المؤشر أو موقعك بدقة",
+                    "حرك الخريطة لتحديد عنوانك تلقائياً",
                     textAlign: TextAlign.center,
                     style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Color(0xFF2D9E68), fontWeight: FontWeight.bold),
                   ),
@@ -134,9 +129,11 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
                     options: MapOptions(
                       initialCenter: _selectedPosition,
                       initialZoom: 16.5,
-                      onTap: (tapPos, point) {
-                        setModalState(() => _selectedPosition = point);
-                        _handleLocationChange(point);
+                      onPositionChanged: (MapPosition position, bool hasGesture) {
+                        if (hasGesture && position.center != null) {
+                          setModalState(() => _selectedPosition = position.center!);
+                          _handleLocationChange(position.center!);
+                        }
                       },
                     ),
                     children: [
@@ -165,9 +162,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     );
   }
 
-  // دالة تغيير الموقع وتحديث العنوان يدوياً
   void _handleLocationChange(LatLng point) {
-    setState(() => _selectedPosition = point);
     _updateAddressText(point);
     widget.onLocationChanged(lat: point.latitude, lng: point.longitude);
   }
@@ -178,13 +173,12 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
         setState(() {
-          widget.controllers['address']!.text = "${place.street ?? ''}, ${place.locality ?? ''}";
+          widget.controllers['address']!.text = "${place.street ?? ''}, ${place.locality ?? ''}, ${place.subAdministrativeArea ?? ''}";
         });
       }
     } catch (e) {}
   }
 
-  // باقي الدوال (الرفع، اختيار الملفات، إلخ) كما هي في نسختك الأصلية
   Future<void> _uploadFileToCloudinary(File file, String field) async {
     setState(() => _isUploading = true);
     try {
@@ -234,11 +228,8 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
               _buildInputField('fullname', 'الاسم الكامل', Icons.person_rounded),
               _buildInputField('phone', 'رقم الهاتف', Icons.phone_android_rounded, keyboardType: TextInputType.phone),
               _buildSectionHeader('الموقع الجغرافي', Icons.map_rounded),
-              
-              // زرار فتح الخريطة بالتسلسل الجديد
               _buildLocationPickerButton(),
-              _buildInputField('address', 'العنوان بالتفصيل (يدوي)', Icons.location_on_rounded),
-              
+              _buildInputField('address', 'العنوان بالتفصيل (يمكنك التعديل يدوياً)', Icons.location_on_rounded),
               _buildSectionHeader('الأمان', Icons.security_rounded),
               _buildInputField('password', 'كلمة المرور', Icons.lock_open_rounded, isPassword: true),
               _buildInputField('confirmPassword', 'تأكيد كلمة المرور', Icons.lock_rounded, isPassword: true),
@@ -278,7 +269,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     );
   }
 
-  // (باقي المكونات _buildInputField, _buildSellerSpecificFields إلخ كما هي)
   Widget _buildInputField(String key, String label, IconData icon, {bool isPassword = false, TextInputType keyboardType = TextInputType.text}) {
     return Padding(
       padding: EdgeInsets.only(bottom: 1.5.h),
@@ -356,8 +346,27 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
 
   Widget _buildTermsCheckbox() {
     return CheckboxListTile(
-      value: _termsAgreed, onChanged: (v) => setState(() => _termsAgreed = v!), activeColor: const Color(0xFF2D9E68),
-      title: Text("أوافق على الشروط والأحكام", style: TextStyle(fontSize: 10.sp, fontFamily: 'Cairo')),
+      value: _termsAgreed,
+      onChanged: (v) => setState(() => _termsAgreed = v!),
+      activeColor: const Color(0xFF2D9E68),
+      title: InkWell(
+        onTap: () async {
+          final url = Uri.parse('https://aksab.shop/');
+          if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
+        },
+        child: RichText(
+          text: TextSpan(
+            style: TextStyle(fontSize: 10.sp, fontFamily: 'Cairo', color: Colors.black),
+            children: const [
+              TextSpan(text: "أوافق على "),
+              TextSpan(
+                text: "سياسة الخصوصية وشروط الاستخدام",
+                style: TextStyle(color: Color(0xFF2D9E68), fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
+              ),
+            ],
+          ),
+        ),
+      ),
       controlAffinity: ListTileControlAffinity.leading,
     );
   }
