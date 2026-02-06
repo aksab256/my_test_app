@@ -9,7 +9,8 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:sizer/sizer.dart';
-import 'package:url_launcher/url_launcher.dart'; // تأكد من وجودها في pubspec.yaml
+import 'package:url_launcher/url_launcher.dart';
+import 'package:facebook_app_events/facebook_app_events.dart';
 
 class ClientDetailsStep extends StatefulWidget {
   final Map<String, TextEditingController> controllers;
@@ -38,6 +39,7 @@ class ClientDetailsStep extends StatefulWidget {
 class _ClientDetailsStepState extends State<ClientDetailsStep> {
   final _formKey = GlobalKey<FormState>();
   late final MapController _mapController;
+  final facebookAppEvents = FacebookAppEvents();
   
   LatLng _selectedPosition = const LatLng(30.0444, 31.2357); 
   bool _locationPicked = false;
@@ -60,6 +62,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     _mapController = MapController();
   }
 
+  // ✅ الخطوة 1: رسالة الإفصاح (Disclosure) المطلوبة لجوجل
   Future<void> _handleMapOpeningSequence() async {
     bool? proceed = await showDialog<bool>(
       context: context,
@@ -100,6 +103,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     }
   }
 
+  // ✅ الخطوة 4: فتح الخريطة مع التحديث التلقائي للعنوان
   void _openMapPicker() {
     showModalBottomSheet(
       context: context,
@@ -118,7 +122,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
                   color: const Color(0xFFF0F7F3),
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   child: const Text(
-                    "حرك الخريطة لتحديد عنوانك تلقائياً",
+                    "حرك الخريطة ليتم كتابة عنوانك أوتوماتيكياً",
                     textAlign: TextAlign.center,
                     style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Color(0xFF2D9E68), fontWeight: FontWeight.bold),
                   ),
@@ -132,7 +136,8 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
                       onPositionChanged: (MapPosition position, bool hasGesture) {
                         if (hasGesture && position.center != null) {
                           setModalState(() => _selectedPosition = position.center!);
-                          _handleLocationChange(position.center!);
+                          _updateAddressText(position.center!);
+                          widget.onLocationChanged(lat: position.center!.latitude, lng: position.center!.longitude);
                         }
                       },
                     ),
@@ -151,7 +156,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
                       setState(() => _locationPicked = true);
                       Navigator.pop(context);
                     },
-                    child: const Text("تأكيد موقع النشاط", style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold)),
+                    child: const Text("تأكيد الموقع الحالي", style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -160,11 +165,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         }
       ),
     );
-  }
-
-  void _handleLocationChange(LatLng point) {
-    _updateAddressText(point);
-    widget.onLocationChanged(lat: point.latitude, lng: point.longitude);
   }
 
   Future<void> _updateAddressText(LatLng position) async {
@@ -229,7 +229,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
               _buildInputField('phone', 'رقم الهاتف', Icons.phone_android_rounded, keyboardType: TextInputType.phone),
               _buildSectionHeader('الموقع الجغرافي', Icons.map_rounded),
               _buildLocationPickerButton(),
-              _buildInputField('address', 'العنوان بالتفصيل (يمكنك التعديل يدوياً)', Icons.location_on_rounded),
+              _buildInputField('address', 'العنوان (يتم تحديثه من الخريطة)', Icons.location_on_rounded),
               _buildSectionHeader('الأمان', Icons.security_rounded),
               _buildInputField('password', 'كلمة المرور', Icons.lock_open_rounded, isPassword: true),
               _buildInputField('confirmPassword', 'تأكيد كلمة المرور', Icons.lock_rounded, isPassword: true),
@@ -297,9 +297,9 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         children: [
           _buildInputField('merchantName', 'اسم النشاط التجاري', Icons.storefront_rounded),
           _buildBusinessTypeDropdown(),
-          _buildUploadItem('شعار النشاط / اللوجو', 'logo', _logoPreview),
-          _buildUploadItem('صورة السجل التجاري', 'cr', _crPreview),
-          _buildUploadItem('صورة البطاقة الضريبية', 'tc', _tcPreview),
+          _buildUploadItem('شعار النشاط / اللوجو (اختياري)', 'logo', _logoPreview),
+          _buildUploadItem('صورة السجل التجاري (اختياري)', 'cr', _crPreview),
+          _buildUploadItem('صورة البطاقة الضريبية (اختياري)', 'tc', _tcPreview),
         ],
       ),
     );
@@ -331,7 +331,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         child: Row(children: [
           Icon(file != null ? Icons.check_circle : Icons.upload_file, color: file != null ? Colors.green : Colors.grey, size: 28),
           const SizedBox(width: 15),
-          Expanded(child: Text(label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo'))),
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'Cairo'))),
         ]),
       ),
     );
@@ -375,12 +375,20 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: (widget.isSaving || !_termsAgreed || _isUploading) ? null : () {
+        onPressed: (widget.isSaving || !_termsAgreed || _isUploading) ? null : () async {
           if (!_locationPicked) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("يرجى تحديد موقعك أولاً", style: TextStyle(fontFamily: 'Cairo'))));
             return;
           }
-          if (_formKey.currentState!.validate()) widget.onRegister();
+          if (_formKey.currentState!.validate()) {
+            // 🚀 تسجيل الحدث لفيسبوك قبل الـ Register
+            try {
+              await facebookAppEvents.logCompletedRegistration(registrationMethod: widget.selectedUserType);
+            } catch (e) {
+              debugPrint("FB Event Error: $e");
+            }
+            widget.onRegister();
+          }
         },
         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68), padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
         child: (widget.isSaving || _isUploading) ? const CircularProgressIndicator(color: Colors.white) : const Text('إتمام التسجيل والبدء', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
