@@ -62,7 +62,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     _mapController = MapController();
   }
 
-  // ✅ الخطوة 1: رسالة الإفصاح (Disclosure) المطلوبة لجوجل
   Future<void> _handleMapOpeningSequence() async {
     bool? proceed = await showDialog<bool>(
       context: context,
@@ -103,7 +102,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     }
   }
 
-  // ✅ الخطوة 4: فتح الخريطة مع التحديث التلقائي للعنوان
   void _openMapPicker() {
     showModalBottomSheet(
       context: context,
@@ -133,7 +131,8 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
                     options: MapOptions(
                       initialCenter: _selectedPosition,
                       initialZoom: 16.5,
-                      onPositionChanged: (MapPosition position, bool hasGesture) {
+                      // التعديل هنا: حذفنا النوع MapPosition عشان نتجنب الخطأ
+                      onPositionChanged: (position, hasGesture) {
                         if (hasGesture && position.center != null) {
                           setModalState(() => _selectedPosition = position.center!);
                           _updateAddressText(position.center!);
@@ -381,7 +380,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
             return;
           }
           if (_formKey.currentState!.validate()) {
-            // 🚀 تسجيل الحدث لفيسبوك قبل الـ Register
             try {
               await facebookAppEvents.logCompletedRegistration(registrationMethod: widget.selectedUserType);
             } catch (e) {
