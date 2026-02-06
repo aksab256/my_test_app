@@ -10,7 +10,7 @@ import 'package:google_fonts/google_fonts.dart'; // 💡 إضافة الخطوط
 final FirebaseAuth _auth = FirebaseAuth.instance;
 
 // 🚨 [التعديل النهائي الصحيح]: استخدام رابط الجذر فقط (بدون index.html)
-const String _privacyPolicyUrl = 'https://amrshipl83.github.io/aksabprivce/';
+const String _privacyPolicyUrl = 'https://aksab.shop/privacy';
 
 // 💡 الدالة المساعدة لفتح الرابط الخارجي (باستخدام url_launcher)
 void _launchUrlExternal(BuildContext context, String url) async {
