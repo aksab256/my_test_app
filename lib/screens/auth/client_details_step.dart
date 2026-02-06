@@ -11,7 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:sizer/sizer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:facebook_app_events/facebook_app_events.dart';
-import 'package:permission_handler/permission_handler.dart'; // ✅ إضافة المكتبة لطلب الإذن
+import 'package:permission_handler/permission_handler.dart';
 
 class ClientDetailsStep extends StatefulWidget {
   final Map<String, TextEditingController> controllers;
@@ -197,9 +197,32 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     }
   }
 
-  // ✅ الدالة المحدثة لطلب الإذن قبل فتح الصور
+  // ✅ الدالة المحدثة بدمج رسالة الإفصاح البارزة وطلب الإذن
   Future<void> _pickFile(String field) async {
-    // إذن الصور مطلوب دائماً لجوجل
+    // 1. إظهار رسالة الإفصاح (Prominent Disclosure)
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: const Text("رفع صور النشاط", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+          content: const Text(
+            "يتطلب رفع الشعار أو المستندات الوصول إلى معرض الصور الخاص بك لاختيار الملفات المطلوبة فقط وتأكيد هوية نشاطك التجاري.",
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("موافق، استمرار", style: TextStyle(color: Color(0xFF2D9E68), fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    // 2. طلب الإذن الرسمي من النظام
     PermissionStatus status;
     if (Platform.isAndroid) {
       status = await Permission.photos.request();
