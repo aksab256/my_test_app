@@ -197,10 +197,9 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     }
   }
 
-  // ✅ الدالة المحدثة بدمج رسالة الإفصاح البارزة وطلب الإذن
+  // ✅ الدالة المحدثة التي تضمن ظهور الإفصاح أولاً ثم انتظار رد المستخدم
   Future<void> _pickFile(String field) async {
-    // 1. إظهار رسالة الإفصاح (Prominent Disclosure)
-    await showDialog(
+    bool proceed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (context) => Directionality(
@@ -213,40 +212,42 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
             style: TextStyle(fontFamily: 'Cairo'),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("موافق، استمرار", style: TextStyle(color: Color(0xFF2D9E68), fontWeight: FontWeight.bold)),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68)),
+              onPressed: () => Navigator.pop(context, true), 
+              child: const Text("موافق، استمرار", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
       ),
-    );
+    ) ?? false;
 
-    // 2. طلب الإذن الرسمي من النظام
-    PermissionStatus status;
-    if (Platform.isAndroid) {
-      status = await Permission.photos.request();
-      if (status.isDenied) status = await Permission.storage.request();
-    } else {
-      status = await Permission.photos.request();
-    }
-
-    if (status.isGranted) {
-      final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
-      if (pickedFile != null) {
-        final file = File(pickedFile.path);
-        setState(() {
-          if (field == 'logo') _logoPreview = file;
-          if (field == 'cr') _crPreview = file;
-          if (field == 'tc') _tcPreview = file;
-        });
-        await _uploadFileToCloudinary(file, field);
+    if (proceed) {
+      PermissionStatus status;
+      if (Platform.isAndroid) {
+        status = await Permission.photos.request();
+        if (status.isDenied) status = await Permission.storage.request();
+      } else {
+        status = await Permission.photos.request();
       }
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("يرجى منح إذن الوصول للصور لرفع المستندات", style: TextStyle(fontFamily: 'Cairo')))
-        );
+
+      if (status.isGranted) {
+        final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
+        if (pickedFile != null) {
+          final file = File(pickedFile.path);
+          setState(() {
+            if (field == 'logo') _logoPreview = file;
+            if (field == 'cr') _crPreview = file;
+            if (field == 'tc') _tcPreview = file;
+          });
+          await _uploadFileToCloudinary(file, field);
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("يرجى منح إذن الوصول للصور لرفع المستندات", style: TextStyle(fontFamily: 'Cairo')))
+          );
+        }
       }
     }
   }
