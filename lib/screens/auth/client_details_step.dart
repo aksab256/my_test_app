@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:sizer/sizer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:facebook_app_events/facebook_app_events.dart';
+import 'package:permission_handler/permission_handler.dart'; // ✅ إضافة المكتبة لطلب الإذن
 
 class ClientDetailsStep extends StatefulWidget {
   final Map<String, TextEditingController> controllers;
@@ -131,7 +132,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
                     options: MapOptions(
                       initialCenter: _selectedPosition,
                       initialZoom: 16.5,
-                      // التعديل هنا: حذفنا النوع MapPosition عشان نتجنب الخطأ
                       onPositionChanged: (position, hasGesture) {
                         if (hasGesture && position.center != null) {
                           setModalState(() => _selectedPosition = position.center!);
@@ -197,16 +197,34 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     }
   }
 
+  // ✅ الدالة المحدثة لطلب الإذن قبل فتح الصور
   Future<void> _pickFile(String field) async {
-    final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
-    if (pickedFile != null) {
-      final file = File(pickedFile.path);
-      setState(() {
-        if (field == 'logo') _logoPreview = file;
-        if (field == 'cr') _crPreview = file;
-        if (field == 'tc') _tcPreview = file;
-      });
-      await _uploadFileToCloudinary(file, field);
+    // إذن الصور مطلوب دائماً لجوجل
+    PermissionStatus status;
+    if (Platform.isAndroid) {
+      status = await Permission.photos.request();
+      if (status.isDenied) status = await Permission.storage.request();
+    } else {
+      status = await Permission.photos.request();
+    }
+
+    if (status.isGranted) {
+      final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
+      if (pickedFile != null) {
+        final file = File(pickedFile.path);
+        setState(() {
+          if (field == 'logo') _logoPreview = file;
+          if (field == 'cr') _crPreview = file;
+          if (field == 'tc') _tcPreview = file;
+        });
+        await _uploadFileToCloudinary(file, field);
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("يرجى منح إذن الوصول للصور لرفع المستندات", style: TextStyle(fontFamily: 'Cairo')))
+        );
+      }
     }
   }
 
