@@ -103,7 +103,7 @@ class _SellerSidebarState extends State<SellerSidebar> {
 
   // دالة مساعدة لفتح الرابط
   void _launchPrivacyUrl() async {
-    final Uri url = Uri.parse('https://aksab.shop/privacy');
+    final Uri url = Uri.parse('https://aksab.shop/');
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       debugPrint('Could not launch $url');
     }

@@ -86,7 +86,7 @@ class _FooterWidgetState extends State<_FooterWidget> {
   bool _isAccepted = true; // الحالة الافتراضية للموافقة
 
   void _launchPrivacyUrl() async {
-    final Uri url = Uri.parse('https://aksab.shop/privacy');
+    final Uri url = Uri.parse('https://aksab.shop/');
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       debugPrint('Could not launch $url');
     }
