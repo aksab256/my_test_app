@@ -9,10 +9,10 @@ plugins {
 
 android {
     namespace = "com.aksabeg500"
-    
+
     // 🎯 تم التعديل لـ 36 لإرضاء المكتبات الجديدة ومنع فشل البناء
     compileSdk = 36
-    
+
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -27,13 +27,13 @@ android {
 
     defaultConfig {
         applicationId = "com.aksabeg500"
-        
+
         // الحد الأدنى لتشغيل التطبيق
-        minSdk = 24 
-        
+        minSdk = 24
+
         // 🎯 نتركه 34 لضمان عمل الإشعارات بشكل سليم ومنع الكراش عند المستخدم
-        targetSdk = 34 
-        
+        targetSdk = 34
+
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
@@ -59,6 +59,9 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.1.0"))
     implementation("com.google.firebase:firebase-messaging")
     implementation("com.google.firebase:firebase-analytics")
+
+    // 🎯 إضافة مكتبة فيسبوك للتبع والـ Login
+    implementation("com.facebook.android:facebook-android-sdk:latest.release")
 }
 
 flutter {
