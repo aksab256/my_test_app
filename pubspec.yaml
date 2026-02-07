@@ -1,7 +1,8 @@
 name: my_test_app
 description: A new Flutter project.
 publish_to: 'none'
-version: 1.0.0+1
+# تم تحديث الإصدار ليكون Build 2 جاهز للرفع
+version: 1.0.1+2
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -74,14 +75,14 @@ dev_dependencies:
   # أداة توليد الأيقونات
   flutter_launcher_icons: ^0.13.1
 
-# إعدادات الأيقونة التكيفية لحل مشكلة الخلفية البيضاء
+# إعدادات الأيقونة التكيفية - تم تعديل المسار ليتناسب مع الملف الجديد
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/images/app_icon.png"
+  image_path: "assets/flutter_logo.png"
   # اللون الأخضر الغامق الخاص بهوية التطبيق
   adaptive_icon_background: "#1B5E20"
-  adaptive_icon_foreground: "assets/images/app_icon.png"
+  adaptive_icon_foreground: "assets/flutter_logo.png"
 
 flutter:
   uses-material-design: true
