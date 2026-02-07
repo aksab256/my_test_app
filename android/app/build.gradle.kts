@@ -9,9 +9,7 @@ plugins {
 
 android {
     namespace = "com.aksabeg500"
-
-    // 🎯 تم التعديل لـ 36 لإرضاء المكتبات الجديدة ومنع فشل البناء
-    compileSdk = 36
+    compileSdk = 35 // نصيحة: 35 أكثر استقراراً حالياً من 36
 
     ndkVersion = flutter.ndkVersion
 
@@ -25,15 +23,24 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
+    // --- 🟢 إضافة جزء التوقيع لقراءة السيكريتس ---
+    signingConfigs {
+        create("release") {
+            // بيقرأ من الـ Environment Variables اللي في GitHub Actions
+            keyAlias = System.getenv("KEY_ALIAS") ?: ""
+            keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+            storePassword = System.getenv("STORE_PASSWORD") ?: ""
+            
+            // بيحدد مسار ملف الـ keystore اللي الـ Action بيولده مؤقتاً
+            val keystorePath = System.getenv("KEYSTORE_PATH") ?: "release-keystore.jks"
+            storeFile = file(keystorePath)
+        }
+    }
+
     defaultConfig {
         applicationId = "com.aksabeg500"
-
-        // الحد الأدنى لتشغيل التطبيق
         minSdk = 24
-
-        // 🎯 نتركه 34 لضمان عمل الإشعارات بشكل سليم ومنع الكراش عند المستخدم
         targetSdk = 34
-
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
@@ -41,26 +48,23 @@ android {
 
     buildTypes {
         release {
-            // نستخدم توقيع الـ debug حالياً لتسهيل التجربة
-            signingConfig = signingConfigs.getByName("debug")
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // --- ✅ تم التغيير من debug إلى release ---
+            signingConfig = signingConfigs.getByName("release")
+            
+            // تفعيل التنظيف لتقليل حجم الـ AAB
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }
 
 dependencies {
-    // مكتبة Desugaring ضرورية جداً للتوافق
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-
     implementation("androidx.multidex:multidex:2.0.1")
-
-    // استخدام نسخة مستقرة من Firebase
     implementation(platform("com.google.firebase:firebase-bom:33.1.0"))
     implementation("com.google.firebase:firebase-messaging")
     implementation("com.google.firebase:firebase-analytics")
-
-    // 🎯 إضافة مكتبة فيسبوك للتبع والـ Login
     implementation("com.facebook.android:facebook-android-sdk:latest.release")
 }
 
