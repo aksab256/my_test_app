@@ -9,7 +9,7 @@ plugins {
 
 android {
     namespace = "com.aksabeg500"
-    compileSdk = 35 // نصيحة: 35 أكثر استقراراً حالياً من 36
+    compileSdk = 36 // نصيحة: 35 أكثر استقراراً حالياً من 36
 
     ndkVersion = flutter.ndkVersion
 
