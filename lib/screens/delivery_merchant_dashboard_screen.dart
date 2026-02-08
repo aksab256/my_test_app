@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/widgets/delivery_merchant_sidebar_widget.dart';
 
-// 1. موديل البيانات (يظل كما هو)
+// 1. موديل البيانات
 class DashboardData {
   final int totalProducts;
   final int totalOrders;
@@ -34,7 +34,7 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
   Future<DashboardData>? _dashboardDataFuture;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // 3. دالة جلب البيانات (يظل المنطق كما هو تماماً)
+  // 2. جلب البيانات من فايرستور
   Future<DashboardData> _fetchDashboardData(String userId) async {
     final productsRef = _firestore.collection("marketOffer");
     final activeOffersQuery = productsRef
@@ -95,13 +95,16 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
 
   @override
   Widget build(BuildContext context) {
-    final userName = Provider.of<BuyerDataProvider>(context).loggedInUser?.fullname ?? 'التاجر';
+    final buyerProvider = Provider.of<BuyerDataProvider>(context);
+    final userName = buyerProvider.loggedInUser?.fullname ?? 'التاجر';
+    // جلب نوع الباقة من البروفايل (لو نل بنحط باقة افتراضية)
+    final planName = buyerProvider.dealerProfile?.planName ?? 'باقة تجريبية';
     final primaryColor = Theme.of(context).primaryColor;
 
     return Scaffold(
-      backgroundColor: Colors.grey[50], // خلفية فاتحة ومريحة
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('لوحة تحكم المتجر', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('لوحة تحكم المتجر', style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.white,
@@ -121,8 +124,8 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // قسم الترحيب المطور
-              _buildWelcomeHeader(userName, primaryColor),
+              // قسم الترحيب المطور مع Badge الباقة
+              _buildWelcomeHeader(userName, planName),
 
               const SizedBox(height: 32),
               
@@ -137,16 +140,13 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
                   } else if (snapshot.hasError) {
                     return _buildErrorState(snapshot.error.toString());
                   } else if (snapshot.hasData) {
-                    final data = snapshot.data!;
-                    return _buildStatsGrid(data, context);
+                    return _buildStatsGrid(snapshot.data!, context);
                   }
                   return const Center(child: Text('لا توجد بيانات متاحة حالياً.'));
                 },
               ),
 
               const SizedBox(height: 40),
-              
-              // بطاقة إرشادية سريعة
               _buildInfoFooter(),
             ],
           ),
@@ -155,20 +155,51 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
     );
   }
 
-  Widget _buildWelcomeHeader(String name, Color color) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
+  // ويدجت الترحيب مع شارة نوع الباقة
+  Widget _buildWelcomeHeader(String name, String plan) {
+    bool isFree = plan.contains('مجانية') || plan.contains('تجريبية');
+    
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          'أهلاً بك، $name 👋',
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
-          textAlign: TextAlign.right,
+        // Badge الباقة
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: isFree ? Colors.green[50] : Colors.amber[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: isFree ? Colors.green : Colors.amber.shade700),
+          ),
+          child: Row(
+            children: [
+              Icon(isFree ? Icons.bolt : Icons.workspace_premium, 
+                   size: 14, color: isFree ? Colors.green : Colors.amber.shade800),
+              const SizedBox(width: 4),
+              Text(
+                plan,
+                style: TextStyle(
+                  fontSize: 11, 
+                  fontWeight: FontWeight.bold, 
+                  fontFamily: 'Cairo',
+                  color: isFree ? Colors.green[700] : Colors.amber[800]
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          'إليك ملخص أداء متجرك اليوم',
-          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-          textAlign: TextAlign.right,
+        // اسم التاجر
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              'أهلاً بك، $name 👋',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87, fontFamily: 'Cairo'),
+            ),
+            Text(
+              'إليك أداء متجرك اليوم',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600], fontFamily: 'Cairo'),
+            ),
+          ],
         ),
       ],
     );
@@ -214,7 +245,7 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(12)),
-      child: Text('خطأ: $error', style: const TextStyle(color: Colors.red), textAlign: TextAlign.center),
+      child: Text('خطأ: $error', style: const TextStyle(color: Colors.red, fontFamily: 'Cairo'), textAlign: TextAlign.center),
     );
   }
 
@@ -233,7 +264,7 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
           Expanded(
             child: Text(
               'يمكنك إدارة المنتجات والطلبات بشكل كامل من خلال القائمة الجانبية.',
-              style: TextStyle(color: Colors.grey[700], fontSize: 13),
+              style: TextStyle(color: Colors.grey[700], fontSize: 13, fontFamily: 'Cairo'),
             ),
           ),
         ],
@@ -242,7 +273,6 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
   }
 }
 
-// ويدجت البطاقة الفرعية بتصميم عصري
 class _DashboardCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -286,7 +316,7 @@ class _DashboardCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               title,
-              style: TextStyle(fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w600, fontFamily: 'Cairo'),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 4),
@@ -294,7 +324,7 @@ class _DashboardCard extends StatelessWidget {
               fit: BoxFit.scaleDown,
               child: Text(
                 value,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
               ),
             ),
           ],
