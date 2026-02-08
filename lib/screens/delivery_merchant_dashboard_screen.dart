@@ -1,5 +1,3 @@
-// lib/screens/delivery_merchant_dashboard_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
@@ -97,8 +95,10 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
   Widget build(BuildContext context) {
     final buyerProvider = Provider.of<BuyerDataProvider>(context);
     final userName = buyerProvider.loggedInUser?.fullname ?? 'التاجر';
-    // جلب نوع الباقة من البروفايل (لو نل بنحط باقة افتراضية)
-    final planName = buyerProvider.dealerProfile?.planName ?? 'باقة تجريبية';
+    
+    // ✨ التغيير الديناميكي: الآن يقرأ مباشرة من البروفايدر المحدث
+    final planName = buyerProvider.planName; 
+    
     final primaryColor = Theme.of(context).primaryColor;
 
     return Scaffold(
@@ -124,11 +124,8 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // قسم الترحيب المطور مع Badge الباقة
               _buildWelcomeHeader(userName, planName),
-
               const SizedBox(height: 32),
-              
               FutureBuilder<DashboardData>(
                 future: _dashboardDataFuture,
                 builder: (context, snapshot) {
@@ -145,7 +142,6 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
                   return const Center(child: Text('لا توجد بيانات متاحة حالياً.'));
                 },
               ),
-
               const SizedBox(height: 40),
               _buildInfoFooter(),
             ],
@@ -155,14 +151,12 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
     );
   }
 
-  // ويدجت الترحيب مع شارة نوع الباقة
   Widget _buildWelcomeHeader(String name, String plan) {
     bool isFree = plan.contains('مجانية') || plan.contains('تجريبية');
     
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Badge الباقة
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
@@ -187,7 +181,6 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
             ],
           ),
         ),
-        // اسم التاجر
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
