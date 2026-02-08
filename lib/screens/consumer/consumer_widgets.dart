@@ -65,7 +65,7 @@ class ConsumerSideMenu extends StatelessWidget {
   }
 }
 
-// 2. شريط التنقل السفلي (Footer Nav) - النسخة الاحترافية المحدثة
+// 2. شريط التنقل السفلي (Footer Nav) - النسخة الاحترافية الشاملة لكافة الحالات
 class ConsumerFooterNav extends StatelessWidget {
   final int cartCount;
   final int activeIndex;
@@ -80,13 +80,13 @@ class ConsumerFooterNav extends StatelessWidget {
       selectedItemColor: const Color(0xFF43A047),
       unselectedItemColor: Colors.grey,
       type: BottomNavigationBarType.fixed,
-      selectedLabelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-      unselectedLabelStyle: const TextStyle(fontSize: 10),
+      selectedLabelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+      unselectedLabelStyle: const TextStyle(fontSize: 10, fontFamily: 'Cairo'),
       items: [
         const BottomNavigationBarItem(icon: Icon(Icons.store), label: 'المتجر'),
         const BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'طلباتي'),
         
-        // ✨ أيقونة "تتبع الطلب" الذكية والمستقرة
+        // ✨ أيقونة "تتبع الطلب" الذكية - معالجة حالات الإلغاء وعدم توفر سائقين
         BottomNavigationBarItem(
           icon: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -94,7 +94,6 @@ class ConsumerFooterNav extends StatelessWidget {
                 .where('userId', isEqualTo: user?.uid)
                 .snapshots(),
             builder: (context, snapshot) {
-              // منع "الرعشة" اللحظية أثناء التحميل
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Icon(Icons.radar, color: Colors.grey, size: 28);
               }
@@ -114,13 +113,18 @@ class ConsumerFooterNav extends StatelessWidget {
               final String status = (lastOrder['status'] ?? 'pending').toString().toLowerCase().trim();
               final bool isRated = lastOrder.containsKey('rating');
               
-              // تعريف الحالات المنتهية
-              final bool isFinished = status.contains('cancelled') || isRated || status == 'none';
+              // ✨ دمج الحالات الجديدة المكتشفة في الفايربيز لضمان إيقاف التتبع
+              final bool isFinished = status.contains('cancel') || 
+                                     status.contains('no_drivers') || 
+                                     status.contains('timeout') ||
+                                     status == 'none' ||
+                                     isRated;
 
               Color iconColor = Colors.grey;
               IconData iconData = Icons.radar;
 
-              if (!isFinished) {
+              // الألوان تظهر فقط لو الطلب "جاري" ولم ينتهِ بعد ولم يتم التوصيل
+              if (!isFinished && status != 'delivered') {
                 if (status == 'pending') {
                   iconColor = Colors.orange;
                   iconData = Icons.hourglass_top_rounded;
@@ -130,17 +134,19 @@ class ConsumerFooterNav extends StatelessWidget {
                 } else if (status == 'picked_up') {
                   iconColor = Colors.indigo;
                   iconData = Icons.local_shipping_rounded;
-                } else if (status == 'delivered') {
-                  iconColor = Colors.green;
-                  iconData = Icons.check_circle_rounded;
                 }
+              } else if (status == 'delivered' && !isRated) {
+                // حالة خاصة: وصل ولم يقيم تظهر باللون الأخضر
+                iconColor = Colors.green;
+                iconData = Icons.check_circle_rounded;
               }
 
               return Stack(
                 alignment: Alignment.center,
                 children: [
                   Icon(iconData, color: iconColor, size: 28),
-                  if (!isFinished)
+                  // إظهار النقطة التنبيهية فقط للطلبات النشطة فعلياً
+                  if (!isFinished && status != 'delivered' && status != '')
                     Positioned(
                       top: -2, right: -2,
                       child: Container(
@@ -191,8 +197,8 @@ class ConsumerFooterNav extends StatelessWidget {
               final String status = (lastOrder['status'] ?? 'pending').toString().toLowerCase().trim();
               final bool isRated = lastOrder.containsKey('rating');
 
-              // التحقق مما إذا كان الطلب قابلاً للتتبع فعلياً
-              if (status.contains('cancelled') || isRated) {
+              // ✨ منع التتبع واللوب اللانهائي إذا كان الطلب ملغياً أو غير متوفر له سائق
+              if (status.contains('cancel') || status.contains('no_drivers') || isRated) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -203,7 +209,7 @@ class ConsumerFooterNav extends StatelessWidget {
                     ),
                   );
                 }
-                return;
+                return; // يخرج فوراً لمنع تكرار الرسالة
               }
 
               if (context.mounted) {
@@ -212,14 +218,14 @@ class ConsumerFooterNav extends StatelessWidget {
             } else {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("لا توجد طلبات نشطة حالياً"), backgroundColor: Colors.black87),
+                  const SnackBar(content: Text("لا توجد طلبات سابقة"), backgroundColor: Colors.black87),
                 );
               }
             }
           } catch (e) {
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("حدث خطأ أثناء تحميل البيانات")),
+                const SnackBar(content: Text("عذراً، حدث خطأ في استعادة البيانات")),
               );
             }
           }
@@ -245,7 +251,7 @@ class ConsumerSectionTitle extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
       child: Align(
         alignment: Alignment.centerRight,
-        child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
       ),
     );
   }
@@ -288,7 +294,7 @@ class ConsumerCategoriesBanner extends StatelessWidget {
                     backgroundColor: Colors.grey[200],
                   ),
                   const SizedBox(height: 5),
-                  Text(category.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  Text(category.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
                 ],
               ),
             ),
