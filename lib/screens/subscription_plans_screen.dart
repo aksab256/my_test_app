@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
+// 🚀 إضافة مكتبة فيسبوك
+import 'package:facebook_app_events/facebook_app_events.dart';
 
 class SubscriptionPlansScreen extends StatefulWidget {
   const SubscriptionPlansScreen({super.key});
@@ -12,42 +14,64 @@ class SubscriptionPlansScreen extends StatefulWidget {
 
 class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
   bool _isProcessing = false;
+  // تعريف كائن فيسبوك
+  static final facebookAppEvents = FacebookAppEvents();
 
   // 🎯 الدالة الأساسية لإرسال الطلب واستلام الرابط من السيرفر
   Future<void> _initiateSubscriptionPayment(Map<String, dynamic> plan) async {
-    setState(() => _isProcessing = true);
+    final double price = (plan['price'] as num).toDouble();
+    final String planName = plan['planName'] ?? 'باقة غير معروفة';
 
+    // 🚀 تتبع فيسبوك: التاجر مهتم وعاوز يشترك (بدأ عملية الدفع)
+    facebookAppEvents.logEvent(
+      name: 'fb_mobile_initiated_checkout',
+      parameters: {
+        'plan_name': planName,
+        'amount': price,
+        'currency': 'EGP',
+      },
+    );
+
+    // 1️⃣ حالة الباقة المجانية (السعر = 0)
+    if (price == 0) {
+      // 🚀 تتبع فيسبوك: تفعيل باقة تجريبية
+      facebookAppEvents.logEvent(
+        name: 'trial_activated',
+        parameters: {'plan_name': planName},
+      );
+
+      _showFreePlanDialog(planName);
+      return;
+    }
+
+    // 2️⃣ حالة الباقة المدفوعة (السعر أكبر من 0)
+    setState(() => _isProcessing = true);
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     try {
-      // 1. إنشاء سجل الطلب في pendingInvoices (نفس البيانات التي ينتظرها الباك)
       final docRef = await FirebaseFirestore.instance.collection('pendingInvoices').add({
         "type": "SUBSCRIPTION_RENEW",
         "status": "pay_now",
-        "amount": (plan['price'] as num).toDouble(),
+        "amount": price,
         "storeId": user.uid,
-        "planName": plan['planName'],
-        "durationDays": plan['durationDays'] ?? 30, // لإبلاغ الويب هوك بالمدة
+        "planName": planName,
+        "durationDays": plan['durationDays'] ?? 30,
         "email": user.email ?? "no-email@store.com",
         "createdAt": FieldValue.serverTimestamp(),
       });
 
-      // 2. الاستماع للمستند بانتظار ظهور الـ paymentUrl من السيرفر
-      // 
       docRef.snapshots().listen((snapshot) async {
         if (snapshot.exists && snapshot.data()!.containsKey('paymentUrl')) {
           String url = snapshot.data()!['paymentUrl'];
           
           if (_isProcessing) {
             setState(() => _isProcessing = false);
-            // فتح بوابة دفع بايموب
             await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
           }
         }
       });
 
-      // تايم آوت في حال تأخر السيرفر
       Future.delayed(const Duration(seconds: 15), () {
         if (mounted && _isProcessing) {
           setState(() => _isProcessing = false);
@@ -63,6 +87,30 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
         SnackBar(content: Text('خطأ في الاتصال: $e')),
       );
     }
+  }
+
+  // دالة إظهار الديالوج للباقة المجانية
+  void _showFreePlanDialog(String planName) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Text('تفعيل الاشتراك', 
+          textAlign: TextAlign.center, 
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        content: Text('باقة "$planName" مفعلة لحسابك حالياً للفترة التجريبية بنجاح.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontFamily: 'Cairo')),
+        actions: [
+          Center(
+            child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('بدء الاستخدام', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Color(0xFF27ae60))),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -83,7 +131,6 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
-
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return const Center(child: Text('لا توجد باقات متاحة حالياً', style: TextStyle(fontFamily: 'Cairo')));
               }
@@ -96,6 +143,7 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
                 itemBuilder: (context, index) {
                   final plan = plans[index].data() as Map<String, dynamic>;
                   final List<dynamic> features = plan['features'] ?? [];
+                  final double price = (plan['price'] as num).toDouble();
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 25),
@@ -108,54 +156,48 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
                     ),
                     child: Column(
                       children: [
-                        // الرأس (اسم الباقة والسعر)
                         Container(
                           padding: const EdgeInsets.all(25),
                           width: double.infinity,
                           decoration: BoxDecoration(
-                            color: plan['price'] > 0 ? const Color(0xFFB21F2D) : const Color(0xFF34495e),
+                            color: price > 0 ? const Color(0xFFB21F2D) : const Color(0xFF34495e),
                             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                           ),
                           child: Column(
                             children: [
-                              Text(
-                                plan['planName'] ?? 'باقة',
+                              Text(plan['planName'] ?? 'باقة',
                                 style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
                               ),
                               const SizedBox(height: 10),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Text('${plan['price']}', style: const TextStyle(color: Color(0xFFf1c40f), fontSize: 32, fontWeight: FontWeight.bold)),
+                                  Text('$price', style: const TextStyle(color: Color(0xFFf1c40f), fontSize: 32, fontWeight: FontWeight.bold)),
                                   const Text(' ج.م', style: TextStyle(color: Colors.white, fontSize: 16, fontFamily: 'Cairo')),
                                 ],
                               ),
                             ],
                           ),
                         ),
-                        
-                        // عرض المميزات
                         Padding(
                           padding: const EdgeInsets.all(20),
                           child: Column(
                             children: features.map((f) => _buildFeatureItem(f['label'], f['value'])).toList(),
                           ),
                         ),
-
-                        // زر التفعيل / الاشتراك
                         Padding(
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 25),
                           child: ElevatedButton(
                             onPressed: _isProcessing ? null : () => _initiateSubscriptionPayment(plan),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: plan['price'] > 0 ? const Color(0xFFB21F2D) : const Color(0xFF27ae60),
+                              backgroundColor: price > 0 ? const Color(0xFFB21F2D) : const Color(0xFF27ae60),
                               foregroundColor: Colors.white,
                               minimumSize: const Size(double.infinity, 55),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                             ),
                             child: _isProcessing 
                               ? const CircularProgressIndicator(color: Colors.white)
-                              : Text(plan['price'] > 0 ? 'اشترك الآن' : 'تفعيل مجاني', 
+                              : Text(price > 0 ? 'اشترك الآن' : 'تفعيل مجاني', 
                                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
                           ),
                         ),
