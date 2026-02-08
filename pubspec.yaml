@@ -1,8 +1,8 @@
 name: my_test_app
 description: A new Flutter project.
 publish_to: 'none'
-# تم تحديث الإصدار ليكون Build 2 جاهز للرفع
-version: 1.0.1+2
+# تم تحديث الإصدار ليكون Build 3 جاهز للرفع النهائي
+version: 1.0.2+3
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -46,7 +46,7 @@ dependencies:
   url_launcher: ^6.3.2
   shared_preferences: ^2.5.3
 
-  # Marketing & Tracking (تمت الإضافة هنا ✅)
+  # Marketing & Tracking
   facebook_app_events: ^0.24.0
 
   # Fonts
@@ -75,14 +75,16 @@ dev_dependencies:
   # أداة توليد الأيقونات
   flutter_launcher_icons: ^0.13.1
 
-# إعدادات الأيقونة التكيفية - تم تعديل المسار ليتناسب مع الملف الجديد
+# 🚀 إعدادات الأيقونة الاحترافية للرفع على المتجر
 flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/flutter_logo.png"
-  # اللون الأخضر الغامق الخاص بهوية التطبيق
+  # إعدادات الأيقونة التكيفية (Adaptive Icon) لمنع القص
   adaptive_icon_background: "#1B5E20"
   adaptive_icon_foreground: "assets/flutter_logo.png"
+  # السطر التالي يضمن توسيط العربة وتصغيرها لتناسب "المنطقة الآمنة"
+  adaptive_icon_foreground_inset: 16 
 
 flutter:
   uses-material-design: true
