@@ -68,11 +68,10 @@ class CustomerTrackingScreen extends StatelessWidget {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))
                   ),
                   onPressed: () async {
-                    // تحديث الطلب: إضافة التقييم هو اللي هيقفل الأيقونة
                     await FirebaseFirestore.instance.collection('specialRequests').doc(orderId).update({
                       'rating': selectedRating,
                       'customerComment': commentController.text,
-                      'status': 'delivered' // نخليها دليفريد زي ما هي بس نعتمد ع حقل الراتينج
+                      'status': 'delivered'
                     });
                     if (context.mounted) Navigator.of(context).popUntil((route) => route.isFirst);
                   },
@@ -141,17 +140,29 @@ class CustomerTrackingScreen extends StatelessWidget {
         String status = orderData['status'] ?? "pending";
         bool isRated = orderData.containsKey('rating');
 
-        // ✨ لو الطلب اتسلم لسه ماتقيمش اظهر النافذة
+        // ✨ معالجة حالات الخروج التلقائي (بما فيها حالة السيرفر الجديدة)
+        if (status.contains('cancelled') || 
+            status == 'no_drivers_available' || 
+            (status == 'delivered' && isRated)) {
+           
+           WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (context.mounted) {
+              if (status == 'no_drivers_available') {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("عذراً، لم نجد مناديب متاحة حالياً لطلبك. يرجى المحاولة مرة أخرى."),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+              }
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            }
+          });
+        }
+
         if (status == 'delivered' && !isRated) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _showRatingDialog(context, orderData['driverId'] ?? "");
-          });
-        }
-        
-        // لو ملغي أو تم التقييم اخرج للشاشة الرئيسية
-        if (status.contains('cancelled') || (status == 'delivered' && isRated)) {
-           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (context.mounted) Navigator.of(context).popUntil((route) => route.isFirst);
           });
         }
 
@@ -216,7 +227,6 @@ class CustomerTrackingScreen extends StatelessWidget {
     );
   }
 
-  // ... (بقية الـ Widgets كما هي في الكود الأصلي)
   Widget _buildUnifiedBottomPanel(BuildContext context, String status, Map<String, dynamic> order, Map<String, dynamic>? driver, String code) {
     double progress = 0.1;
     String statusDesc = "بانتظار قبول مندوب...";
@@ -225,6 +235,8 @@ class CustomerTrackingScreen extends StatelessWidget {
     if (status == 'accepted') { progress = 0.4; statusDesc = "المندوب وافق وفي طريقه إليك"; mainColor = Colors.blue; }
     else if (status == 'at_pickup') { progress = 0.6; statusDesc = "المندوب وصل لموقع الاستلام"; mainColor = Colors.indigo; }
     else if (status == 'picked_up') { progress = 0.8; statusDesc = "جاري التوصيل الآن"; mainColor = Colors.green; }
+    // ✨ إضافة حالة عدم التوافر لشرح الـ UI قبل الـ Pop
+    else if (status == 'no_drivers_available') { progress = 1.0; statusDesc = "عذراً، لم نجد مناديب حالياً"; mainColor = Colors.red; }
 
     return Positioned(
       bottom: 15, left: 10, right: 10,
