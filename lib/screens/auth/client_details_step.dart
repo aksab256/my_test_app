@@ -268,6 +268,22 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
               _buildSectionHeader('المعلومات الأساسية', Icons.badge_rounded),
               _buildInputField('fullname', 'الاسم الكامل', Icons.person_rounded),
               _buildInputField('phone', 'رقم الهاتف', Icons.phone_android_rounded, keyboardType: TextInputType.phone),
+              
+
+// إضافة النص التوضيحي هنا
+Padding(
+  padding: EdgeInsets.only(bottom: 1.5.h, right: 2.w, left: 2.w),
+  child: Text(
+    "• نستخدم رقم هاتفك لتسهيل تواصل المندوب معك وضمان دقة التوصيل.",
+    style: TextStyle(
+      fontSize: 9.sp, 
+      color: Colors.grey.shade600, 
+      fontFamily: 'Cairo',
+      height: 1.4
+    ),
+  ),
+),
+
               _buildSectionHeader('الموقع الجغرافي', Icons.map_rounded),
               _buildLocationPickerButton(),
               _buildInputField('address', 'العنوان (يتم تحديثه من الخريطة)', Icons.location_on_rounded),
