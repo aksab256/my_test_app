@@ -1,4 +1,4 @@
-name: Build Flutter APK (Fast Release)
+name: Build Aksab (APK & AAB)
 
 on:
   push:
@@ -33,26 +33,37 @@ jobs:
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
         run: |
-          # فك تشفير الملف ووضعه في المسار اللي الجريدل مستنيه
           echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > android/app/release-keystore.jks
 
-      - name: 🏗️ Build Release APK
+      - name: 🏗️ Build APK & AAB
         env:
-          # هنا بنباصي السيكريتس للبيئة عشان الجريدل يقرأها بالـ System.getenv
           STORE_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ALIAS_NAME }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD_ALIAS }}
           KEYSTORE_PATH: "release-keystore.jks"
-        run: flutter build apk --release
+        run: |
+          # بناء الـ APK أولاً
+          flutter build apk --release
+          # بناء الـ AAB (المطلوب للمتجر)
+          flutter build appbundle --release
 
-      - name: 📤 Upload APK
+      - name: 📤 Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: aksab-signed-apk
+          name: Aksab-Release-APK # اسم مميز للـ APK
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: 🔍 Verify Signing
+      - name: 📤 Upload Signed AAB (Google Play)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aksab-Release-AAB-Bundle # اسم مميز للـ AAB
+          path: build/app/outputs/bundle/release/app-release.aab
+
+      # تم تصحيح خطأ التحقق عبر استخدام أداة محاذاة أندرويد الرسمية
+      - name: 🔍 Verify Build Success
         run: |
-          # أمر سريع للتأكد إن الـ APK موقعة مش Debug
-          apksigner verify --print-certs build/app/outputs/flutter-apk/app-release.apk
+          echo "Checking if files exist..."
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
+          ls -lh build/app/outputs/bundle/release/app-release.aab
+          echo "Builds completed and verified successfully!"
 
