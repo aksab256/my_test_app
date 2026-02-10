@@ -78,7 +78,6 @@ class BuyerHeaderWidget extends StatelessWidget {
     );
   }
 
-  // --- دالة مساعدة لـ ListTile (تحسين M3) ---
   static Widget _buildDrawerTile(Function(String) navigate, Map<String, dynamic> item, Color color, BuildContext context) {
     final textStyle = GoogleFonts.notoSansArabic(fontSize: 16, fontWeight: FontWeight.w600, color: color);
 
@@ -158,108 +157,100 @@ class BuyerHeaderWidget extends StatelessWidget {
     ];
 
     return Drawer(
-      child: Column(
-        children: [
-          DrawerHeader(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [primaryColor, accentColor],
-                begin: Alignment.centerRight,
-                end: Alignment.centerLeft,
+      child: SafeArea( // 🎯 إضافة SafeArea هنا لضمان عدم تداخل القائمة مع شريط الساعة
+        child: Column(
+          children: [
+            DrawerHeader(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [primaryColor, accentColor],
+                  begin: Alignment.centerRight,
+                  end: Alignment.centerLeft,
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.store_rounded, size: 40, color: Colors.white),
+                  const SizedBox(height: 8),
+                  Text(
+                    'أسواق أكسب',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.notoSansArabic(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    'تسوق بسهولة وأمان',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.notoSansArabic(color: Colors.white70, fontSize: 14),
+                  ),
+                ],
               ),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.store_rounded, size: 40, color: Colors.white),
-                const SizedBox(height: 8),
-                Text(
-                  'أسواق أكسب',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.notoSansArabic(fontSize: 24, color: Colors.white, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  'تسوق بسهولة وأمان',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.notoSansArabic(color: Colors.white70, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-
-          Expanded(
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                for (var item in mainNavItems) _buildDrawerTile(navigateTo, item, primaryColor, context),
-                const SizedBox(height: 10),
-                const Divider(height: 1, thickness: 1, indent: 16, endIndent: 16),
-                const SizedBox(height: 10),
-
-                if (deliveryItems.isNotEmpty) ...[
-                  for (var item in deliveryItems)
-                    _buildDrawerTile(
-                      navigateTo,
-                      item,
-                      item['title'] == 'طلبات الدليفري' ? highlightColor : primaryColor,
-                      context
-                    ),
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  for (var item in mainNavItems) _buildDrawerTile(navigateTo, item, primaryColor, context),
                   const SizedBox(height: 10),
                   const Divider(height: 1, thickness: 1, indent: 16, endIndent: 16),
                   const SizedBox(height: 10),
-                ],
-
-                for (var item in bottomNavItems) _buildDrawerTile(navigateTo, item, primaryColor, context),
-              ],
-            ),
-          ),
-
-          // تسجيل الخروج
-          ListTile(
-            leading: const Icon(Icons.logout_rounded, color: highlightColor),
-            title: Text('تسجيل الخروج', style: GoogleFonts.notoSansArabic(fontSize: 16, color: highlightColor, fontWeight: FontWeight.w700)),
-            onTap: onLogout,
-          ),
-
-          // 💡 الروابط الاجتماعية والدعم الفني (تم التفعيل والربط)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 24.0, top: 10.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // واتساب
-                    IconButton(
-                      icon: const Icon(Icons.message_rounded, size: 28, color: Color(0xFF25D366)),
-                      onPressed: () => _launchUrlExternal(context, _whatsappUrl),
-                    ),
-                    const SizedBox(width: 24),
-                    // فيسبوك
-                    IconButton(
-                      icon: const Icon(Icons.facebook, size: 28, color: Color(0xFF1877F2)),
-                      onPressed: () => _launchUrlExternal(context, _facebookUrl),
-                    ),
-                    const SizedBox(width: 24),
-                    // إيميل الدعم
-                    IconButton(
-                      icon: const Icon(Icons.email_rounded, size: 28, color: primaryColor),
-                      onPressed: () => _launchUrlExternal(context, 'mailto:$_supportEmail'),
-                    ),
+                  if (deliveryItems.isNotEmpty) ...[
+                    for (var item in deliveryItems)
+                      _buildDrawerTile(
+                        navigateTo,
+                        item,
+                        item['title'] == 'طلبات الدليفري' ? highlightColor : primaryColor,
+                        context
+                      ),
+                    const SizedBox(height: 10),
+                    const Divider(height: 1, thickness: 1, indent: 16, endIndent: 16),
+                    const SizedBox(height: 10),
                   ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'الدعم: $_supportEmail',
-                  style: GoogleFonts.notoSansArabic(fontSize: 10, color: Colors.grey[600]),
-                ),
-              ],
+                  for (var item in bottomNavItems) _buildDrawerTile(navigateTo, item, primaryColor, context),
+                ],
+              ),
             ),
-          ),
-        ],
+            ListTile(
+              leading: const Icon(Icons.logout_rounded, color: highlightColor),
+              title: Text('تسجيل الخروج', style: GoogleFonts.notoSansArabic(fontSize: 16, color: highlightColor, fontWeight: FontWeight.w700)),
+              onTap: onLogout,
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 24.0, top: 10.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.message_rounded, size: 28, color: Color(0xFF25D366)),
+                        onPressed: () => _launchUrlExternal(context, _whatsappUrl),
+                      ),
+                      const SizedBox(width: 24),
+                      IconButton(
+                        icon: const Icon(Icons.facebook, size: 28, color: Color(0xFF1877F2)),
+                        onPressed: () => _launchUrlExternal(context, _facebookUrl),
+                      ),
+                      const SizedBox(width: 24),
+                      IconButton(
+                        icon: const Icon(Icons.email_rounded, size: 28, color: primaryColor),
+                        onPressed: () => _launchUrlExternal(context, 'mailto:$_supportEmail'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'الدعم: $_supportEmail',
+                    style: GoogleFonts.notoSansArabic(fontSize: 10, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -269,68 +260,73 @@ class BuyerHeaderWidget extends StatelessWidget {
     const Color primaryColor = Color(0xFF2c3e50);
     const Color accentColor = Color(0xFF4CAF50);
     
-    return Container(
-      padding: const EdgeInsets.only(top: 45, bottom: 10, right: 15, left: 15), 
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [primaryColor, accentColor],
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,   
+    // 🎯 استخدام SafeArea بدلاً من الرقم الثابت 45 لضمان التوافق مع كل الهواتف
+    return SafeArea(
+      bottom: false, 
+      child: Container(
+        padding: const EdgeInsets.only(top: 10, bottom: 10, right: 15, left: 15), 
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [primaryColor, accentColor],
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,   
+          ),
+          boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 4, offset: Offset(0, 2))],
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(25),
+          ),
         ),
-        boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 4, offset: Offset(0, 2))],
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(25),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              InkWell(
-                onTap: onMenuToggle,
-                borderRadius: BorderRadius.circular(10),
-                child: Padding(
-                  padding: const EdgeInsets.all(6.0), 
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      const Icon(Icons.menu_rounded, size: 28, color: Colors.white), 
-                      if (menuNotificationDotActive)
-                        Positioned(
-                          top: -1,
-                          right: -1,
-                          child: Container(
-                            width: 10,
-                            height: 10,
-                            decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+        child: Column(
+          mainAxisSize: MainAxisSize.min, 
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                InkWell(
+                  onTap: onMenuToggle,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.all(6.0), 
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        const Icon(Icons.menu_rounded, size: 28, color: Colors.white), 
+                        if (menuNotificationDotActive)
+                          Positioned(
+                            top: -1,
+                            right: -1,
+                            child: Container(
+                              width: 10,
+                              height: 10,
+                              decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                            ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const Row(
-                mainAxisSize: MainAxisSize.min, 
-                children: [
-                  Icon(Icons.store_rounded, size: 24, color: Colors.white), 
-                  SizedBox(width: 6),
-                  Text('أسواق أكسب', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)), 
-                ],
-              ),
-              const SizedBox(width: 40),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 5.0, top: 5.0),
-            child: Text(
-              userName,
-              textAlign: TextAlign.right,
-              style: GoogleFonts.notoSansArabic(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
+                const Row(
+                  mainAxisSize: MainAxisSize.min, 
+                  children: [
+                    Icon(Icons.store_rounded, size: 24, color: Colors.white), 
+                    SizedBox(width: 6),
+                    Text('أسواق أكسب', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)), 
+                  ],
+                ),
+                const SizedBox(width: 40),
+              ],
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.only(right: 5.0, top: 5.0),
+              child: Text(
+                userName,
+                textAlign: TextAlign.right,
+                style: GoogleFonts.notoSansArabic(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
