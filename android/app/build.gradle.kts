@@ -40,7 +40,7 @@ android {
     defaultConfig {
         applicationId = "com.aksabeg500"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
