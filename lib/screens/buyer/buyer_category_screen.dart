@@ -77,21 +77,15 @@ class _BuyerCategoryScreenState extends State<BuyerCategoryScreen> {
 
                 BuyerSubCategoriesGrid(mainCategoryId: widget.mainCategoryId),
 
-                const SizedBox(height: 30),
-
-                const Center(
-                  child: Text(
-                    'قائمة المنتجات المرتبطة مباشرة (سيتم بناؤها لاحقاً)',
-                    style: TextStyle(color: Colors.grey, fontSize: 14),
-                  ),
-                ),
+                // ✅ تم حذف نص "المنتجات المرتبطة سيتم بناؤها لاحقاً" من هنا
 
                 const SizedBox(height: 50),
               ],
             ),
           ),
 
-      bottomNavigationBar: const CategoryBottomNavBar(),
+      // ✅ تم إضافة selectedIndex: -1 لحل مشكلة عدم استجابة زر الهوم
+      bottomNavigationBar: const CategoryBottomNavBar(selectedIndex: -1),
     );
   }
 }
