@@ -71,12 +71,15 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text('إدارة قائمة الأسعار', 
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.white)),
         backgroundColor: AppTheme.primaryGreen,
         centerTitle: true,
         elevation: 0,
+        // تأمين أيقونات الساعة في الأندرويد والآيفون لتظهر بيضاء فوق الأخضر
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
-      bottomNavigationBar: _buildBottomBar(context),
+      // 🛡️ تغليف البار السفلي بـ SafeArea لحمايته من شريط الإيماءات السفلي
+      bottomNavigationBar: SafeArea(child: _buildBottomBar(context)),
       body: Consumer<ProductOfferProvider>(
         builder: (context, provider, child) {
           final offers = provider.offers.where((o) {
@@ -103,7 +106,8 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
 
   Widget _buildHeader(int count) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 30),
+      // تم تقليل الـ padding العلوي لأن الـ AppBar أخذ مساحة الـ SafeArea العلوية
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
       decoration: const BoxDecoration(
         color: AppTheme.primaryGreen,
         borderRadius: BorderRadius.only(
@@ -138,7 +142,6 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
     );
   }
 
-  // الإصلاح الجذري لمشكلة الـ boxShadow في الـ TextField
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, -20, 16, 10),
