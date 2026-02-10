@@ -1,3 +1,5 @@
+// lib/screens/delivery/update_delivery_settings_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/delivery_settings_provider.dart';
@@ -19,6 +21,8 @@ class UpdateDeliverySettingsScreen extends StatelessWidget {
           automaticallyImplyLeading: false, 
           backgroundColor: const Color(0xFF2c3e50), 
           foregroundColor: Colors.white,
+          // ✅ تأمين أيقونات النظام (الساعة والبطارية) لتظهر بيضاء فوق الخلفية الداكنة
+          systemOverlayStyle: SystemUiOverlayStyle.light,
           title: const Text('تحديث إعدادات الدليفري', style: TextStyle(fontSize: 20, fontFamily: 'Cairo')),
           centerTitle: true,
           actions: [
@@ -29,7 +33,10 @@ class UpdateDeliverySettingsScreen extends StatelessWidget {
             const SizedBox(width: 8),
           ],
         ),
-        body: const UpdateDeliverySettingsForm(),
+        // 🛡️ تغليف الجسم بـ SafeArea لحماية المحتوى من الأسفل (شريط الإيماءات)
+        body: const SafeArea(
+          child: UpdateDeliverySettingsForm(),
+        ),
       ),
     );
   }
@@ -63,9 +70,7 @@ class _UpdateDeliverySettingsFormState extends State<UpdateDeliverySettingsForm>
     super.dispose();
   }
 
-  // 🔴 الكارت الذكي: تم تصحيح الوصول للحالة عبر الـ dealerProfile
   Widget _buildUpgradeAccountCard(DeliverySettingsProvider provider) {
-    // جلب الحالة من البروفايل الموجود في الـ provider
     final String? status = provider.dealerProfile?.subscriptionStatus;
     bool isExpired = status == 'expired';
 
@@ -253,7 +258,6 @@ class _UpdateDeliverySettingsFormState extends State<UpdateDeliverySettingsForm>
                               padding: const EdgeInsets.only(top: 20.0),
                               child: ElevatedButton(
                                 onPressed: () {
-                                  // تصحيح الوصول للحالة هنا أيضاً
                                   if (provider.dealerProfile?.subscriptionStatus == 'expired') {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
@@ -281,6 +285,8 @@ class _UpdateDeliverySettingsFormState extends State<UpdateDeliverySettingsForm>
                               ),
                             ),
                           ),
+                          // 💡 مساحة إضافية صغيرة في النهاية لضمان عدم ملامسة الحافة
+                          const SizedBox(height: 20),
                         ],
                       ),
                     ),
