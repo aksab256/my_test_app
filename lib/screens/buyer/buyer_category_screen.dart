@@ -77,14 +77,14 @@ class _BuyerCategoryScreenState extends State<BuyerCategoryScreen> {
 
                 BuyerSubCategoriesGrid(mainCategoryId: widget.mainCategoryId),
 
-                // ✅ تم حذف نص "المنتجات المرتبطة سيتم بناؤها لاحقاً" من هنا
+                // ✅ تم حذف الجزء الخاص بنص "المنتجات المرتبطة" والـ Center الخاص به تماماً
 
                 const SizedBox(height: 50),
               ],
             ),
           ),
 
-      // ✅ تم إضافة selectedIndex: -1 لحل مشكلة عدم استجابة زر الهوم
+      // ✅ تم تصحيح المسار هنا بإضافة selectedIndex: -1
       bottomNavigationBar: const CategoryBottomNavBar(selectedIndex: -1),
     );
   }
