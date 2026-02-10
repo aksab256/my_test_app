@@ -14,45 +14,48 @@ class ProductOfferScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('إضافة عرض جديد', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('إضافة عرض جديد', 
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: AppTheme.primaryGreen,
         centerTitle: true,
         elevation: 0,
+        // ✅ تأمين ظهور أيقونات الساعة والرجوع باللون الأبيض
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      // 🛡️ تأمين الشريط السفلي من حواف الشاشة السفلية (Gesture Bar)
+      bottomNavigationBar: SafeArea(
+        top: false, // لا نريد حماية من الأعلى هنا لأن الـ Body يتكفل بذلك
+        child: const _BottomBarButtons(),
       ),
       body: Consumer<ProductOfferProvider>(
         builder: (context, provider, child) {
-          return Stack(
-            children: [
-              CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 200),
-                      child: Column(
-                        children: [
-                          _NotificationMessage(provider: provider),
-                          _buildStepHeader(context, "1", "البحث والتصنيف"),
-                          _CategoryAndSearchSection(provider: provider),
-                          
-                          if (provider.selectedProduct != null) ...[
-                            const SizedBox(height: 24),
-                            _buildStepHeader(context, "2", "تأكيد المنتج المختار"),
-                            const _SelectedProductDetailsSection(),
-                            
-                            const SizedBox(height: 24),
-                            _buildStepHeader(context, "3", "تحديد أسعار الوحدات"),
-                            const _ProductUnitsAndPriceSection(),
-                            
-                            const SizedBox(height: 30),
-                            _buildSubmitButton(provider),
-                          ],
-                        ],
-                      ),
-                    ),
+          return CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 20), // تقليل الـ bottom padding لعدم الحاجة لـ 200 بعد نقل البار
+                  child: Column(
+                    children: [
+                      _NotificationMessage(provider: provider),
+                      _buildStepHeader(context, "1", "البحث والتصنيف"),
+                      _CategoryAndSearchSection(provider: provider),
+                      
+                      if (provider.selectedProduct != null) ...[
+                        const SizedBox(height: 24),
+                        _buildStepHeader(context, "2", "تأكيد المنتج المختار"),
+                        const _SelectedProductDetailsSection(),
+                        
+                        const SizedBox(height: 24),
+                        _buildStepHeader(context, "3", "تحديد أسعار الوحدات"),
+                        const _ProductUnitsAndPriceSection(),
+                        
+                        const SizedBox(height: 30),
+                        _buildSubmitButton(provider),
+                      ],
+                    ],
                   ),
-                ],
+                ),
               ),
-              const _BottomBarButtons(),
             ],
           );
         },
@@ -334,23 +337,21 @@ class _BottomBarButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: Container(
-        height: 100,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, -5))],
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-        ),
-        child: Row(
-          children: [
-            _buildNavButton(context, Icons.storefront, "المتجر", Colors.blue, '/buyer_home'),
-            const SizedBox(width: 15),
-            _buildNavButton(context, Icons.dashboard_customize, "لوحة التحكم", Colors.blueGrey, '/deliveryPrices'),
-          ],
-        ),
+    // 💡 تم تحويل الـ Align إلى Container بسيط ليتم تغليفه بـ SafeArea في الـ Scaffold
+    return Container(
+      height: 90,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, -5))],
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+      ),
+      child: Row(
+        children: [
+          _buildNavButton(context, Icons.storefront, "المتجر", Colors.blue, '/buyer_home'),
+          const SizedBox(width: 15),
+          _buildNavButton(context, Icons.dashboard_customize, "لوحة التحكم", Colors.blueGrey, '/deliveryPrices'),
+        ],
       ),
     );
   }
@@ -364,7 +365,7 @@ class _BottomBarButtons extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           foregroundColor: color,
           side: BorderSide(color: color),
-          padding: const EdgeInsets.symmetric(vertical: 15),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
