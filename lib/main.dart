@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // ✅ مستورد للتحكم في شريط الحالة
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,7 +11,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:latlong2/latlong.dart'; 
-import 'package:facebook_app_events/facebook_app_events.dart'; // ✅ إضافة مكتبة فيسبوك
+import 'package:facebook_app_events/facebook_app_events.dart'; 
 
 import 'package:my_test_app/firebase_options.dart';
 import 'package:my_test_app/theme/app_theme.dart';
@@ -73,6 +74,13 @@ void main() async {
   final facebookAppEvents = FacebookAppEvents();
   facebookAppEvents.logEvent(name: 'fb_mobile_activate_app');
 
+  // 🎨 ضبط شريط الحالة ليكون شفافاً مع أيقونات بيضاء لتناسب الهيدر الأخضر
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light, // أيقونات بيضاء (ساعة، بطارية)
+    statusBarBrightness: Brightness.dark,      // للـ iOS
+  ));
+
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
@@ -93,7 +101,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => ThemeNotifier(ThemeMode.light)), // ✅ تم الإجبار على الوضع الفاتح هنا
+        ChangeNotifierProvider(create: (_) => ThemeNotifier(ThemeMode.light)), 
         ChangeNotifierProvider(create: (_) => BuyerDataProvider()),
         ChangeNotifierProvider(create: (_) => ManufacturersProvider()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
@@ -135,7 +143,6 @@ class MyApp extends StatelessWidget {
           ],
           supportedLocales: const [Locale('ar', 'EG')],
           
-          // ✅ إجبار التطبيق على الوضع الفاتح وإلغاء الوضع الليلي تماماً
           themeMode: ThemeMode.light, 
           
           theme: ThemeData(
@@ -151,6 +158,8 @@ class MyApp extends StatelessWidget {
               backgroundColor: Colors.white,
               elevation: 0,
               iconTheme: IconThemeData(color: Colors.black),
+              // لضمان استقرار شريط الحالة داخل الـ AppBar
+              systemOverlayStyle: SystemUiOverlayStyle.dark, 
             ),
           ),
           
