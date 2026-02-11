@@ -1,46 +1,52 @@
-// المسار: lib/screens/buyer/buyer_category_screen.dart
+// المسار: lib/screens/buyer/buyer_product_list_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart'; 
+import 'package:my_test_app/providers/cart_provider.dart'; 
 
-// استبدال الـ Import بالشريط السفلي الموحد
-import 'package:my_test_app/widgets/buyer_category_header.dart';
-import 'package:my_test_app/widgets/buyer_sub_categories_grid.dart';
-import 'package:my_test_app/widgets/buyer_category_ads_banner.dart';
-import 'package:my_test_app/widgets/buyer_mobile_nav_widget.dart'; // 🎯 الشريط الموحد
+import 'package:my_test_app/widgets/buyer_product_header.dart';
+import 'package:my_test_app/widgets/product_list_grid.dart';
+import 'package:my_test_app/widgets/manufacturers_banner.dart';
+import 'package:my_test_app/widgets/buyer_mobile_nav_widget.dart'; // 🎯 استيراد الشريط الموحد
 import 'package:my_test_app/screens/buyer/my_orders_screen.dart'; // للتوجيه
 
-class BuyerCategoryScreen extends StatefulWidget {
+class BuyerProductListScreen extends StatefulWidget {
   final String mainCategoryId;
+  final String subCategoryId;
+  final String? manufacturerId;
 
-  const BuyerCategoryScreen({
+  const BuyerProductListScreen({
     super.key,
     required this.mainCategoryId,
+    required this.subCategoryId,
+    this.manufacturerId,
   });
 
   @override
-  State<BuyerCategoryScreen> createState() => _BuyerCategoryScreenState();
+  State<BuyerProductListScreen> createState() => _BuyerProductListScreenState();
 }
 
-class _BuyerCategoryScreenState extends State<BuyerCategoryScreen> {
+class _BuyerProductListScreenState extends State<BuyerProductListScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  String _categoryName = 'جارٍ التحميل...';
+  String _pageTitle = 'المنتجات...';
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadCategoryDetails();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSubCategoryDetails();
+    });
   }
 
-  // نفس منطق التنقل الموجود في الـ Home لتوحيد الأداء
+  // 🎯 دالة التنقل الموحدة لضمان عمل الشريط السفلي
   void _onItemTapped(int index) {
     switch (index) {
       case 0: 
         Navigator.pushReplacementNamed(context, '/traders'); 
         break;
       case 1: 
-        // العودة للرئيسية
         Navigator.of(context).pushNamedAndRemoveUntil('/buyerHome', (route) => false);
         break;
       case 2:
@@ -52,24 +58,24 @@ class _BuyerCategoryScreenState extends State<BuyerCategoryScreen> {
     }
   }
 
-  Future<void> _loadCategoryDetails() async {
+  Future<void> _loadSubCategoryDetails() async {
     try {
-      final docSnapshot = await _db.collection('mainCategory').doc(widget.mainCategoryId).get();
+      final docSnapshot = await _db.collection('subCategory').doc(widget.subCategoryId).get();
       if (docSnapshot.exists && mounted) {
         setState(() {
-          _categoryName = docSnapshot.data()?['name'] ?? 'قسم غير معروف';
+          _pageTitle = docSnapshot.data()?['name'] ?? 'قسم فرعي غير معروف';
           _isLoading = false;
         });
       } else if (mounted) {
         setState(() {
-          _categoryName = 'القسم غير موجود';
+          _pageTitle = 'القسم غير موجود';
           _isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _categoryName = 'خطأ في التحميل';
+          _pageTitle = 'خطأ في التحميل';
           _isLoading = false;
         });
       }
@@ -78,36 +84,100 @@ class _BuyerCategoryScreenState extends State<BuyerCategoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea( // 🛡️ حل مشكلة التداخل مع شريط الهاتف والساعة
-      child: Scaffold(
-        appBar: BuyerCategoryHeader(
-          title: _categoryName,
-          isLoading: _isLoading,
-        ),
-
-        body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF4A6491))) 
-          : SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 10.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  BuyerCategoryAdsBanner(categoryId: widget.mainCategoryId),
-                  const SizedBox(height: 30),
-                  BuyerSubCategoriesGrid(mainCategoryId: widget.mainCategoryId),
-                  // تم حذف نص "المنتجات المرتبطة" هنا
-                  const SizedBox(height: 50),
-                ],
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: BuyerProductHeader(
+        title: _pageTitle,
+        isLoading: _isLoading,
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ManufacturersBanner(
+            subCategoryId: widget.subCategoryId, 
+            onManufacturerSelected: (id) {
+              if (id == 'ALL') {
+                if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+              } else if (id != null) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => BuyerProductListScreen(
+                      mainCategoryId: widget.mainCategoryId,
+                      subCategoryId: widget.subCategoryId,
+                      manufacturerId: id,
+                    ),
+                  ),
+                );
+              }
+            },
+          ),
+          Divider(height: 1.0, color: Colors.grey[300]),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 12.0, left: 10.0, right: 10.0, bottom: 0.0),
+              child: ProductListGrid(
+                subCategoryId: widget.subCategoryId,
+                pageTitle: _pageTitle,
+                manufacturerId: widget.manufacturerId,
               ),
             ),
+          ),
+        ],
+      ),
 
-        // 🎯 استخدام الـ Widget الموحد بدلاً من القديم
-        bottomNavigationBar: BuyerMobileNavWidget(
-          selectedIndex: -1, // لكي لا تظهر أي أيقونة كأنها نشطة بشكل خاطئ
-          onItemSelected: _onItemTapped,
-          cartCount: 0, // يمكنك تمرير المتغير الفعلي لو أردت
-          ordersChanged: false,
-        ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: Consumer<CartProvider>(
+        builder: (context, cartProvider, child) {
+          final cartCount = cartProvider.cartTotalItems; 
+
+          return Stack(
+            alignment: Alignment.topRight,
+            children: [
+              FloatingActionButton(
+                heroTag: "product_list_cart_btn", // إضافة تاغ فريد لمنع خطأ Hero
+                onPressed: () => Navigator.of(context).pushNamed('/cart'),
+                backgroundColor: const Color(0xFF4CAF50), 
+                elevation: 6,
+                child: const Icon(Icons.shopping_cart, color: Colors.white, size: 28),
+              ),
+              if (cartCount > 0)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                    child: Text(
+                      '$cartCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+
+      // 🎯 استدعاء الشريط الموحد الجديد بدلاً من القديم
+      bottomNavigationBar: Consumer<CartProvider>(
+        builder: (context, cart, child) {
+          return BuyerMobileNavWidget(
+            selectedIndex: -1, // لضمان عدم إضاءة أي أيقونة بشكل خاطئ في صفحات التصفح
+            onItemSelected: _onItemTapped,
+            cartCount: cart.cartTotalItems,
+            ordersChanged: false, // يمكن ربطها بحالة الإشعارات لاحقاً
+          );
+        },
       ),
     );
   }
