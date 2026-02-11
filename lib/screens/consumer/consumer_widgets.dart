@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'consumer_data_models.dart';
 import 'package:my_test_app/screens/consumer/consumer_category_screen.dart'; 
 
-// 1. الشريط الجانبي (Side Menu)
+// 1. الشريط الجانبي (Side Menu) - نسخة مؤمنة بـ SafeArea
 class ConsumerSideMenu extends StatelessWidget {
   const ConsumerSideMenu({super.key});
 
@@ -16,56 +16,62 @@ class ConsumerSideMenu extends StatelessWidget {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Drawer(
-        child: Column(
-          children: [
-            StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance.collection('consumers').doc(user?.uid).snapshots(),
-              builder: (context, snapshot) {
-                String name = "مستخدِم كسبان";
-                if (snapshot.hasData && snapshot.data!.exists) {
-                  final data = snapshot.data!.data() as Map<String, dynamic>;
-                  name = data['fullname'] ?? "مستخدِم كسبان";
-                }
-                return UserAccountsDrawerHeader(
-                  decoration: const BoxDecoration(color: Color(0xFF43A047)),
-                  currentAccountPicture: const CircleAvatar(
-                    backgroundColor: Colors.white,
-                    child: Icon(Icons.person_rounded, size: 50, color: Color(0xFF43A047)),
-                  ),
-                  accountName: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                  accountEmail: Text(user?.email ?? ""),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.privacy_tip_outlined, color: Color(0xFF43A047), size: 28),
-              title: const Text('سياسة الخصوصية', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              onTap: () async {
-                final url = Uri.parse('https://aksab.shop/');
-                if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
-              },
-            ),
-            const Spacer(),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.logout_rounded, color: Colors.red, size: 28),
-              title: const Text('تسجيل الخروج', style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
-              onTap: () async {
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.clear();
-                await FirebaseAuth.instance.signOut();
-                if (context.mounted) Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-              },
-            ),
-            const SizedBox(height: 20),
-          ],
+        child: SafeArea(
+          // 🛡️ SafeArea هنا تضمن عدم تداخل الهيدر مع الكاميرا الأمامية أو الحواف العلوية
+          top: true,
+          bottom: true,
+          child: Column(
+            children: [
+              StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance.collection('consumers').doc(user?.uid).snapshots(),
+                builder: (context, snapshot) {
+                  String name = "مستخدِم كسبان";
+                  if (snapshot.hasData && snapshot.data!.exists) {
+                    final data = snapshot.data!.data() as Map<String, dynamic>;
+                    name = data['fullname'] ?? "مستخدِم كسبان";
+                  }
+                  return UserAccountsDrawerHeader(
+                    margin: EdgeInsets.zero, // لإزالة المسافات الزائدة مع SafeArea
+                    decoration: const BoxDecoration(color: Color(0xFF43A047)),
+                    currentAccountPicture: const CircleAvatar(
+                      backgroundColor: Colors.white,
+                      child: Icon(Icons.person_rounded, size: 50, color: Color(0xFF43A047)),
+                    ),
+                    accountName: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    accountEmail: Text(user?.email ?? ""),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.privacy_tip_outlined, color: Color(0xFF43A047), size: 28),
+                title: const Text('سياسة الخصوصية', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                onTap: () async {
+                  final url = Uri.parse('https://aksab.shop/');
+                  if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
+                },
+              ),
+              const Spacer(),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.logout_rounded, color: Colors.red, size: 28),
+                title: const Text('تسجيل الخروج', style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
+                onTap: () async {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.clear();
+                  await FirebaseAuth.instance.signOut();
+                  if (context.mounted) Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                },
+              ),
+              const SizedBox(height: 10), // مسافة أمان إضافية في الأسفل
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// 2. شريط التنقل السفلي (Footer Nav) - النسخة الاحترافية الشاملة لكافة الحالات
+// 2. شريط التنقل السفلي (Footer Nav) - نسخة مؤمنة بـ SafeArea للحواف السفلية
 class ConsumerFooterNav extends StatelessWidget {
   final int cartCount;
   final int activeIndex;
@@ -75,168 +81,171 @@ class ConsumerFooterNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
 
-    return BottomNavigationBar(
-      currentIndex: activeIndex == -1 ? 0 : activeIndex,
-      selectedItemColor: const Color(0xFF43A047),
-      unselectedItemColor: Colors.grey,
-      type: BottomNavigationBarType.fixed,
-      selectedLabelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
-      unselectedLabelStyle: const TextStyle(fontSize: 10, fontFamily: 'Cairo'),
-      items: [
-        const BottomNavigationBarItem(icon: Icon(Icons.store), label: 'المتجر'),
-        const BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'طلباتي'),
-        
-        // ✨ أيقونة "تتبع الطلب" الذكية - معالجة حالات الإلغاء وعدم توفر سائقين
-        BottomNavigationBarItem(
-          icon: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('specialRequests')
-                .where('userId', isEqualTo: user?.uid)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Icon(Icons.radar, color: Colors.grey, size: 28);
-              }
+    // 🛡️ تغليف بـ Container ثم SafeArea لضمان بقاء الشريط فوق شريط السحب في الهواتف الحديثة
+    return Container(
+      color: Colors.white, 
+      child: SafeArea(
+        top: false, // لا نحتاج حماية علوية للشريط السفلي
+        child: BottomNavigationBar(
+          currentIndex: activeIndex == -1 ? 0 : activeIndex,
+          selectedItemColor: const Color(0xFF43A047),
+          unselectedItemColor: Colors.grey,
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.white,
+          elevation: 0, // الإيليفيشن يتم من الحاوية الخارجية
+          selectedLabelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+          unselectedLabelStyle: const TextStyle(fontSize: 10, fontFamily: 'Cairo'),
+          items: [
+            const BottomNavigationBarItem(icon: Icon(Icons.store), label: 'المتجر'),
+            const BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'طلباتي'),
+            
+            BottomNavigationBarItem(
+              icon: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('specialRequests')
+                    .where('userId', isEqualTo: user?.uid)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Icon(Icons.radar, color: Colors.grey, size: 28);
+                  }
 
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return const Icon(Icons.radar, color: Colors.grey, size: 28);
-              }
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const Icon(Icons.radar, color: Colors.grey, size: 28);
+                  }
 
-              var docs = snapshot.data!.docs.toList();
-              docs.sort((a, b) {
-                Timestamp t1 = a['createdAt'] ?? Timestamp.now();
-                Timestamp t2 = b['createdAt'] ?? Timestamp.now();
-                return t2.compareTo(t1);
-              });
+                  var docs = snapshot.data!.docs.toList();
+                  docs.sort((a, b) {
+                    Timestamp t1 = a['createdAt'] ?? Timestamp.now();
+                    Timestamp t2 = b['createdAt'] ?? Timestamp.now();
+                    return t2.compareTo(t1);
+                  });
 
-              final lastOrder = docs.first.data() as Map<String, dynamic>;
-              final String status = (lastOrder['status'] ?? 'pending').toString().toLowerCase().trim();
-              final bool isRated = lastOrder.containsKey('rating');
-              
-              // ✨ دمج الحالات الجديدة المكتشفة في الفايربيز لضمان إيقاف التتبع
-              final bool isFinished = status.contains('cancel') || 
-                                     status.contains('no_drivers') || 
-                                     status.contains('timeout') ||
-                                     status == 'none' ||
-                                     isRated;
+                  final lastOrder = docs.first.data() as Map<String, dynamic>;
+                  final String status = (lastOrder['status'] ?? 'pending').toString().toLowerCase().trim();
+                  final bool isRated = lastOrder.containsKey('rating');
+                  
+                  final bool isFinished = status.contains('cancel') || 
+                                         status.contains('no_drivers') || 
+                                         status.contains('timeout') ||
+                                         status == 'none' ||
+                                         isRated;
 
-              Color iconColor = Colors.grey;
-              IconData iconData = Icons.radar;
+                  Color iconColor = Colors.grey;
+                  IconData iconData = Icons.radar;
 
-              // الألوان تظهر فقط لو الطلب "جاري" ولم ينتهِ بعد ولم يتم التوصيل
-              if (!isFinished && status != 'delivered') {
-                if (status == 'pending') {
-                  iconColor = Colors.orange;
-                  iconData = Icons.hourglass_top_rounded;
-                } else if (status == 'accepted' || status == 'at_pickup') {
-                  iconColor = Colors.blue;
-                  iconData = Icons.directions_bike_rounded;
-                } else if (status == 'picked_up') {
-                  iconColor = Colors.indigo;
-                  iconData = Icons.local_shipping_rounded;
-                }
-              } else if (status == 'delivered' && !isRated) {
-                // حالة خاصة: وصل ولم يقيم تظهر باللون الأخضر
-                iconColor = Colors.green;
-                iconData = Icons.check_circle_rounded;
-              }
+                  if (!isFinished && status != 'delivered') {
+                    if (status == 'pending') {
+                      iconColor = Colors.orange;
+                      iconData = Icons.hourglass_top_rounded;
+                    } else if (status == 'accepted' || status == 'at_pickup') {
+                      iconColor = Colors.blue;
+                      iconData = Icons.directions_bike_rounded;
+                    } else if (status == 'picked_up') {
+                      iconColor = Colors.indigo;
+                      iconData = Icons.local_shipping_rounded;
+                    }
+                  } else if (status == 'delivered' && !isRated) {
+                    iconColor = Colors.green;
+                    iconData = Icons.check_circle_rounded;
+                  }
 
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  Icon(iconData, color: iconColor, size: 28),
-                  // إظهار النقطة التنبيهية فقط للطلبات النشطة فعلياً
-                  if (!isFinished && status != 'delivered' && status != '')
-                    Positioned(
-                      top: -2, right: -2,
-                      child: Container(
-                        width: 10, height: 10,
-                        decoration: BoxDecoration(
-                          color: Colors.red, 
-                          shape: BoxShape.circle, 
-                          border: Border.all(color: Colors.white, width: 1.5)
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Icon(iconData, color: iconColor, size: 28),
+                      if (!isFinished && status != 'delivered' && status != '')
+                        Positioned(
+                          top: -2, right: -2,
+                          child: Container(
+                            width: 10, height: 10,
+                            decoration: BoxDecoration(
+                              color: Colors.red, 
+                              shape: BoxShape.circle, 
+                              border: Border.all(color: Colors.white, width: 1.5)
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-          label: 'تتبع الطلب',
-        ),
+                    ],
+                  );
+                },
+              ),
+              label: 'تتبع الطلب',
+            ),
 
-        BottomNavigationBarItem(
-          icon: Badge(
-            label: Text(cartCount.toString()),
-            isLabelVisible: cartCount > 0,
-            child: const Icon(Icons.shopping_cart),
-          ),
-          label: 'السلة',
-        ),
-        const BottomNavigationBarItem(icon: Icon(Icons.person), label: 'حسابي'),
-      ],
-      onTap: (index) async {
-        if (index == activeIndex) return;
+            BottomNavigationBarItem(
+              icon: Badge(
+                label: Text(cartCount.toString()),
+                isLabelVisible: cartCount > 0,
+                child: const Icon(Icons.shopping_cart),
+              ),
+              label: 'السلة',
+            ),
+            const BottomNavigationBarItem(icon: Icon(Icons.person), label: 'حسابي'),
+          ],
+          onTap: (index) async {
+            if (index == activeIndex) return;
 
-        if (index == 2) { 
-          try {
-            final snap = await FirebaseFirestore.instance
-                .collection('specialRequests')
-                .where('userId', isEqualTo: user?.uid)
-                .get();
+            if (index == 2) { 
+              try {
+                final snap = await FirebaseFirestore.instance
+                    .collection('specialRequests')
+                    .where('userId', isEqualTo: user?.uid)
+                    .get();
 
-            if (snap.docs.isNotEmpty) {
-              var docs = snap.docs.toList();
-              docs.sort((a, b) {
-                Timestamp t1 = a['createdAt'] ?? Timestamp.now();
-                Timestamp t2 = b['createdAt'] ?? Timestamp.now();
-                return t2.compareTo(t1);
-              });
+                if (snap.docs.isNotEmpty) {
+                  var docs = snap.docs.toList();
+                  docs.sort((a, b) {
+                    Timestamp t1 = a['createdAt'] ?? Timestamp.now();
+                    Timestamp t2 = b['createdAt'] ?? Timestamp.now();
+                    return t2.compareTo(t1);
+                  });
 
-              final lastOrder = docs.first.data() as Map<String, dynamic>;
-              final String status = (lastOrder['status'] ?? 'pending').toString().toLowerCase().trim();
-              final bool isRated = lastOrder.containsKey('rating');
+                  final lastOrder = docs.first.data() as Map<String, dynamic>;
+                  final String status = (lastOrder['status'] ?? 'pending').toString().toLowerCase().trim();
+                  final bool isRated = lastOrder.containsKey('rating');
 
-              // ✨ منع التتبع واللوب اللانهائي إذا كان الطلب ملغياً أو غير متوفر له سائق
-              if (status.contains('cancel') || status.contains('no_drivers') || isRated) {
+                  if (status.contains('cancel') || status.contains('no_drivers') || isRated) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("لا توجد طلبات نشطة حالياً لمتابعتها"), 
+                          backgroundColor: Colors.black87,
+                          behavior: SnackBarBehavior.floating,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                    return;
+                  }
+
+                  if (context.mounted) {
+                    Navigator.pushNamed(context, '/customerTracking', arguments: docs.first.id);
+                  }
+                } else {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("لا توجد طلبات سابقة"), backgroundColor: Colors.black87),
+                    );
+                  }
+                }
+              } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("لا توجد طلبات نشطة حالياً لمتابعتها"), 
-                      backgroundColor: Colors.black87,
-                      behavior: SnackBarBehavior.floating,
-                      duration: Duration(seconds: 2),
-                    ),
+                    const SnackBar(content: Text("عذراً، حدث خطأ في استعادة البيانات")),
                   );
                 }
-                return; // يخرج فوراً لمنع تكرار الرسالة
               }
-
-              if (context.mounted) {
-                Navigator.pushNamed(context, '/customerTracking', arguments: docs.first.id);
-              }
-            } else {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("لا توجد طلبات سابقة"), backgroundColor: Colors.black87),
-                );
-              }
+              return;
             }
-          } catch (e) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("عذراً، حدث خطأ في استعادة البيانات")),
-              );
-            }
-          }
-          return;
-        }
 
-        final routes = ['/consumerhome', '/consumer-purchases', '', '/cart', '/myDetails'];
-        if (index < routes.length && routes[index].isNotEmpty) {
-          Navigator.pushNamed(context, routes[index]);
-        }
-      },
+            final routes = ['/consumerhome', '/consumer-purchases', '', '/cart', '/myDetails'];
+            if (index < routes.length && routes[index].isNotEmpty) {
+              Navigator.pushNamed(context, routes[index]);
+            }
+          },
+        ),
+      ),
     );
   }
 }
