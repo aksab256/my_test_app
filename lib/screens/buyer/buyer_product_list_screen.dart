@@ -2,13 +2,14 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:provider/provider.dart'; // 🚀 ضروري لاستخدام الـ Provider
-import 'package:my_test_app/providers/cart_provider.dart'; // 🚀 استيراد البروفايدر
+import 'package:provider/provider.dart'; 
+import 'package:my_test_app/providers/cart_provider.dart'; 
 
 import 'package:my_test_app/widgets/buyer_product_header.dart';
 import 'package:my_test_app/widgets/product_list_grid.dart';
-import 'package:my_test_app/widgets/category_bottom_nav_bar.dart'; 
 import 'package:my_test_app/widgets/manufacturers_banner.dart';
+import 'package:my_test_app/widgets/buyer_mobile_nav_widget.dart'; // 🎯 استيراد الشريط الموحد
+import 'package:my_test_app/screens/buyer/my_orders_screen.dart'; // للتوجيه
 
 class BuyerProductListScreen extends StatefulWidget {
   final String mainCategoryId;
@@ -37,6 +38,24 @@ class _BuyerProductListScreenState extends State<BuyerProductListScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadSubCategoryDetails();
     });
+  }
+
+  // 🎯 دالة التنقل الموحدة لضمان عمل الشريط السفلي
+  void _onItemTapped(int index) {
+    switch (index) {
+      case 0: 
+        Navigator.pushReplacementNamed(context, '/traders'); 
+        break;
+      case 1: 
+        Navigator.of(context).pushNamedAndRemoveUntil('/buyerHome', (route) => false);
+        break;
+      case 2:
+        Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
+        break;
+      case 3: 
+        Navigator.pushReplacementNamed(context, '/wallet'); 
+        break;
+    }
   }
 
   Future<void> _loadSubCategoryDetails() async {
@@ -74,7 +93,6 @@ class _BuyerProductListScreenState extends State<BuyerProductListScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 🎯 التعديل المضاف: تمرير subCategoryId لفلترة الشركات حسب القسم
           ManufacturersBanner(
             subCategoryId: widget.subCategoryId, 
             onManufacturerSelected: (id) {
@@ -107,7 +125,6 @@ class _BuyerProductListScreenState extends State<BuyerProductListScreen> {
         ],
       ),
 
-      // 🎯 أيقونة السلة العائمة مع العداد
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: Consumer<CartProvider>(
         builder: (context, cartProvider, child) {
@@ -117,6 +134,7 @@ class _BuyerProductListScreenState extends State<BuyerProductListScreen> {
             alignment: Alignment.topRight,
             children: [
               FloatingActionButton(
+                heroTag: "product_list_cart_btn", // إضافة تاغ فريد لمنع خطأ Hero
                 onPressed: () => Navigator.of(context).pushNamed('/cart'),
                 backgroundColor: const Color(0xFF4CAF50), 
                 elevation: 6,
@@ -150,7 +168,17 @@ class _BuyerProductListScreenState extends State<BuyerProductListScreen> {
         },
       ),
 
-      bottomNavigationBar: const CategoryBottomNavBar(),
+      // 🎯 استدعاء الشريط الموحد الجديد بدلاً من القديم
+      bottomNavigationBar: Consumer<CartProvider>(
+        builder: (context, cart, child) {
+          return BuyerMobileNavWidget(
+            selectedIndex: -1, // لضمان عدم إضاءة أي أيقونة بشكل خاطئ في صفحات التصفح
+            onItemSelected: _onItemTapped,
+            cartCount: cart.cartTotalItems,
+            ordersChanged: false, // يمكن ربطها بحالة الإشعارات لاحقاً
+          );
+        },
+      ),
     );
   }
 }
