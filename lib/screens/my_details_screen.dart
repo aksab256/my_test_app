@@ -1,4 +1,4 @@
-// المسار: lib/screens/my_details_screen.dart
+// lib/screens/my_details_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -117,7 +117,6 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
             onPressed: () => Navigator.of(context).pop(),
           ),
         ),
-        // ✅ إضافة SafeArea هنا لحماية الأجزاء السفلى
         body: SafeArea(
           child: _isLoading
               ? const Center(child: CircularProgressIndicator(color: _accentColor))
@@ -133,7 +132,7 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
                       _buildReadOnlySection(),
                       const SizedBox(height: 30),
                       _buildActionButtons(),
-                      const SizedBox(height: 10), // مسافة أمان إضافية
+                      const SizedBox(height: 10),
                     ],
                   ),
                 ),
@@ -155,7 +154,8 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(4),
-            decoration: const BoxDecoration(color: Colors.white24, shape: BoxType.circle),
+            // ✅ تم التصحيح هنا: BoxShape بدلاً من BoxType وإزالة const
+            decoration: BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
             child: const CircleAvatar(
               radius: 30,
               backgroundColor: Colors.white,
