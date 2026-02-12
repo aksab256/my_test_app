@@ -34,11 +34,9 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
   void initState() {
     super.initState();
     _checkInitialPoints();
-    // 🛡️ فحص التقييمات المعلقة فور فتح التطبيق بشكل مستقل
     _checkForPendingRating();
   }
 
-  // 🛡️ دالة تأمين التقييم: تفحص إذا كان هناك طلب مستلم لم يتم تقييمه
   void _checkForPendingRating() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -54,7 +52,6 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
     if (query.docs.isNotEmpty) {
       final orderId = query.docs.first.id;
       if (mounted) {
-        // ننتظر قليلاً حتى تكتمل واجهة المستخدم ثم نوجه المستخدم لصفحة التقييم
         Future.delayed(const Duration(seconds: 2), () {
           if (mounted) Navigator.pushNamed(context, '/customerTracking', arguments: orderId);
         });
@@ -216,15 +213,28 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
             ),
           ),
         ),
-        floatingActionButton: FloatingActionButton(
-          heroTag: "consumer_home_chat_btn",
-          onPressed: () {
-            showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (context) => const ChatSupportWidget());
-          },
-          backgroundColor: softGreen,
-          child: const Icon(Icons.support_agent, color: Colors.white, size: 30),
+        // 🛡️ تأمين زر الشات ليكون دائماً فوق شريط التنقل بمسافة واضحة
+        floatingActionButton: Padding(
+          padding: const EdgeInsets.only(bottom: 10), 
+          child: FloatingActionButton(
+            heroTag: "consumer_home_chat_btn",
+            onPressed: () {
+              showModalBottomSheet(
+                context: context, 
+                isScrollControlled: true, 
+                backgroundColor: Colors.transparent, 
+                builder: (context) => const ChatSupportWidget()
+              );
+            },
+            backgroundColor: softGreen,
+            child: const Icon(Icons.support_agent, color: Colors.white, size: 30),
+          ),
         ),
-        bottomNavigationBar: const ConsumerFooterNav(cartCount: 0, activeIndex: 0),
+        // 🛡️ تأمين شريط التنقل السفلي باستخدام SafeArea
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: const ConsumerFooterNav(cartCount: 0, activeIndex: 0),
+        ),
       ),
     );
   }
