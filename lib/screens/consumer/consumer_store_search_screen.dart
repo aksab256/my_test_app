@@ -34,13 +34,11 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
   @override
   void initState() {
     super.initState();
-    // تأخير بسيط لضمان تحميل بيانات البروفايدر بالكامل قبل فتح النافذة
     Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted) _promptLocationSelection();
     });
   }
 
-  // إفصاح جوجل بلاي (Prominent Disclosure)
   Future<bool> _showLocationExplanation() async {
     return await showDialog(
       context: context,
@@ -60,17 +58,15 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
   }
 
   Future<void> _promptLocationSelection() async {
-    // جلب البروفايدر بشكل مباشر لضمان أحدث بيانات
     final buyerDataProvider = Provider.of<BuyerDataProvider>(context, listen: false);
-    
-    // شرط ظهور العنوان المسجل (إذا كان Lat لا يساوي صفر ولا يساوي null)
     final bool hasValidRegisteredLocation = (buyerDataProvider.userLat != null && buyerDataProvider.userLat != 0);
 
     final selectedOption = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
       isDismissible: false,
-      builder: (context) => _buildLocationSelectionSheet(hasValidRegisteredLocation, buyerDataProvider),
+      // تأمين الـ BottomSheet بالـ SafeArea
+      builder: (context) => SafeArea(child: _buildLocationSelectionSheet(hasValidRegisteredLocation, buyerDataProvider)),
     );
 
     if (selectedOption == 'current') {
@@ -100,7 +96,6 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     finally { setState(() { _isLoading = false; }); }
   }
 
-  // --- 🛡️ دالة المسح الجغرافي مع الفلترة الصارمة للباقات ---
   Future<void> _searchAndDisplayStores(LatLng location) async {
     setState(() { _isLoading = true; _loadingMessage = 'جاري رصد المتاجر النشطة...'; });
     try {
@@ -119,12 +114,9 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
 
       for (var doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
-
-        // 🛑 الفلترة الصارمة: التحقق من باقة الدفع وتاريخ الصلاحية
-        if (data['trialExpiryDate'] == null) continue; // استبعاد لو مفيش حقل تاريخ انتهاء
-        
+        if (data['trialExpiryDate'] == null) continue;
         final DateTime expiry = (data['trialExpiryDate'] as Timestamp).toDate();
-        if (expiry.isBefore(now)) continue; // استبعاد لو الباقة منتهية الصلاحية
+        if (expiry.isBefore(now)) continue;
 
         LatLng? storeLoc;
         if (data['location'] is GeoPoint) {
@@ -196,7 +188,6 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     );
   }
 
-  // --- بقية الـ Widgets (Markers, Carousel, Style) مستقرة تماماً ---
   Widget _buildUserLocationMarker() => const Icon(Icons.person_pin_circle, color: Colors.blue, size: 50);
 
   Widget _buildStoreMarker(Map<String, dynamic> store) {
@@ -243,36 +234,40 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
 
   Widget _buildBottomStoresCarousel() {
     if (_nearbySupermarkets.isEmpty) return const SizedBox.shrink();
-    return Container(
-      height: 170, 
-      margin: const EdgeInsets.only(bottom: 25),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 15),
-        itemCount: _nearbySupermarkets.length,
-        itemBuilder: (context, index) {
-          final store = _nearbySupermarkets[index];
-          final style = _getStoreStyle(store['storeType']);
-          return Container(
-            width: 270,
-            margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(25), border: Border(right: BorderSide(color: style['color'], width: 6)), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15)]),
-            child: InkWell(
-              onTap: () => _showStoreDetailSheet(store),
-              borderRadius: BorderRadius.circular(25),
-              child: Padding(
-                padding: const EdgeInsets.all(15),
-                child: Row(
-                  children: [
-                    Container(width: 65, height: 65, decoration: BoxDecoration(color: (style['color'] as Color).withOpacity(0.1), borderRadius: BorderRadius.circular(18)), child: Icon(style['icon'], color: style['color'], size: 32)),
-                    const SizedBox(width: 15),
-                    Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [Text(store['supermarketName'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)), Text(_getStoreTypeName(store['storeType']), style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.bold)), Text("يبعد ${store['distance']} كم", style: TextStyle(color: style['color'], fontWeight: FontWeight.bold, fontSize: 14))])),
-                  ],
+    // تم تغليف الـ Carousel بـ SafeArea لضمان رفعه عن أزرار التحكم
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: 170, 
+        margin: const EdgeInsets.only(bottom: 10), // تقليل المارجن لأن الـ SafeArea ستتولى المهمة
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          itemCount: _nearbySupermarkets.length,
+          itemBuilder: (context, index) {
+            final store = _nearbySupermarkets[index];
+            final style = _getStoreStyle(store['storeType']);
+            return Container(
+              width: 270,
+              margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(25), border: Border(right: BorderSide(color: style['color'], width: 6)), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15)]),
+              child: InkWell(
+                onTap: () => _showStoreDetailSheet(store),
+                borderRadius: BorderRadius.circular(25),
+                child: Padding(
+                  padding: const EdgeInsets.all(15),
+                  child: Row(
+                    children: [
+                      Container(width: 65, height: 65, decoration: BoxDecoration(color: (style['color'] as Color).withOpacity(0.1), borderRadius: BorderRadius.circular(18)), child: Icon(style['icon'], color: style['color'], size: 32)),
+                      const SizedBox(width: 15),
+                      Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [Text(store['supermarketName'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)), Text(_getStoreTypeName(store['storeType']), style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.bold)), Text("يبعد ${store['distance']} كم", style: TextStyle(color: style['color'], fontWeight: FontWeight.bold, fontSize: 14))])),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -281,28 +276,30 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(35),
-        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(40))),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(store['supermarketName'], style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-            Text(_getStoreTypeName(store['storeType']), style: const TextStyle(color: Colors.grey, fontSize: 16)),
-            const SizedBox(height: 30),
-            SizedBox(
-              width: double.infinity,
-              height: 60,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: brandGreen, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.pushNamed(context, MarketplaceHomeScreen.routeName, arguments: {'storeId': store['id'], 'storeName': store['supermarketName']});
-                },
-                child: const Text("دخول المتجر", style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900)),
-              ),
-            )
-          ],
+      builder: (context) => SafeArea(
+        child: Container(
+          padding: const EdgeInsets.all(35),
+          decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(40))),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(store['supermarketName'], style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+              Text(_getStoreTypeName(store['storeType']), style: const TextStyle(color: Colors.grey, fontSize: 16)),
+              const SizedBox(height: 30),
+              SizedBox(
+                width: double.infinity,
+                height: 60,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: brandGreen, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, MarketplaceHomeScreen.routeName, arguments: {'storeId': store['id'], 'storeName': store['supermarketName']});
+                  },
+                  child: const Text("دخول المتجر", style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900)),
+                ),
+              )
+            ],
+          ),
         ),
       ),
     );
@@ -337,6 +334,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
               ],
             ),
             Positioned(top: 115, left: 15, right: 15, child: _buildRadarStatusCard()),
+            // تم وضع الكاروسيل في القاع بشكل مؤمن
             Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomStoresCarousel()),
             if (_isLoading) _buildModernLoader(),
           ],
