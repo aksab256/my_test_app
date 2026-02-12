@@ -72,7 +72,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 88.h, // زيادة الارتفاع قليلاً لشكل أفضل
+      height: 88.h,
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.95),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(35)),
@@ -104,7 +104,12 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
               ),
 
               if (_isTyping) _buildTypingIndicator(),
-              _buildInputSection(),
+              
+              // 🛡️ استخدام SafeArea هنا هو السر لرفع المحتوى عن الأزرار السفلية
+              SafeArea(
+                top: false,
+                child: _buildInputSection(),
+              ),
             ],
           ),
         ),
@@ -182,7 +187,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
         child: Text(
           text,
           style: TextStyle(
-            fontSize: 13.sp, // خط كبير وواضح
+            fontSize: 13.sp,
             height: 1.5,
             fontWeight: FontWeight.w600,
             fontFamily: 'Cairo',
@@ -211,10 +216,15 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
   }
 
   Widget _buildInputSection() {
+    // 🛠️ تم تعديل الـ padding والـ bottom ليتناسب مع الكيبورد ومع أزرار النظام
     return Container(
       padding: EdgeInsets.only(
-        left: 5.w, right: 5.w, top: 2.h,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 3.h,
+        left: 5.w, 
+        right: 5.w, 
+        top: 2.h,
+        bottom: MediaQuery.of(context).viewInsets.bottom > 0 
+            ? MediaQuery.of(context).viewInsets.bottom + 1.h 
+            : 1.5.h, // مسافة أمان بسيطة لو الكيبورد مقفولة والـ SafeArea شغالة
       ),
       decoration: BoxDecoration(
         color: Colors.white,
