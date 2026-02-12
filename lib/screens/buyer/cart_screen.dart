@@ -107,10 +107,14 @@ class _CartScreenState extends State<CartScreen> {
           );
         },
       ),
+      // تم إضافة SafeArea هنا لتأمين أزرار التحكم السفلى
       bottomNavigationBar: Consumer<CartProvider>(
         builder: (context, cartProvider, child) {
           if (cartProvider.isCartEmpty && !_hasPendingCheckout) return const SizedBox.shrink();
-          return _buildCartSummaryAndActions(context, cartProvider);
+          return SafeArea(
+            bottom: true,
+            child: _buildCartSummaryAndActions(context, cartProvider),
+          );
         },
       ),
     );
@@ -128,7 +132,7 @@ class _CartScreenState extends State<CartScreen> {
           sellerName: sellerData.sellerName,
           message: sellerData.minOrderAlert ?? '',
           sellerId: sellerData.sellerId,
-          minOrderAmount: sellerData.minOrderTotal, // ✅ تم التعديل هنا ليتوافق مع الـ Provider
+          minOrderAmount: sellerData.minOrderTotal, 
         ),
         ...sellerData.items.map((item) => CartItemCard(
           item: item,
@@ -210,7 +214,8 @@ class _CartScreenState extends State<CartScreen> {
 
   Widget _buildCartSummaryAndActions(BuildContext context, CartProvider cartProvider) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(15, 10, 15, 20),
+      // تم تعديل الـ padding السفلي ليكون متناسقاً مع الـ SafeArea
+      padding: const EdgeInsets.fromLTRB(15, 10, 15, 10), 
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, -3))],
