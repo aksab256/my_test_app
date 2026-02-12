@@ -1,15 +1,41 @@
+// lib/screens/buyer/my_orders_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
-// استيراد الشريط السفلي الموحد
-import 'package:my_test_app/widgets/category_bottom_nav_bar.dart';
+// 🎯 استيراد الشريط الموحد الخاص بالـ Buyer والـ Header إذا لزم الأمر
+import 'package:my_test_app/widgets/buyer_mobile_nav_widget.dart';
 
-class MyOrdersScreen extends StatelessWidget {
+class MyOrdersScreen extends StatefulWidget {
   static const String routeName = '/my_orders';
   const MyOrdersScreen({super.key});
+
+  @override
+  State<MyOrdersScreen> createState() => _MyOrdersScreenState();
+}
+
+class _MyOrdersScreenState extends State<MyOrdersScreen> {
+  
+  // 🎯 نفس منطق التنقل الموحد اللي موجود في صفحة الأقسام
+  void _onItemTapped(int index) {
+    switch (index) {
+      case 0: 
+        Navigator.pushReplacementNamed(context, '/traders'); 
+        break;
+      case 1: 
+        Navigator.of(context).pushNamedAndRemoveUntil('/buyerHome', (route) => false);
+        break;
+      case 2:
+        // نحن بالفعل في صفحة الطلبات، لا نفعل شيء أو نعيد البناء
+        break;
+      case 3: 
+        Navigator.pushReplacementNamed(context, '/wallet'); 
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,8 +52,21 @@ class MyOrdersScreen extends StatelessWidget {
           ),
         ),
       ),
-      // 🎯 الشريط السفلي الموحد لضمان التنقل السهل
-      bottomNavigationBar: const CategoryBottomNavBar(),
+      
+      // 🎯 استبدال الشريط القديم بالشريط الموحد الخاص بالـ Buyer
+      // وتغليفه بـ SafeArea لضمان المسافات الآمنة تحت أزرار النظام
+      bottomNavigationBar: Container(
+        color: Colors.white,
+        child: SafeArea(
+          top: false,
+          child: BuyerMobileNavWidget(
+            selectedIndex: 2, // 🎯 تحديد أيقونة "طلباتي" كنشطة
+            onItemSelected: _onItemTapped,
+            cartCount: 0,
+            ordersChanged: false,
+          ),
+        ),
+      ),
       
       body: SafeArea(
         child: StreamBuilder<QuerySnapshot>(
@@ -45,7 +84,7 @@ class MyOrdersScreen extends StatelessWidget {
             }
 
             return ListView.builder(
-              padding: const EdgeInsets.fromLTRB(15, 15, 15, 100), // مساحة إضافية للسكرول فوق الشريط
+              padding: const EdgeInsets.fromLTRB(15, 15, 15, 100), 
               itemCount: snapshot.data!.docs.length,
               itemBuilder: (context, index) {
                 var doc = snapshot.data!.docs[index];
@@ -70,6 +109,7 @@ class MyOrdersScreen extends StatelessWidget {
   }
 }
 
+// كلاس الـ _OrderCard يظل كما هو بدون تغيير
 class _OrderCard extends StatelessWidget {
   final String status;
   final double total;
@@ -87,7 +127,6 @@ class _OrderCard extends StatelessWidget {
     required this.sellerId,
   });
 
-  // 🎯 دالة لجلب اسم التاجر من مجموعة sellers
   Future<String> _getMerchantName(String id) async {
     if (id.isEmpty) return "تاجر غير معروف";
     try {
@@ -125,8 +164,6 @@ class _OrderCard extends StatelessWidget {
           children: [
             Text("التاريخ: ${DateFormat('yyyy-MM-dd').format(orderDate)}", 
               style: const TextStyle(fontSize: 12)),
-            
-            // 🎯 FutureBuilder لعرض اسم التاجر الحقيقي
             FutureBuilder<String>(
               future: _getMerchantName(sellerId),
               builder: (context, snapshot) {
@@ -163,4 +200,3 @@ class _OrderCard extends StatelessWidget {
     );
   }
 }
-
