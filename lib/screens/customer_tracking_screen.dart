@@ -14,7 +14,7 @@ class CustomerTrackingScreen extends StatelessWidget {
 
   final String mapboxToken = "pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw";
 
-  // دالة إظهار نافذة التقييم
+  // دالة إظهار نافذة التقييم (كما هي بدون تغيير)
   void _showRatingDialog(BuildContext context, String driverId) {
     double selectedRating = 5;
     TextEditingController commentController = TextEditingController();
@@ -85,6 +85,7 @@ class CustomerTrackingScreen extends StatelessWidget {
     );
   }
 
+  // دالة الإلغاء الذكي (كما هي بدون تغيير)
   Future<void> _handleSmartCancel(BuildContext context, String currentStatus) async {
     bool isAccepted = currentStatus != 'pending';
     String targetStatus = isAccepted 
@@ -140,7 +141,6 @@ class CustomerTrackingScreen extends StatelessWidget {
         String status = orderData['status'] ?? "pending";
         bool isRated = orderData.containsKey('rating');
 
-        // ✨ معالجة حالات الخروج التلقائي (بما فيها حالة السيرفر الجديدة)
         if (status.contains('cancelled') || 
             status == 'no_drivers_available' || 
             (status == 'delivered' && isRated)) {
@@ -216,7 +216,13 @@ class CustomerTrackingScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    _buildUnifiedBottomPanel(context, status, orderData, driverData, verificationCode),
+                    // ✅ استخدام Align مع SafeArea لتأمين الكارت السفلي
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: SafeArea(
+                        child: _buildUnifiedBottomPanel(context, status, orderData, driverData, verificationCode),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -235,75 +241,77 @@ class CustomerTrackingScreen extends StatelessWidget {
     if (status == 'accepted') { progress = 0.4; statusDesc = "المندوب وافق وفي طريقه إليك"; mainColor = Colors.blue; }
     else if (status == 'at_pickup') { progress = 0.6; statusDesc = "المندوب وصل لموقع الاستلام"; mainColor = Colors.indigo; }
     else if (status == 'picked_up') { progress = 0.8; statusDesc = "جاري التوصيل الآن"; mainColor = Colors.green; }
-    // ✨ إضافة حالة عدم التوافر لشرح الـ UI قبل الـ Pop
     else if (status == 'no_drivers_available') { progress = 1.0; statusDesc = "عذراً، لم نجد مناديب حالياً"; mainColor = Colors.red; }
 
-    return Positioned(
-      bottom: 15, left: 10, right: 10,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(25), boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 15)]),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Expanded(child: LinearProgressIndicator(value: progress, minHeight: 6, backgroundColor: Colors.grey[200], color: mainColor)),
-                const SizedBox(width: 10),
-                Text("${(progress * 100).toInt()}%", style: const TextStyle(fontWeight: FontWeight.bold)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(statusDesc, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.sp, color: mainColor)),
-            const Divider(height: 25),
+    return Container(
+      // ✅ تم تحويله لـ Container بـ Margin ليعمل بشكل مثالي مع Align
+      margin: const EdgeInsets.fromLTRB(10, 0, 10, 15),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white, 
+        borderRadius: BorderRadius.circular(25), 
+        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 15)]
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(child: LinearProgressIndicator(value: progress, minHeight: 6, backgroundColor: Colors.grey[200], color: mainColor)),
+              const SizedBox(width: 10),
+              Text("${(progress * 100).toInt()}%", style: const TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(statusDesc, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.sp, color: mainColor)),
+          const Divider(height: 25),
 
-            if (status == 'accepted' || status == 'at_pickup' || status == 'picked_up')
-              Container(
-                margin: const EdgeInsets.only(bottom: 15),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.amber[50], borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.amber)),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+          if (status == 'accepted' || status == 'at_pickup' || status == 'picked_up')
+            Container(
+              margin: const EdgeInsets.only(bottom: 15),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.amber[50], borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.amber)),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.security, color: Colors.amber),
+                  const SizedBox(width: 10),
+                  const Text("كود التسليم: ", style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text(code, style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.red[900])),
+                ],
+              ),
+            ),
+
+          Row(
+            children: [
+              CircleAvatar(radius: 25, backgroundColor: Colors.blue[50], child: const Icon(Icons.person, color: Colors.blue)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.security, color: Colors.amber),
-                    const SizedBox(width: 10),
-                    const Text("كود التسليم: ", style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text(code, style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.red[900])),
+                    Text(driver != null ? driver['fullname'] : "بحث عن مندوب...", style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const Text("موثق من أكسب", style: TextStyle(fontSize: 10, color: Colors.grey)),
                   ],
                 ),
               ),
-
-            Row(
-              children: [
-                CircleAvatar(radius: 25, backgroundColor: Colors.blue[50], child: const Icon(Icons.person, color: Colors.blue)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(driver != null ? driver['fullname'] : "بحث عن مندوب...", style: const TextStyle(fontWeight: FontWeight.bold)),
-                      const Text("موثق من أكسب", style: TextStyle(fontSize: 10, color: Colors.grey)),
-                    ],
-                  ),
+              if (driver != null)
+                IconButton(
+                  onPressed: () async => await launchUrl(Uri.parse("tel:${driver['phone']}")),
+                  icon: const Icon(Icons.phone_in_talk, color: Colors.green, size: 30),
                 ),
-                if (driver != null)
-                  IconButton(
-                    onPressed: () async => await launchUrl(Uri.parse("tel:${driver['phone']}")),
-                    icon: const Icon(Icons.phone_in_talk, color: Colors.green, size: 30),
-                  ),
-              ],
-            ),
-            
-            if (status == 'pending' || status == 'accepted' || status == 'at_pickup')
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: TextButton(
-                  onPressed: () => _handleSmartCancel(context, status),
-                  child: const Text("إلغاء الطلب", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                ),
+            ],
+          ),
+          
+          if (status == 'pending' || status == 'accepted' || status == 'at_pickup')
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: TextButton(
+                onPressed: () => _handleSmartCancel(context, status),
+                child: const Text("إلغاء الطلب", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
