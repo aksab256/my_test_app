@@ -63,15 +63,44 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     _mapController = MapController();
   }
 
-  // ✅ تسلسل فتح الخريطة السريع
+  // ✅ رسالة الإفصاح قبل طلب الإذن (مطلب أساسي لجوجل)
+  Future<bool> _showLocationDisclosure() async {
+    return await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text("تحديد موقع النشاط", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+          content: const Text(
+            "يقوم تطبيق أكسب بجمع بيانات الموقع الجغرافي لتحديد عنوان نشاطك التجاري بدقة على الخريطة، مما يسهل وصول المناديب والعملاء إليك. يتم استخدام هذه البيانات فقط أثناء استخدام التطبيق.",
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("رفض", style: TextStyle(color: Colors.red, fontFamily: 'Cairo'))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68)),
+              onPressed: () => Navigator.pop(context, true), 
+              child: const Text("موافق", style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
+            ),
+          ],
+        ),
+      ),
+    ) ?? false;
+  }
+
+  // ✅ تسلسل فتح الخريطة مع السيف أريا ورسالة الإفصاح
   Future<void> _handleMapOpeningSequence() async {
     LocationPermission permission = await Geolocator.checkPermission();
+    
     if (permission == LocationPermission.denied) {
+      bool userAgreed = await _showLocationDisclosure();
+      if (!userAgreed) return;
       permission = await Geolocator.requestPermission();
     }
 
     if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-      // سرعة البرق: جلب آخر موقع معروف لفتح الخريطة فوراً
       Position? lastPos = await Geolocator.getLastKnownPosition();
       if (lastPos != null) {
         setState(() => _selectedPosition = LatLng(lastPos.latitude, lastPos.longitude));
@@ -79,7 +108,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       
       _openMapPicker();
 
-      // تحديث الموقع بدقة عالية في الخلفية
       Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high).then((pos) {
         if (mounted) {
           setState(() {
@@ -100,49 +128,52 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
           return Container(
-            height: 85.h,
+            height: 90.h,
             decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
-            child: Column(
-              children: [
-                Container(margin: const EdgeInsets.symmetric(vertical: 12), width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text("حرك الخريطة لتحديد عنوان نشاطك", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Color(0xFF2D9E68))),
-                ),
-                Expanded(
-                  child: FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: _selectedPosition,
-                      initialZoom: 16.5,
-                      onPositionChanged: (position, hasGesture) {
-                        if (position.center != null) {
-                          setModalState(() => _selectedPosition = position.center!);
-                          setState(() => _selectedPosition = position.center!);
-                          _updateAddressText(position.center!); // تحديث تلقائي للعنوان
-                        }
-                      },
+            child: SafeArea( // ✅ إضافة سيف أريا لحماية المحتوى من الحواف السفلية
+              bottom: true,
+              child: Column(
+                children: [
+                  Container(margin: const EdgeInsets.symmetric(vertical: 12), width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text("حرك الخريطة لتحديد عنوان نشاطك", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Color(0xFF2D9E68))),
+                  ),
+                  Expanded(
+                    child: FlutterMap(
+                      mapController: _mapController,
+                      options: MapOptions(
+                        initialCenter: _selectedPosition,
+                        initialZoom: 16.5,
+                        onPositionChanged: (position, hasGesture) {
+                          if (position.center != null) {
+                            setModalState(() => _selectedPosition = position.center!);
+                            setState(() => _selectedPosition = position.center!);
+                            _updateAddressText(position.center!);
+                          }
+                        },
+                      ),
+                      children: [
+                        TileLayer(urlTemplate: "https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/tiles/{z}/{x}/{y}?access_token=$mapboxToken"),
+                        MarkerLayer(markers: [Marker(point: _selectedPosition, width: 60, height: 60, child: const Icon(Icons.location_pin, size: 50, color: Colors.red))]),
+                      ],
                     ),
-                    children: [
-                      TileLayer(urlTemplate: "https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/tiles/{z}/{x}/{y}?access_token=$mapboxToken"),
-                      MarkerLayer(markers: [Marker(point: _selectedPosition, width: 60, height: 60, child: const Icon(Icons.location_pin, size: 50, color: Colors.red))]),
-                    ],
                   ),
-                ),
-                Container(
-                  padding: EdgeInsets.all(5.w),
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68), padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
-                    onPressed: () {
-                      setState(() => _locationPicked = true);
-                      widget.onLocationChanged(lat: _selectedPosition.latitude, lng: _selectedPosition.longitude);
-                      Navigator.pop(context);
-                    },
-                    child: const Text("تأكيد هذا الموقع", style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold)),
+                  Container(
+                    padding: EdgeInsets.all(5.w),
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68), padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+                      onPressed: () {
+                        setState(() => _locationPicked = true);
+                        widget.onLocationChanged(lat: _selectedPosition.latitude, lng: _selectedPosition.longitude);
+                        Navigator.pop(context);
+                      },
+                      child: const Text("تأكيد هذا الموقع", style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         }
@@ -150,12 +181,13 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     );
   }
 
+  // ... [باقي الدوال (updateAddressText, cloudinary, pickFile) تظل كما هي بدون تغيير]
+
   Future<void> _updateAddressText(LatLng position) async {
     try {
       final placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
-        // تنسيق العنوان ليظهر بشكل احترافي
         String formattedAddress = "${place.street ?? ''}, ${place.locality ?? ''}, ${place.subAdministrativeArea ?? ''}".replaceAll(", ,", ",");
         setState(() {
           widget.controllers['address']!.text = formattedAddress;
@@ -186,7 +218,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   }
 
   Future<void> _pickFile(String field) async {
-    // ... (نفس دالة رفع الملفات السابقة بدون تغيير لضمان الشفافية مع جوجل)
     bool proceed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -200,7 +231,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68)),
               onPressed: () => Navigator.pop(context, true), 
-              child: const Text("موافق", style: TextStyle(color: Colors.white)),
+              child: const Text("موافق", style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
             ),
           ],
         ),
@@ -235,7 +266,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('إكمال بيانات الحساب', style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68)), textAlign: TextAlign.center),
+              Text('إكمال بيانات الحساب', style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68), fontFamily: 'Cairo'), textAlign: TextAlign.center),
               SizedBox(height: 3.h),
               _buildSectionHeader('المعلومات الأساسية', Icons.badge_rounded),
               _buildInputField('fullname', 'الاسم الكامل', Icons.person_rounded),
@@ -249,7 +280,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
               _buildSectionHeader('الموقع الجغرافي', Icons.map_rounded),
               _buildLocationPickerButton(),
               
-              // ✅ حقل العنوان: للقراءة فقط ويُفتح بالضغط عليه
               _buildInputField(
                 'address', 
                 'العنوان (اضغط للتحديد من الخريطة)', 
@@ -266,7 +296,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
               SizedBox(height: 2.h),
               _buildTermsCheckbox(),
               _buildSubmitButton(),
-              TextButton(onPressed: widget.onGoBack, child: Text('العودة لتعديل نوع الحساب', style: TextStyle(color: Colors.grey.shade400, fontSize: 11.sp))),
+              TextButton(onPressed: widget.onGoBack, child: Text('العودة لتعديل نوع الحساب', style: TextStyle(color: Colors.grey.shade400, fontSize: 11.sp, fontFamily: 'Cairo'))),
               SizedBox(height: 5.h),
             ],
           ),
@@ -275,6 +305,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     );
   }
 
+  // ✅ الحفاظ على الأكواد والـ Widgets كما هي لضمان استقرار التطبيق
   Widget _buildLocationPickerButton() {
     return InkWell(
       onTap: _handleMapOpeningSequence,
@@ -305,11 +336,12 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         controller: widget.controllers[key],
         obscureText: isPassword && _obscurePassword,
         keyboardType: keyboardType,
-        readOnly: isReadOnly, // ✅ منع الكتابة اليدوية
-        onTap: onTap, // ✅ تنفيذ أكشن عند الضغط
+        readOnly: isReadOnly,
+        onTap: onTap,
         validator: (value) => (value == null || value.isEmpty) ? "هذا الحقل مطلوب من الخريطة" : null,
         decoration: InputDecoration(
           labelText: label,
+          labelStyle: const TextStyle(fontFamily: 'Cairo'),
           prefixIcon: Icon(icon, color: const Color(0xFF2D9E68)),
           suffixIcon: isPassword ? IconButton(icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => _obscurePassword = !_obscurePassword)) : null,
           filled: true, fillColor: isReadOnly ? Colors.grey.shade50 : Colors.white,
@@ -320,7 +352,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     );
   }
 
-  // ... (باقي الـ Widgets: _buildSellerSpecificFields, _buildBusinessTypeDropdown, إلخ كما هي في الكود الأصلي)
   Widget _buildSellerSpecificFields() {
     return Container(
       padding: EdgeInsets.all(4.w),
@@ -344,8 +375,8 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       child: DropdownButtonFormField<String>(
         value: _selectedBusinessType,
         validator: (value) => (value == null || value.isEmpty) ? "يرجى تحديد نوع النشاط" : null,
-        decoration: const InputDecoration(border: InputBorder.none, hintText: "نوع النشاط التجاري *"),
-        items: _businessTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+        decoration: const InputDecoration(border: InputBorder.none, hintText: "نوع النشاط التجاري *", hintStyle: TextStyle(fontFamily: 'Cairo')),
+        items: _businessTypes.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontFamily: 'Cairo')))).toList(),
         onChanged: (val) {
           setState(() => _selectedBusinessType = val);
           widget.controllers['businessType']?.text = val ?? "";
