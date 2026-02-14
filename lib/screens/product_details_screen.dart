@@ -5,8 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:sizer/sizer.dart';
 import 'package:my_test_app/theme/app_theme.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
-import 'package:my_test_app/providers/buyer_data_provider.dart'; // ✅ مهم للفلترة الجغرافية
-import 'package:my_test_app/utils/offer_data_model.dart'; // ✅ لتوحيد قراءة العرض
+import 'package:my_test_app/providers/buyer_data_provider.dart';
+import 'package:my_test_app/utils/offer_data_model.dart';
 
 final FirebaseFirestore _db = FirebaseFirestore.instance;
 
@@ -23,7 +23,7 @@ class ProductDetailsScreen extends StatefulWidget {
 
 class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   Map<String, dynamic>? _productData;
-  List<OfferModel> _filteredOffers = []; // ✅ نستخدم الموديل الموحد
+  List<OfferModel> _filteredOffers = []; 
   bool _isLoading = true;
   String? _currentProductId;
 
@@ -47,16 +47,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     try {
       if (_currentProductId == null || _currentProductId!.isEmpty) return;
       
-      // 1. جلب بيانات المشتري الحالية (منطقته الجغرافية)
       final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
       final String? userArea = buyerProvider.userAddress;
 
-      // 2. جلب المنتج وكل عروضه النشطة
       final results = await Future.wait([
         _db.collection('products').doc(_currentProductId).get(),
         _db.collection('productOffers')
             .where('productId', isEqualTo: _currentProductId)
-            .where('status', isEqualTo: 'active') // ✅ العروض النشطة فقط
+            .where('status', isEqualTo: 'active')
             .get(),
       ]);
 
@@ -67,13 +65,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         _productData = productDoc.data();
       }
 
-      // 3. تحويل العروض وفلترتها جغرافياً
       List<OfferModel> allOffers = [];
       for (var doc in offersSnap.docs) {
+        // الـ fromFirestore الآن تعيد List<OfferModel> مفككة الوحدات
         allOffers.addAll(OfferModel.fromFirestore(doc));
       }
 
-      // تطبيق نفس منطق الـ Grid: يظهر العرض إذا كان عاماً أو يغطي منطقة المشتري
       setState(() {
         _filteredOffers = allOffers.where((offer) {
           bool isGlobal = offer.deliveryAreas == null || offer.deliveryAreas!.isEmpty;
@@ -95,18 +92,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       final String imageUrl = (_productData?['imageUrls'] as List?)?.isNotEmpty == true
           ? _productData!['imageUrls'][0] : '';
 
-      // ملاحظة: نستخدم البيانات من أول وحدة (unit) في العرض كما فعلت أنت
-      final firstUnit = offer.units.isNotEmpty ? offer.units[0] : null;
-
       await cartProvider.addItemToCart(
-        offerId: offer.offerId ?? '',
+        offerId: offer.offerId,
         productId: _currentProductId!,
         sellerId: offer.sellerId,
         sellerName: offer.sellerName,
         name: _productData?['name'] ?? 'منتج',
-        price: firstUnit?.price ?? 0.0,
-        unit: firstUnit?.unitName ?? 'وحدة',
-        unitIndex: 0,
+        price: (offer.price is num) ? offer.price.toDouble() : 0.0,
+        unit: offer.unitName,
+        unitIndex: offer.unitIndex ?? 0,
         imageUrl: imageUrl,
         userRole: 'buyer',
         quantityToAdd: offer.minQty ?? 1,
@@ -114,11 +108,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         subId: _productData?['subId'],
         availableStock: offer.stock,
         minOrderQuantity: offer.minQty ?? 1,
-        maxOrderQuantity: 9999,
+        maxOrderQuantity: offer.maxQty ?? 9999,
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✅ تمت الإضافة للسلة'), backgroundColor: Colors.green)
+        const SnackBar(
+          content: Text('✅ تمت الإضافة للسلة', style: TextStyle(fontFamily: 'Cairo')), 
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        )
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('⚠️ $e')));
@@ -142,14 +140,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end, // للتنسيق العربي
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(_productData?['name'] ?? '', 
                     style: GoogleFonts.cairo(fontSize: 18.sp, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(_productData?['description'] ?? '', 
-                    style: GoogleFonts.cairo(color: Colors.grey),
+                    style: GoogleFonts.cairo(color: Colors.grey, fontSize: 11.sp),
                   ),
                   const Divider(height: 40),
                   Text('العروض المتاحة في منطقتك', 
@@ -157,10 +155,16 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   ),
                   const SizedBox(height: 12),
                   if (_filteredOffers.isEmpty)
-                    const Center(child: Padding(
-                      padding: EdgeInsets.all(20.0),
-                      child: Text('عذراً، لا توجد عروض لهذا المنتج تغطي منطقتك حالياً'),
-                    ))
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Text(
+                          'عذراً، لا توجد عروض لهذا المنتج تغطي منطقتك حالياً',
+                          style: GoogleFonts.cairo(color: Colors.red),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
                   else
                     ..._filteredOffers.map((offer) => _buildOfferItem(offer)).toList(),
                 ],
@@ -173,19 +177,22 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   Widget _buildOfferItem(OfferModel offer) {
-    final firstUnit = offer.units.isNotEmpty ? offer.units[0] : null;
-    
     return Card(
       elevation: 2,
       margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         title: Text(offer.sellerName, style: GoogleFonts.cairo(fontWeight: FontWeight.bold)),
-        subtitle: Text('${firstUnit?.price ?? 0} ج.م / ${firstUnit?.unitName ?? ''}', 
-          style: GoogleFonts.cairo(color: AppTheme.primaryGreen, fontWeight: FontWeight.w600)),
+        subtitle: Text('${offer.price} ج.م / ${offer.unitName}', 
+          style: GoogleFonts.cairo(color: AppTheme.primaryGreen, fontWeight: FontWeight.w600, fontSize: 13.sp)),
         trailing: ElevatedButton(
-          onPressed: () => _addToCart(offer),
-          style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryGreen),
-          child: const Text('إضافة', style: TextStyle(color: Colors.white)),
+          onPressed: offer.disabled ? null : () => _addToCart(offer),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppTheme.primaryGreen,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          child: Text(offer.disabled ? 'نفذ' : 'إضافة', style: const TextStyle(color: Colors.white)),
         ),
       ),
     );
@@ -193,12 +200,16 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   Widget _buildImageGallery() {
     final images = (_productData?['imageUrls'] as List?) ?? [];
-    if (images.isEmpty) return Container(height: 200, color: Colors.grey[200], child: const Icon(Icons.image));
+    if (images.isEmpty) return Container(height: 200, color: Colors.grey[200], child: const Icon(Icons.image, size: 50));
     return SizedBox(
       height: 250,
       child: PageView.builder(
         itemCount: images.length,
-        itemBuilder: (context, index) => Image.network(images[index], fit: BoxFit.contain),
+        itemBuilder: (context, index) => Image.network(
+          images[index], 
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image),
+        ),
       ),
     );
   }
