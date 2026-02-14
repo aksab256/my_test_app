@@ -1,10 +1,9 @@
-// المسار: lib/widgets/product_list_grid.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:my_test_app/widgets/buyer_product_card.dart';
 import 'package:my_test_app/providers/product_offers_provider.dart';
+import 'package:my_test_app/providers/buyer_data_provider.dart'; // 🎯 استيراد موفر بيانات المشتري
 import 'package:sizer/sizer.dart';
 
 class ProductListGrid extends StatelessWidget {
@@ -42,6 +41,18 @@ class ProductListGrid extends StatelessWidget {
     
     final colorScheme = Theme.of(context).colorScheme;
     const double finalAspectRatio = 0.52; 
+
+    // 🎯 الخطوة 1: استخراج قائمة المناطق المكتشفة للمستخدم من الـ BuyerDataProvider
+    // ملاحظة: هنا نفترض أنك قمت بمعالجة الـ GeoJSON وتخزين النتائج في قائمة تسمى 'detectedAreasNames' 
+    // أو ما شابه داخل الـ Provider الخاص بك.
+    final buyerProvider = context.watch<BuyerDataProvider>();
+    
+    // هنا نجهز القائمة (إذا كانت فارغة، سيعرض الـ Provider العروض العامة فقط)
+    // يمكنك استبدال ['القاهرة'] بالدالة التي تحسب المنطقة من الإحداثيات (lat/lng)
+    List<String> userAreas = []; 
+    if (buyerProvider.userAddress != null) {
+      userAreas.add(buyerProvider.userAddress!); 
+    }
 
     return StreamBuilder<QuerySnapshot>(
       stream: _getProductsStream(),
@@ -85,14 +96,16 @@ class ProductListGrid extends StatelessWidget {
             final productId = productDoc.id;
             final productData = productDoc.data() as Map<String, dynamic>;
 
+            // 🎯 الخطوة 2: تمرير المناطق المكتشفة للمنتج عند إنشاء الـ Provider
             return ChangeNotifierProvider<ProductOffersProvider>(
-              create: (_) => ProductOffersProvider(productId: productId),
+              create: (_) => ProductOffersProvider(
+                productId: productId,
+                userDetectedAreas: userAreas, // ⬅️ التعديل الجوهري هنا
+              ),
               child: BuyerProductCard(
                 productId: productId,
                 productData: productData,
                 onTap: (selectedProductId, selectedOfferId) {
-                  // 🎯 [التعديل الجوهري]: تنفيذ الانتقال لصفحة التفاصيل فوراً
-                  // المسار '/productDetails' معرف في ملف main.dart ويستقبل Map كأرجومنت
                   Navigator.of(context).pushNamed(
                     '/productDetails',
                     arguments: {
@@ -100,8 +113,6 @@ class ProductListGrid extends StatelessWidget {
                       'offerId': selectedOfferId,
                     },
                   );
-
-                  // استدعاء الـ callback الخارجي إذا كان موجوداً (اختياري)
                   onProductTap?.call(selectedProductId, selectedOfferId);
                 },
               ),
