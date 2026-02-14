@@ -4,14 +4,18 @@ import 'package:my_test_app/utils/offer_data_model.dart';
 
 class ProductOffersProvider with ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final String productId; 
-  // 🎯 أضفنا متغير لتخزين منطقة المستخدم الحالية
-  final String? userRegionId; 
 
-  // 💡 تحديث المنشئ ليدعم استقبال منطقة المستخدم
-  ProductOffersProvider({required this.productId, this.userRegionId}) {
-    // نمرر منطقة المستخدم للدالة عند البدء
-    fetchOffers(productId, userRegionId);
+  final String productId; 
+  // 🎯 إضافة قائمة المناطق المكتشفة للمشتري بناءً على الـ GPS والـ GeoJSON
+  final List<String> userDetectedAreas;
+
+  // 💡 تحديث المُنشئ لاستقبال المنتج والمناطق المكتشفة
+  ProductOffersProvider({
+    required this.productId, 
+    required this.userDetectedAreas,
+  }) {
+    // جلب العروض مع تمرير المناطق لفلترتها
+    fetchOffers(productId, userDetectedAreas);
   }
 
   List<OfferModel> _availableOffers = [];
@@ -24,35 +28,47 @@ class ProductOffersProvider with ChangeNotifier {
   bool get isLoading => _isLoading;               
   int get currentQuantity => _currentQuantity;                                                                                                    
   
-  // 💥 تحديث الدالة لتأخذ منطقة المستخدم (regionId)
-  Future<void> fetchOffers(String productId, String? regionId) async {
+  // 💥 دالة جلب العروض مع منطق الفلترة الجغرافية
+  Future<void> fetchOffers(String productId, List<String> detectedAreas) async {
     _isLoading = true;                              
     _availableOffers = [];                          
     _selectedOffer = null;
     notifyListeners(); 
 
     try {                                             
-      // 1. نبدأ الاستعلام الأساسي
-      Query offersQuery = _db.collection('productOffers')
+      // 1. جلب كل العروض النشطة للمنتج من Firestore
+      final offersQuery = _db.collection('productOffers')
         .where('productId', isEqualTo: productId)                                                       
         .where('status', isEqualTo: 'active');
-
-      // 🎯 2. السطر السحري: إذا كانت المنطقة معروفة، هات فقط الموردين الذين يغطونها
-      if (regionId != null && regionId.isNotEmpty) {
-        offersQuery = offersQuery.where('deliveryZones', arrayContains: regionId);
-      }
                                                       
       final offersSnap = await offersQuery.get();                                                     
-      List<OfferModel> allOffers = [];
+      List<OfferModel> filteredOffers = [];
                                                       
       for (var doc in offersSnap.docs) {
-        allOffers.addAll(OfferModel.fromFirestore(doc));
+        // نستخدم الوظيفة الحالية لتحويل البيانات لنموذج OfferModel
+        List<OfferModel> offersFromDoc = OfferModel.fromFirestore(doc);
+
+        for (var offer in offersFromDoc) {
+          // 🎯 منطق الفلترة الجغرافي (مطابق لكود الـ HTML الخاص بك):
+          // الحالة أ: التاجر لم يحدد مناطق (العرض متاح للجميع)
+          // الحالة ب: إحداثيات المشتري تقع ضمن إحدى المناطق التي يغطيها التاجر
+          
+          bool isGlobal = offer.deliveryAreas == null || offer.deliveryAreas!.isEmpty;
+          
+          bool isAreaMatch = offer.deliveryAreas?.any((area) => 
+            detectedAreas.contains(area)) ?? false;
+
+          if (isGlobal || isAreaMatch) {
+            filteredOffers.add(offer);
+          }
+        }
       }                                         
+
+      // 2. تحديث الحالة بالعروض المفلترة فقط
+      _availableOffers = filteredOffers;             
       
-      _availableOffers = allOffers;             
-      
-      if (allOffers.isNotEmpty) {
-        _selectedOffer = allOffers.first;               
+      if (_availableOffers.isNotEmpty) {
+        _selectedOffer = _availableOffers.first;               
         _currentQuantity = _selectedOffer!.stock >= (_selectedOffer!.minQty ?? 1)                             
           ? (_selectedOffer!.minQty ?? 1)
           : 0;
@@ -68,7 +84,7 @@ class ProductOffersProvider with ChangeNotifier {
       _selectedOffer = null;                          
       _currentQuantity = 0;
       if (kDebugMode) {
-        print('Error fetching offers: $e');
+        print('Error fetching and filtering offers: $e');
       }
       notifyListeners(); 
     }
