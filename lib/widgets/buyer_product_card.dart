@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:my_test_app/utils/offer_data_model.dart';
 import 'package:my_test_app/providers/product_offers_provider.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
+import 'package:my_test_app/providers/buyer_data_provider.dart'; // ✅ أضفنا هذا
 import 'package:sizer/sizer.dart';
 
 class BuyerProductCard extends StatefulWidget {
@@ -31,8 +32,18 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // 🎯 [التصحيح الجوهري]: جلب مناطق المشتري وتمريرها للدالة
+      final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
+      
+      // تجهيز قائمة المناطق (إذا كان العنوان موجوداً)
+      List<String> userAreas = [];
+      if (buyerProvider.userAddress != null) {
+        userAreas.add(buyerProvider.userAddress!);
+      }
+
+      // تمرير المعاملين كما هو محدد في الـ Provider الجديد
       Provider.of<ProductOffersProvider>(context, listen: false)
-          .fetchOffers(widget.productId);
+          .fetchOffers(widget.productId, userAreas); // ✅ تم الإصلاح (2 arguments)
     });
   }
 
@@ -46,17 +57,17 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
       await cartProvider.addItemToCart(
         productId: widget.productId,
         name: widget.productData['name'] ?? 'منتج غير معروف',
-        offerId: offer.offerId!,
-        sellerId: offer.sellerId!,
-        sellerName: offer.sellerName!,
-        price: offer.price.toDouble(), 
+        offerId: offer.offerId,
+        sellerId: offer.sellerId,
+        sellerName: offer.sellerName,
+        price: (offer.price is num) ? offer.price.toDouble() : 0.0, 
         unit: offer.unitName,
         unitIndex: offer.unitIndex ?? 0,
         quantityToAdd: qty,
         imageUrl: imageUrl,
         userRole: currentUserRole,
         minOrderQuantity: offer.minQty ?? 1,
-        availableStock: offer.stock ?? 0,
+        availableStock: offer.stock,
         maxOrderQuantity: offer.maxQty ?? 9999,
         mainId: widget.productData['mainId'],
         subId: widget.productData['subId'],
@@ -92,7 +103,6 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
         padding: const EdgeInsets.all(10.0),
         child: Column(
           children: [
-            // صورة المنتج تأخذ المساحة المتاحة لملء الفراغ
             Expanded(
               child: InkWell(
                 onTap: hasOffers 
@@ -102,15 +112,13 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
               ),
             ),
             const SizedBox(height: 8),
-            // اسم المنتج
             Text(
               widget.productData['name'] ?? 'منتج غير معروف',
               textAlign: TextAlign.center,
               maxLines: 2,
-              style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 15.sp),
+              style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 13.sp),
             ),
             const SizedBox(height: 12),
-            // الزر المطور
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -119,7 +127,7 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                     : () => _showOfferSelectionModal(context, availableOffers, offersProvider),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: !hasOffers ? Colors.grey : const Color(0xFFFF7000),
-                  padding: EdgeInsets.symmetric(vertical: 12.sp),
+                  padding: EdgeInsets.symmetric(vertical: 10.sp),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 child: isLoadingOffers
@@ -127,11 +135,11 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(hasOffers ? Icons.shopping_cart_outlined : Icons.block, color: Colors.white, size: 16.sp),
+                          Icon(hasOffers ? Icons.shopping_cart_outlined : Icons.block, color: Colors.white, size: 14.sp),
                           const SizedBox(width: 8),
                           Text(
-                            hasOffers ? 'عرض الأسعار والطلب' : 'لا توجد عروض حالياً',
-                            style: GoogleFonts.cairo(fontSize: 13.sp, fontWeight: FontWeight.bold, color: Colors.white),
+                            hasOffers ? 'عرض الأسعار' : 'غير متوفر بمدينتك',
+                            style: GoogleFonts.cairo(fontSize: 11.sp, fontWeight: FontWeight.bold, color: Colors.white),
                           ),
                         ],
                       ),
@@ -143,6 +151,8 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
     );
   }
 
+  // دالة _showOfferSelectionModal وباقي الدوال تظل كما هي في كودك الأصلي
+  // ... (نفس الكود الذي أرسلته أنت للمودال والتاج)
   void _showOfferSelectionModal(BuildContext context, List<OfferModel> availableOffers, ProductOffersProvider provider) {
     showModalBottomSheet(
       context: context,
@@ -160,7 +170,7 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                 child: SingleChildScrollView(
                   child: Column(
                     children: availableOffers.map((offer) {
-                      final bool isOutOfStock = (offer.stock ?? 0) <= 0;
+                      final bool isOutOfStock = (offer.stock) <= 0;
                       return Card(
                         margin: const EdgeInsets.symmetric(vertical: 8),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
@@ -171,8 +181,8 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Expanded(child: Text('${offer.sellerName} (${offer.unitName})', style: GoogleFonts.cairo(fontSize: 16.sp, fontWeight: FontWeight.bold))),
-                                  Text('${offer.price} ج', style: GoogleFonts.cairo(fontSize: 19.sp, fontWeight: FontWeight.w900, color: Colors.red.shade700)),
+                                  Expanded(child: Text('${offer.sellerName} (${offer.unitName})', style: GoogleFonts.cairo(fontSize: 14.sp, fontWeight: FontWeight.bold))),
+                                  Text('${offer.price} ج', style: GoogleFonts.cairo(fontSize: 16.sp, fontWeight: FontWeight.w900, color: Colors.red.shade700)),
                                 ],
                               ),
                               const SizedBox(height: 10),
@@ -191,7 +201,7 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                                     child: QuantityControl(
                                       initialQuantity: provider.currentQuantity < (offer.minQty ?? 1) ? (offer.minQty ?? 1) : provider.currentQuantity,
                                       minQuantity: offer.minQty ?? 1,
-                                      maxStock: offer.stock ?? 0,
+                                      maxStock: offer.stock,
                                       onQuantityChanged: (qty) => provider.updateQuantity(qty),
                                     ),
                                   ),
