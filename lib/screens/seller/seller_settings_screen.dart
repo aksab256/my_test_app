@@ -160,7 +160,7 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
       await _firestore.collection("sellers").doc(widget.currentSellerId).update({
         'isDeleted': true,
         'deletedAt': FieldValue.serverTimestamp(),
-        'status': 'inactive',
+        'status': 'delete_requested',
       });
 
       // تسجيل الخروج والعودة للبداية
