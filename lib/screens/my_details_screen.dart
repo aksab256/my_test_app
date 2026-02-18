@@ -313,20 +313,61 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
   }
 
   void _showDeleteDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('تأكيد الطلب'),
-        content: const Text('سيتم مراجعة طلب إغلاق حسابك من قبل الإدارة. هل تريد الاستمرار؟'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context), 
-            style: ElevatedButton.styleFrom(backgroundColor: _deleteColor), 
-            child: const Text('تأكيد', style: TextStyle(color: Colors.white))
-          ),
-        ],
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      title: const Text('طلب حذف الحساب', style: TextStyle(fontWeight: FontWeight.bold, color: _deleteColor)),
+      content: const Text(
+        'سيتم البدء في إجراءات حذف حسابك وكافة بياناتك نهائياً. سيتم تسجيل خروجك الآن ومعالجة الطلب خلال 48 ساعة. هل أنت متأكد؟',
+        style: TextStyle(fontSize: 14),
       ),
-    );
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('تراجع', style: TextStyle(color: Colors.grey)),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            Navigator.pop(context); // إغلاق الديالوج
+            await _handleDeleteAccount(); // تنفيذ الحذف الفعلي
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: _deleteColor, elevation: 0),
+          child: const Text('تأكيد الحذف', style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    ),
+  );
+}
+
+// الدالة المسؤولة عن التنفيذ الفعلي المتوافق مع جوجل
+Future<void> _handleDeleteAccount() async {
+  final user = FirebaseAuth.instance.currentUser;
+  final col = _userData?['activeCollection'];
+
+  if (user == null || col == null) return;
+
+  try {
+    // 1. تحديث حالة الحساب في Firestore ليعرف النظام أنه "قيد الحذف"
+    await FirebaseFirestore.instance.collection(col).doc(user.uid).update({
+      'status': 'delete_requested',
+      'deletionDate': FieldValue.serverTimestamp(),
+    });
+
+    // 2. تسجيل الخروج فوراً (شرط أساسي لجوجل ليشعر المستخدم ببدء الإجراء)
+    await FirebaseAuth.instance.signOut();
+
+    // 3. التوجيه لشاشة تسجيل الدخول
+    if (mounted) {
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم استلام طلبك وسيتم حذف البيانات نهائياً')),
+      );
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حدث خطأ، حاول مرة أخرى')));
+    }
   }
 }
+
