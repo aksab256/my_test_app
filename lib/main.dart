@@ -264,14 +264,34 @@ class _AuthWrapperState extends State<AuthWrapper> {
     super.initState();
     _userFuture = _checkUserLoginStatus();
   }
-
-  Future<LoggedInUser?> _checkUserLoginStatus() async {
+    Future<LoggedInUser?> _checkUserLoginStatus() async {
     final prefs = await SharedPreferences.getInstance();
     final userJson = prefs.getString('loggedUser');
     if (userJson != null) {
       try {
+        final userMap = jsonDecode(userJson); // تحويل النص لـ Map أولاً
+        final String uid = userMap['id'];
+
+        // --- 🛡️ التعديل الشامل المضاف هنا لحماية الحذف ---
+        
+        // 1. فحص المستهلك أولاً في كولكشن consumers
+        var userDoc = await FirebaseFirestore.instance.collection('consumers').doc(uid).get();
+        
+        // 2. إذا لم يوجد، فحص المشتري (Buyer) في كولكشن users
+        if (!userDoc.exists) {
+          userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+        }
+
+        // 3. إذا وجد الحساب في أي منهما وكان قيد الحذف، اطرده
+        if (userDoc.exists && userDoc.data()?['status'] == 'delete_requested') {
+          await FirebaseAuth.instance.signOut();
+          await prefs.remove('loggedUser');
+          return null; 
+        }
+        // ----------------------------------------------
+
         await UserSession.loadSession();
-        final user = LoggedInUser.fromJson(jsonDecode(userJson));
+        final user = LoggedInUser.fromJson(userMap);
         final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
         await buyerProvider.initializeData(user.id, user.id, user.fullname);
         return user;
@@ -282,6 +302,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
     }
     return null;
   }
+
 
   @override
   Widget build(BuildContext context) {
