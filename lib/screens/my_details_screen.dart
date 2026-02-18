@@ -370,4 +370,4 @@ Future<void> _handleDeleteAccount() async {
     }
   }
 }
-
+}
