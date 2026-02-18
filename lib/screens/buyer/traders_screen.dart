@@ -26,7 +26,9 @@ class TradersScreen extends StatefulWidget {
 
 class _TradersScreenState extends State<TradersScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final int _selectedIndex = 3; // ترتيب أيقونة التجار في الـ Nav
+  
+  // 🎯 التعديل: الترتيب الجديد يجعل "التجار" في أول أيقونة (index 0)
+  final int _selectedIndex = 0; 
 
   String _searchQuery = '';
   String _currentFilter = 'all';
@@ -44,6 +46,29 @@ class _TradersScreenState extends State<TradersScreen> {
     _initData();
   }
 
+  // 🎯 منطق التنقل الموحد (مطابق لصفحة الأقسام والفروع)
+  void _onItemTapped(int index) {
+    if (index == _selectedIndex) return; 
+
+    switch (index) {
+      case 0:
+        // نحن بالفعل في صفحة التجار
+        break;
+      case 1:
+        // العودة للرئيسية مع تنظيف المسارات
+        Navigator.of(context).pushNamedAndRemoveUntil('/buyerHome', (route) => false);
+        break;
+      case 2:
+        // الذهاب لصفحة طلباتي
+        Navigator.pushReplacementNamed(context, '/myOrders');
+        break;
+      case 3:
+        // الذهاب للمحفظة
+        Navigator.pushReplacementNamed(context, '/wallet');
+        break;
+    }
+  }
+
   Future<void> _initData() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
@@ -55,7 +80,6 @@ class _TradersScreenState extends State<TradersScreen> {
     if (mounted) setState(() => _isLoading = false);
   }
 
-  // منطق معالجة المناطق الجغرافية (Polygon Data)
   Future<void> _fetchAndProcessGeoJson() async {
     try {
       final String jsonString = await rootBundle.loadString('assets/OSMB-bc319d822a17aa9ad1089fc05e7d4e752460f877.geojson');
@@ -96,7 +120,6 @@ class _TradersScreenState extends State<TradersScreen> {
     return null;
   }
 
-  // تحميل التجار بناءً على منطق التغطية الجغرافية
   Future<void> _loadTraders() async {
     try {
       final snapshot = await _db.collection("sellers")
@@ -109,7 +132,6 @@ class _TradersScreenState extends State<TradersScreen> {
         final data = doc.data();
         final List? deliveryAreas = data['deliveryAreas'] as List?;
 
-        // الحالة 1: موقع المشتري غير معروف -> يعرض من يقدم توصيل شامل
         if (!isBuyerLocationKnown) {
           if (deliveryAreas == null || deliveryAreas.isEmpty) {
             sellersServingArea.add(doc);
@@ -117,9 +139,8 @@ class _TradersScreenState extends State<TradersScreen> {
           continue;
         }
 
-        // الحالة 2: موقع المشتري معروف -> فحص التغطية الجغرافية
         if (deliveryAreas == null || deliveryAreas.isEmpty) {
-          sellersServingArea.add(doc); // توصيل شامل
+          sellersServingArea.add(doc); 
           continue;
         }
 
@@ -181,7 +202,8 @@ class _TradersScreenState extends State<TradersScreen> {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        Navigator.pushReplacementNamed(context, '/buyerHome');
+        // العودة للرئيسية عند الضغط على زر الرجوع
+        Navigator.of(context).pushNamedAndRemoveUntil('/buyerHome', (route) => false);
       },
       child: Directionality(
         textDirection: TextDirection.rtl,
@@ -229,10 +251,7 @@ class _TradersScreenState extends State<TradersScreen> {
               ),
           bottomNavigationBar: BuyerMobileNavWidget(
             selectedIndex: _selectedIndex,
-            onItemSelected: (index) {
-              if (index == 1) Navigator.pushReplacementNamed(context, '/buyerHome');
-              if (index == 2) Navigator.pushNamed(context, '/myOrders');
-            },
+            onItemSelected: _onItemTapped, // 🎯 استخدام الدالة الموحدة
             cartCount: 0, 
             ordersChanged: false,
           ),
