@@ -284,6 +284,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
         if (!userDoc.exists) {
           userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
         }
+        if (!userDoc.exists) {
+        userDoc = await FirebaseFirestore.instance.collection('sellers').doc(uid).get();
+        }
 
         // 3. إذا وجد الحساب في أي منهما وكان قيد الحذف، اطرده
         if (userDoc.exists && userDoc.data()?['status'] == 'delete_requested') {
