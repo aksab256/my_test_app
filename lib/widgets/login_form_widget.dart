@@ -49,10 +49,34 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       try {
         debugPrint("Attempting login via @aksab.com...");
         userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aksab.com", _password);
-      } catch (e) {
+            } catch (e) {
         debugPrint("Aksab failed, attempting @aswaq.com...");
         userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aswaq.com", _password);
       }
+
+      // 👇 ضيف الكود ده هنا بالظبط 👇
+      final userToCheck = FirebaseAuth.instance.currentUser;
+      if (userToCheck != null) {
+        var checkDoc = await FirebaseFirestore.instance.collection('consumers').doc(userToCheck.uid).get();
+        if (!checkDoc.exists) {
+          checkDoc = await FirebaseFirestore.instance.collection('users').doc(userToCheck.uid).get();
+        }
+        if (checkDoc.exists && checkDoc.data()?['status'] == 'delete_requested') {
+          await FirebaseAuth.instance.signOut();
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+              _errorMessage = 'هذا الحساب قيد الحذف نهائياً، لا يمكن تسجيل الدخول إليه.';
+            });
+          }
+          return;
+        }
+      }
+      // 👆 نهاية الكود المضاف 👆
+
+      // تحميل بيانات الجلسة في الذاكرة
+      await UserSession.loadSession();
+
 
       // تحميل بيانات الجلسة في الذاكرة
       await UserSession.loadSession();
