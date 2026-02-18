@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:my_test_app/theme/app_theme.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
 import 'package:my_test_app/widgets/trader_offer_card.dart';
-// تم إزالة استيراد صفحة التفاصيل لأننا لن نستخدمها هنا
 import 'package:my_test_app/widgets/buyer_mobile_nav_widget.dart';
 
 class TraderOffersScreen extends StatefulWidget {
@@ -18,16 +17,30 @@ class TraderOffersScreen extends StatefulWidget {
 }
 
 class _TraderOffersScreenState extends State<TraderOffersScreen> {
-  // ملاحظة: اجعل الـ index متوافق مع ترتيب أيقونة "عروض التاجر" إذا كانت موجودة
-  // أو اتركه كما هو ليعبر عن الحالة الحالية
+  // 🎯 التعديل: نضع القيمة -1 لأن صفحة العروض تعتبر صفحة فرعية من التجار
+  // أو اتركها 0 إذا كنت تريد بقاء أيقونة "التجار" نشطة
   final int _selectedIndex = 0; 
 
+  // 🎯 التوجيه الموحد المتوافق مع باقي الصفحات
   void _onItemTapped(int index) {
+    if (index == _selectedIndex && index == 0) {
+       Navigator.pushReplacementNamed(context, '/traders');
+       return;
+    }
+
     switch (index) {
-      case 0: Navigator.pushNamed(context, '/buyerWallet'); break; // ✅ توجيه المحفظة (الأيقونة الأولى)
-      case 1: Navigator.pushReplacementNamed(context, '/buyerHome'); break;
-      case 2: Navigator.pushNamed(context, '/myOrders'); break;
-      case 3: Navigator.pushReplacementNamed(context, '/traders'); break; // توجيه للتجار
+      case 0: 
+        Navigator.pushReplacementNamed(context, '/traders'); 
+        break;
+      case 1: 
+        Navigator.of(context).pushNamedAndRemoveUntil('/buyerHome', (route) => false);
+        break;
+      case 2: 
+        Navigator.pushReplacementNamed(context, '/myOrders'); 
+        break;
+      case 3: 
+        Navigator.pushReplacementNamed(context, '/wallet'); // أو '/buyerWallet' حسب تسميتك في الـ Routes
+        break;
     }
   }
 
@@ -216,7 +229,6 @@ class _OffersDataFetcherState extends State<OffersDataFetcher> {
                   return TraderOfferCard(
                     offerData: offers[index],
                     offerDocId: offers[index]['offerDocId'],
-                    // ✅ تم تعطيل التوجيه لصفحة التفاصيل كما طلبت
                     onTap: () {
                       debugPrint("تم تعطيل الانتقال لصفحة التفاصيل");
                     },
