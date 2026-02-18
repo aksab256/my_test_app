@@ -61,6 +61,10 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         if (!checkDoc.exists) {
           checkDoc = await FirebaseFirestore.instance.collection('users').doc(userToCheck.uid).get();
         }
+        if (!checkDoc.exists) {
+  checkDoc = await FirebaseFirestore.instance.collection('sellers').doc(userToCheck.uid).get();
+}
+
         if (checkDoc.exists && checkDoc.data()?['status'] == 'delete_requested') {
           await FirebaseAuth.instance.signOut();
           if (mounted) {
