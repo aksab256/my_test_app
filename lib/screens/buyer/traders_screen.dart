@@ -26,8 +26,6 @@ class TradersScreen extends StatefulWidget {
 
 class _TradersScreenState extends State<TradersScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  
-  // 🎯 التعديل: الترتيب الجديد يجعل "التجار" في أول أيقونة (index 0)
   final int _selectedIndex = 0; 
 
   String _searchQuery = '';
@@ -36,6 +34,9 @@ class _TradersScreenState extends State<TradersScreen> {
   List<DocumentSnapshot> _filteredTraders = [];
   List<String> _categories = [];
   bool _isLoading = true;
+  
+  // 🎯 إضافة متغير لتحديد رتبة المستخدم
+  String _userRole = 'consumer'; 
   
   Coordinates? _userCoordinates;
   Map<String, List<Coordinates>> _areaCoordinatesMap = {};
@@ -46,24 +47,19 @@ class _TradersScreenState extends State<TradersScreen> {
     _initData();
   }
 
-  // 🎯 منطق التنقل الموحد (مطابق لصفحة الأقسام والفروع)
   void _onItemTapped(int index) {
     if (index == _selectedIndex) return; 
 
     switch (index) {
       case 0:
-        // نحن بالفعل في صفحة التجار
         break;
       case 1:
-        // العودة للرئيسية مع تنظيف المسارات
         Navigator.of(context).pushNamedAndRemoveUntil('/buyerHome', (route) => false);
         break;
       case 2:
-        // الذهاب لصفحة طلباتي
         Navigator.pushReplacementNamed(context, '/myOrders');
         break;
       case 3:
-        // الذهاب للمحفظة
         Navigator.pushReplacementNamed(context, '/wallet');
         break;
     }
@@ -73,6 +69,18 @@ class _TradersScreenState extends State<TradersScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
     
+    // 🎯 جلب بيانات المستخدم لتحديد الرتبة (Role)
+    final prefs = await SharedPreferences.getInstance();
+    final userJson = prefs.getString('loggedUser');
+    if (userJson != null) {
+      final user = json.decode(userJson);
+      if (mounted) {
+        setState(() {
+          _userRole = user['role'] ?? 'consumer'; 
+        });
+      }
+    }
+
     await _fetchAndProcessGeoJson();
     _userCoordinates = await _getUserLocation();
     await _loadTraders();
@@ -199,12 +207,7 @@ class _TradersScreenState extends State<TradersScreen> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
-        // العودة للرئيسية عند الضغط على زر الرجوع
-        Navigator.of(context).pushNamedAndRemoveUntil('/buyerHome', (route) => false);
-      },
+      canPop: true, // 🎯 تم التعديل للسماح بالرجوع الطبيعي (Back Stack)
       child: Directionality(
         textDirection: TextDirection.rtl,
         child: Scaffold(
@@ -223,38 +226,48 @@ class _TradersScreenState extends State<TradersScreen> {
             title: const Text('التجار المعتمدون', 
               style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontFamily: 'Tajawal')),
             centerTitle: true,
+            // 🎯 إضافة زر رجوع يدوي يظهر للـ Consumer فقط لو لم يظهر تلقائياً
+            leading: _userRole == 'consumer' ? IconButton(
+              icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+              onPressed: () => Navigator.of(context).pop(),
+            ) : null,
           ),
-          body: _isLoading 
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFF4CAF50)))
-            : Column(
-                children: [
-                  TradersHeaderWidget(
-                    onSearch: (val) { _searchQuery = val; _applyFilters(); },
-                    currentQuery: _searchQuery,
-                  ),
-                  TradersFilterWidget(
-                    categories: _categories,
-                    currentFilter: _currentFilter,
-                    onFilterSelected: (val) { _currentFilter = val; _applyFilters(); },
-                  ),
-                  Expanded(
-                    child: _filteredTraders.isEmpty 
-                      ? _buildEmptyState()
-                      : TradersListWidget(
-                          traders: _filteredTraders,
-                          onTraderTap: (doc) {
-                            Navigator.pushNamed(context, '/traderOffers', arguments: doc.id);
-                          },
-                        ),
-                  ),
-                ],
-              ),
-          bottomNavigationBar: BuyerMobileNavWidget(
-            selectedIndex: _selectedIndex,
-            onItemSelected: _onItemTapped, // 🎯 استخدام الدالة الموحدة
-            cartCount: 0, 
-            ordersChanged: false,
+          body: SafeArea( // 🎯 استخدام SafeArea للحفاظ على المحتوى في المساحة الآمنة
+            child: _isLoading 
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF4CAF50)))
+              : Column(
+                  children: [
+                    TradersHeaderWidget(
+                      onSearch: (val) { _searchQuery = val; _applyFilters(); },
+                      currentQuery: _searchQuery,
+                    ),
+                    TradersFilterWidget(
+                      categories: _categories,
+                      currentFilter: _currentFilter,
+                      onFilterSelected: (val) { _currentFilter = val; _applyFilters(); },
+                    ),
+                    Expanded(
+                      child: _filteredTraders.isEmpty 
+                        ? _buildEmptyState()
+                        : TradersListWidget(
+                            traders: _filteredTraders,
+                            onTraderTap: (doc) {
+                              Navigator.pushNamed(context, '/traderOffers', arguments: doc.id);
+                            },
+                          ),
+                    ),
+                  ],
+                ),
           ),
+          // 🎯 التحقق من الرتبة قبل بناء الشريط السفلي
+          bottomNavigationBar: _userRole == 'buyer' 
+            ? BuyerMobileNavWidget(
+                selectedIndex: _selectedIndex,
+                onItemSelected: _onItemTapped,
+                cartCount: 0, 
+                ordersChanged: false,
+              )
+            : null, // لا يتم بناء الشريط للـ Consumer نهائياً
         ),
       ),
     );
