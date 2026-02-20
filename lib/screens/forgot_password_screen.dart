@@ -101,7 +101,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   // دالة فتح الواتساب (تعمل فقط بعد التحقق)
   void _contactSupport() async {
     String phone = _phoneController.text.trim();
-    String whatsappNumber = "201551445252"; // رقم الدعم الفني
+    String whatsappNumber = "201021070462"; // رقم الدعم الفني
     String message = "مرحباً دعم أكسب، أنا $_userName، مسجل كـ ${_roles[_selectedRole]} برقم: $phone. فقدت كلمة السر وأريد استعادتها.";
     
     String url = "https://wa.me/$whatsappNumber?text=${Uri.encodeComponent(message)}";
