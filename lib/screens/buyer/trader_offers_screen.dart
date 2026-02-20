@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // 🎯 تم الإضافة
 import 'package:my_test_app/theme/app_theme.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
 import 'package:my_test_app/widgets/trader_offer_card.dart';
@@ -17,11 +19,29 @@ class TraderOffersScreen extends StatefulWidget {
 }
 
 class _TraderOffersScreenState extends State<TraderOffersScreen> {
-  // 🎯 التعديل: نضع القيمة -1 لأن صفحة العروض تعتبر صفحة فرعية من التجار
-  // أو اتركها 0 إذا كنت تريد بقاء أيقونة "التجار" نشطة
   final int _selectedIndex = 0; 
+  String _userRole = 'consumer'; // 🎯 الرتبة الافتراضية للأمان
 
-  // 🎯 التوجيه الموحد المتوافق مع باقي الصفحات
+  @override
+  void initState() {
+    super.initState();
+    _getUserRole(); // 🎯 جلب الرتبة عند التشغيل
+  }
+
+  // 🎯 دالة جلب الرتبة من التخزين المحلي
+  Future<void> _getUserRole() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userJson = prefs.getString('loggedUser');
+    if (userJson != null) {
+      final user = json.decode(userJson);
+      if (mounted) {
+        setState(() {
+          _userRole = user['role'] ?? 'consumer';
+        });
+      }
+    }
+  }
+
   void _onItemTapped(int index) {
     if (index == _selectedIndex && index == 0) {
        Navigator.pushReplacementNamed(context, '/traders');
@@ -39,7 +59,7 @@ class _TraderOffersScreenState extends State<TraderOffersScreen> {
         Navigator.pushReplacementNamed(context, '/myOrders'); 
         break;
       case 3: 
-        Navigator.pushReplacementNamed(context, '/wallet'); // أو '/buyerWallet' حسب تسميتك في الـ Routes
+        Navigator.pushReplacementNamed(context, '/wallet'); 
         break;
     }
   }
@@ -69,11 +89,11 @@ class _TraderOffersScreenState extends State<TraderOffersScreen> {
           children: [
             IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 22),
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(context).pop(), // 🎯 يرجع للصحفة السابقة (التجار)
             ),
             const Text(
               'عروض التاجر',
-              style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Colors.white),
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Tajawal'),
             ),
           ],
         ),
@@ -116,16 +136,20 @@ class _TraderOffersScreenState extends State<TraderOffersScreen> {
         },
       ),
 
-      body: OffersDataFetcher(sellerId: widget.sellerId), 
+      // 🎯 إضافة SafeArea لضمان بقاء المحتوى بعيداً عن حواف الشاشة بعد إخفاء الشريط
+      body: SafeArea(child: OffersDataFetcher(sellerId: widget.sellerId)), 
       
-      bottomNavigationBar: Consumer<CartProvider>(
-        builder: (context, cart, child) => BuyerMobileNavWidget(
-          selectedIndex: _selectedIndex,
-          onItemSelected: _onItemTapped,
-          cartCount: cart.cartTotalItems,
-          ordersChanged: false,
-        ),
-      ),
+      // 🎯 الشرط الذكي: بناء الشريط فقط للـ buyer
+      bottomNavigationBar: _userRole == 'buyer' 
+        ? Consumer<CartProvider>(
+            builder: (context, cart, child) => BuyerMobileNavWidget(
+              selectedIndex: _selectedIndex,
+              onItemSelected: _onItemTapped,
+              cartCount: cart.cartTotalItems,
+              ordersChanged: false,
+            ),
+          )
+        : null, // يختفي تماماً للـ consumer
     );
   }
 }
@@ -190,12 +214,12 @@ class _OffersDataFetcherState extends State<OffersDataFetcher> {
       future: _offersFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: CircularProgressIndicator(color: AppTheme.primaryGreen));
         }
         
         final offers = snapshot.data ?? [];
         if (offers.isEmpty) {
-          return const Center(child: Text('لا توجد عروض متاحة حالياً.'));
+          return const Center(child: Text('لا توجد عروض متاحة حالياً.', style: TextStyle(fontFamily: 'Tajawal')));
         }
 
         return Column(
@@ -209,7 +233,7 @@ class _OffersDataFetcherState extends State<OffersDataFetcher> {
                   Expanded(
                     child: Text(
                       'عروض $_sellerName',
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'Tajawal'),
                     ),
                   ),
                 ],
@@ -217,7 +241,7 @@ class _OffersDataFetcherState extends State<OffersDataFetcher> {
             ),
             Expanded(
               child: GridView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2, 
                   childAspectRatio: 0.7, 
