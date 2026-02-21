@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart'; // 🚀 إضافة مكتبة تتبع الأعطال
 
 const Color _primaryColor = Color(0xFF2c3e50); 
 const Color _accentColor = Color(0xFF4CAF50);  
@@ -44,7 +43,7 @@ class AboutScreen extends StatelessWidget {
                       const SizedBox(height: 30),
                       _buildContactSection(context),
                       const SizedBox(height: 30),
-                      _buildBackButton(context), // 🛠️ يحتوي الآن على زر الفحص
+                      _buildBackButton(context), 
                       const SizedBox(height: 30),
                     ],
                   ),
@@ -132,7 +131,7 @@ class AboutScreen extends StatelessWidget {
             _buildFeatureCard(FontAwesomeIcons.circleCheck, 'الجودة والموثوقية', 'نلتزم بتقديم أفضل المنتجات لضمان رضاك.'),
             _buildFeatureCard(FontAwesomeIcons.truckFast, 'السرعة والراحة', 'تجربة تسوق سلسة وتوصيل موثوق لباب منزلك.'),
             _buildFeatureCard(FontAwesomeIcons.usersGear, 'دعم المجتمع', 'تمكين التجار المحليين لنمو اقتصادنا المجتمعي.'),
-            _buildFeatureCard(FontAwesomeIcons.mobileScreen, 'سهولة الاستخدام', 'واجهة بسيطة تجعل التسوق متعة للجميع.'),
+            _buildFeatureCard(FontAwesomeIcons.circleCheck, 'سهولة الاستخدام', 'واجهة بسيطة تجعل التسوق متعة للجميع.'),
           ],
         ),
       ],
@@ -165,35 +164,18 @@ class AboutScreen extends StatelessWidget {
   }
 
   Widget _buildBackButton(BuildContext context) {
-    return Column(
-      children: [
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false),
-            icon: const Icon(FontAwesomeIcons.bagShopping, size: 18, color: Colors.white),
-            label: const Text('ابدأ التسوق الآن', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _accentColor, 
-              padding: const EdgeInsets.symmetric(vertical: 16), 
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-            ),
-          ),
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false),
+        icon: const Icon(FontAwesomeIcons.bagShopping, size: 18, color: Colors.white),
+        label: const Text('ابدأ التسوق الآن', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _accentColor, 
+          padding: const EdgeInsets.symmetric(vertical: 16), 
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
         ),
-        const SizedBox(height: 15),
-        // 🧪 زر فحص الكراش (مخفي بشكل بسيط)
-        TextButton(
-          onPressed: () {
-            // تسجيل ملاحظة قبل الكراش لمعرفة السبب في لوحة التحكم
-            FirebaseCrashlytics.instance.log("User triggered a test crash from AboutScreen");
-            FirebaseCrashlytics.instance.crash();
-          },
-          child: Text(
-            "نسخة المطورين: فحص الاتصال بـ Firebase",
-            style: TextStyle(color: _primaryColor.withOpacity(0.2), fontSize: 10),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
