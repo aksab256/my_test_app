@@ -5,11 +5,12 @@ plugins {
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics") // 🚀 تم إضافة سطر الكراشليتكس هنا
 }
 
 android {
     namespace = "com.aksabeg500"
-    compileSdk = 36 // نصيحة: 35 أكثر استقراراً حالياً من 36
+    compileSdk = 36 // ✅ تم التعديل لـ 35 ليتطابق مع targetSdk ويكون أكثر استقراراً
 
     ndkVersion = flutter.ndkVersion
 
@@ -48,7 +49,6 @@ android {
 
     buildTypes {
         release {
-            // --- ✅ تم التغيير من debug إلى release ---
             signingConfig = signingConfigs.getByName("release")
             
             // تفعيل التنظيف لتقليل حجم الـ AAB
@@ -65,10 +65,10 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.1.0"))
     implementation("com.google.firebase:firebase-messaging")
     implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-crashlytics") // 🚀 تم إضافة التبعية هنا
     implementation("com.facebook.android:facebook-android-sdk:latest.release")
 }
 
 flutter {
     source = "../.."
 }
-
