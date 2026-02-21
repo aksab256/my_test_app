@@ -1,3 +1,6 @@
+import 'package:firebase_crashlytics/firebase_crashlytics.dart'; // 🚀 إضافة مكتبة الكراشليتكس
+import 'package:flutter/foundation.dart'; // 🚀 ضرورية لالتقاط الأخطاء
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // ✅ مستورد للتحكم في شريط الحالة
 import 'package:firebase_core/firebase_core.dart';
@@ -72,6 +75,18 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ar', null);
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    // 🛡️ إعدادات Firebase Crashlytics
+  // التقاط جميع الأخطاء التي لم يتم التعامل معها بواسطة إطار عمل فلاتر
+  FlutterError.onError = (errorDetails) {
+    FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+  };
+
+  // التقاط الأخطاء التي تحدث في العمليات الخلفية أو غير المتزامنة (Async)
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
+
 
   // 🚀 تفعيل تتبع فتح التطبيق في فيسبوك
   final facebookAppEvents = FacebookAppEvents();
