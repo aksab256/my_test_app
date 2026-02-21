@@ -6,7 +6,7 @@ buildscript {
     dependencies {
         classpath("com.android.tools.build:gradle:8.1.0")        // نسخة Gradle مناسبة
         classpath("com.google.gms:google-services:4.4.0")        // ⬅️ إضافة Google Services
-        // أي classpath إضافي هنا
+        classpath("com.google.firebase:firebase-crashlytics-gradle:3.0.2") // 🚀 إضافة كلاس باث الكراشليتكس
     }
 }
 
