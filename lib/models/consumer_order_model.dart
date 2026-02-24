@@ -1,6 +1,7 @@
 // lib/models/consumer_order_model.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:latlong2/latlong.dart'; // ✅ ضروري للـ LatLng
 import '../constants/constants.dart';
 
 // نموذج المنتج داخل الطلب
@@ -9,7 +10,7 @@ class OrderItem {
   final num? quantity;
   final String? imageUrl;
   final double? price;
-  final String? productId; // تم إضافته لتمكين الفلترة الذكية
+  final String? productId; 
 
   OrderItem({
     this.name, 
@@ -25,7 +26,7 @@ class OrderItem {
       quantity: data['quantity'] as num?,
       imageUrl: (data['imageUrl'] ?? data['productImage']) as String?,
       price: (data['price'] as num?)?.toDouble(),
-      productId: data['productId'] as String?, // جلب المعرف للتأكد من نوع المنتج
+      productId: data['productId'] as String?, 
     );
   }
 }
@@ -44,9 +45,13 @@ class ConsumerOrderModel {
   final String status;
   final DateTime? orderDate; 
   final String paymentMethod;
-  final double deliveryFee; // الحقل الذي كان يظهر صفراً
+  final double deliveryFee; 
   final int pointsUsed;
   final List<OrderItem> items;
+  
+  // 🎯 الحقول الجديدة لدعم الإحداثيات (الرادار)
+  final double? lat;
+  final double? lng;
 
   ConsumerOrderModel({
     required this.id,
@@ -64,7 +69,12 @@ class ConsumerOrderModel {
     required this.deliveryFee,
     required this.pointsUsed,
     required this.items,
+    this.lat, // مضاف
+    this.lng, // مضاف
   });
+
+  // 🚀 الـ Getter الذي تحتاجه شاشة consumer_orders_screen.dart لحل الخطأ
+  LatLng get customerLatLng => LatLng(lat ?? 0.0, lng ?? 0.0);
 
   factory ConsumerOrderModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>?;
@@ -76,26 +86,36 @@ class ConsumerOrderModel {
 
     // 2. 🎯 منطق جلب مصاريف التوصيل الموحد مع الـ Checkout
     double extractedFee = 0.0;
-
-    // أولاً: محاولة القراءة من الحقل المباشر (في حال وجوده في طلبات قديمة أو تحديث مستقبلي)
     extractedFee = (data?['deliveryFee'] as num?)?.toDouble() ?? 0.0;
 
-    // ثانياً: إذا كانت النتيجة صفر، نبحث داخل المنتجات عن المعرف 'DELIVERY_FEE' 
-    // أو أي منتج يحتوي اسمه على كلمة "توصيل" (نفس منطق تطبيق المستهلك)
     if (extractedFee == 0) {
       for (var item in itemsList) {
         if (item.productId == 'DELIVERY_FEE' || 
             (item.name != null && (item.name!.contains("توصيل") || item.name!.contains("Delivery")))) {
           extractedFee = item.price ?? 0.0;
-          break; // وجدنا القيمة، نخرج من الحلقة
+          break; 
         }
       }
+    }
+
+    // 3. 📍 استخراج الإحداثيات الجغرافية (دعم الخريطة والرادار)
+    double? extractedLat;
+    double? extractedLng;
+
+    // محاولة القراءة من الهيكل الجديد (deliveryLocation) الذي أضفناه في الكنترولر
+    if (data?['deliveryLocation'] != null && data?['deliveryLocation'] is Map) {
+      extractedLat = (data?['deliveryLocation']['lat'] as num?)?.toDouble();
+      extractedLng = (data?['deliveryLocation']['lng'] as num?)?.toDouble();
+    } 
+    // محاولة القراءة في حال كانت البيانات مخزنة كـ GeoPoint (للتوافق مع البيانات القديمة)
+    else if (data?['customerLatLng'] is GeoPoint) {
+      extractedLat = (data?['customerLatLng'] as GeoPoint).latitude;
+      extractedLng = (data?['customerLatLng'] as GeoPoint).longitude;
     }
 
     final finalAmount = (data?['finalAmount'] as num?)?.toDouble() ?? 0.0;
     final pointsUsed = (data?['pointsUsed'] as num?)?.toInt() ?? 0;
 
-    // معالجة التاريخ (Timestamp أو String)
     DateTime? parsedDate;
     var rawDate = data?['orderDate'];
     if (rawDate is Timestamp) {
@@ -117,9 +137,11 @@ class ConsumerOrderModel {
       status: data?['status'] ?? 'new-order', 
       orderDate: parsedDate,
       paymentMethod: data?['paymentMethod'] ?? 'كاش',
-      deliveryFee: extractedFee, // القيمة المستخرجة بذكاء الآن
+      deliveryFee: extractedFee, 
       pointsUsed: pointsUsed,
       items: itemsList,
+      lat: extractedLat, // القيمة المستخرجة
+      lng: extractedLng, // القيمة المستخرجة
     );
   }
 }
