@@ -65,7 +65,6 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isDismissible: false,
-      // تأمين الـ BottomSheet بالـ SafeArea
       builder: (context) => SafeArea(child: _buildLocationSelectionSheet(hasValidRegisteredLocation, buyerDataProvider)),
     );
 
@@ -73,10 +72,22 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
       final position = await _getCurrentLocation();
       if (position != null) {
         _currentSearchLocation = LatLng(position.latitude, position.longitude);
+        
+        // 🎯 [تعديل جوهري] تخزين موقع الـ GPS في الجلسة المؤقتة لاستخدامه في الـ Checkout
+        buyerDataProvider.setSessionLocation(
+          lat: position.latitude,
+          lng: position.longitude,
+          address: "موقعي الحالي (GPS)", 
+        );
+        
         _searchAndDisplayStores(_currentSearchLocation!);
       }
     } else if (selectedOption == 'registered' && hasValidRegisteredLocation) {
       _currentSearchLocation = LatLng(buyerDataProvider.userLat!, buyerDataProvider.userLng!);
+      
+      // 🎯 [تعديل جوهري] مسح موقع الجلسة والعودة للعنوان المسجل رسمياً
+      buyerDataProvider.clearSessionLocation();
+      
       _searchAndDisplayStores(_currentSearchLocation!);
     }
   }
@@ -234,12 +245,11 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
 
   Widget _buildBottomStoresCarousel() {
     if (_nearbySupermarkets.isEmpty) return const SizedBox.shrink();
-    // تم تغليف الـ Carousel بـ SafeArea لضمان رفعه عن أزرار التحكم
     return SafeArea(
       top: false,
       child: Container(
         height: 170, 
-        margin: const EdgeInsets.only(bottom: 10), // تقليل المارجن لأن الـ SafeArea ستتولى المهمة
+        margin: const EdgeInsets.only(bottom: 10),
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 15),
@@ -293,6 +303,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
                   style: ElevatedButton.styleFrom(backgroundColor: brandGreen, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
                   onPressed: () {
                     Navigator.pop(context);
+                    // عند الدخول للمتجر، الموقع يكون مخزن بالفعل في الـ Provider بفضل دالة _promptLocationSelection
                     Navigator.pushNamed(context, MarketplaceHomeScreen.routeName, arguments: {'storeId': store['id'], 'storeName': store['supermarketName']});
                   },
                   child: const Text("دخول المتجر", style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900)),
@@ -334,7 +345,6 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
               ],
             ),
             Positioned(top: 115, left: 15, right: 15, child: _buildRadarStatusCard()),
-            // تم وضع الكاروسيل في القاع بشكل مؤمن
             Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomStoresCarousel()),
             if (_isLoading) _buildModernLoader(),
           ],
