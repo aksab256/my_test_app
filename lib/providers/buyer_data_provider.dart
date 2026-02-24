@@ -1,4 +1,3 @@
-// lib/providers/buyer_data_provider.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -26,11 +25,17 @@ class BuyerDataProvider with ChangeNotifier {
   String _userName = 'مرحباً بك!';
   LoggedInUser? _loggedInUser;
   String? _userId;
-  String _planName = 'باقة تجريبية'; // ✨ [إضافة] لتجنب خطأ الـ Build
+  String _planName = 'باقة تجريبية'; 
 
+  // 🏠 الموقع الثابت (المسجل في الحساب)
   double? _userLat;
   double? _userLng;
   String? _userAddress; 
+
+  // 📍 الموقع المؤقت (للجلسة الحالية فقط - GPS)
+  double? _sessionLat;
+  double? _sessionLng;
+  String? _sessionAddress;
 
   String _userRole = 'buyer';
   bool _deliveryIsActive = false;
@@ -45,13 +50,21 @@ class BuyerDataProvider with ChangeNotifier {
   bool _deliverySettingsAvailable = false;
   bool _deliveryPricesAvailable = false;
 
+  // --- Getters ---
   String get userName => _userName;
   LoggedInUser? get loggedInUser => _loggedInUser;
-  String get planName => _planName; // ✨ [إضافة] Getter اللازم للداش بورد
+  String get planName => _planName; 
 
+  // الـ Getters الأصلية للعنوان الثابت
   double? get userLat => _userLat;
   double? get userLng => _userLng;
   String? get userAddress => _userAddress; 
+
+  // 🎯 الـ Getters الذكية (تستخدم الموقع المؤقت إذا وجد، وإلا الثابت)
+  double? get effectiveLat => _sessionLat ?? _userLat;
+  double? get effectiveLng => _sessionLng ?? _userLng;
+  String? get effectiveAddress => _sessionAddress ?? _userAddress;
+  bool get isUsingSessionLocation => _sessionLat != null;
 
   String? get currentUserId => _userId;
   String get userClassification => _userRole;
@@ -67,6 +80,24 @@ class BuyerDataProvider with ChangeNotifier {
 
   bool get deliverySettingsAvailable => _deliverySettingsAvailable;
   bool get deliveryPricesAvailable => _deliveryPricesAvailable;
+
+  // --- Functions ---
+
+  /// تحديث الموقع المؤقت للجلسة الحالية (لا يحفظ في Firestore أو Local)
+  void setSessionLocation({required double lat, required double lng, String? address}) {
+    _sessionLat = lat;
+    _sessionLng = lng;
+    if (address != null) _sessionAddress = address;
+    notifyListeners();
+  }
+
+  /// مسح الموقع المؤقت والعودة للعنوان الثابت (للأمان)
+  void clearSessionLocation() {
+    _sessionLat = null;
+    _sessionLng = null;
+    _sessionAddress = null;
+    notifyListeners();
+  }
 
   Future<void> initializeData(String? currentUserId, String? currentDealerId, String? fullName) async {
     _isLoading = true;
@@ -92,7 +123,6 @@ class BuyerDataProvider with ChangeNotifier {
                                 locationData['addressName']?.toString() ?? 
                                 userData['address']?.toString();
               }
-              // ✨ [إضافة] تحديث اسم الخطة لو موجود في الـ Local Storage
               if (userData.containsKey('planName')) {
                 _planName = userData['planName'];
               }
@@ -104,6 +134,7 @@ class BuyerDataProvider with ChangeNotifier {
     } else {
       _loggedInUser = null;
       _userName = 'مرحباً بك!';
+      clearSessionLocation(); // تأمين إضافي عند الخروج
     }
 
     notifyListeners();
@@ -118,13 +149,11 @@ class BuyerDataProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // ✨ [إضافة] دالة لتحديث الخطة ديناميكياً من أي مكان
   void updatePlan(String newPlan) {
     _planName = newPlan;
     notifyListeners();
   }
 
-  // ... بقية الدوال (_checkDeliveryStatusAndDisplayIcons, إلخ) كما هي في ملفك الأصلي
   Future<void> _checkDeliveryStatusAndDisplayIcons(String? currentDealerId) async {
     _deliverySettingsAvailable = false;
     _deliveryPricesAvailable = false;
@@ -140,12 +169,10 @@ class BuyerDataProvider with ChangeNotifier {
         if (docData['isActive'] == true) {
           _deliveryPricesAvailable = true;
           _deliveryIsActive = true;
-          // تحديث الخطة من الداتا لو موجودة
           if(docData.containsKey('planName')) _planName = docData['planName'];
           return;
         }
       }
-      // ... بقية الكود
     } catch (e) { print(e); }
   }
 
