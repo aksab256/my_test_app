@@ -1,4 +1,3 @@
-// lib/screens/retailer_dispatch_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -11,7 +10,7 @@ import 'dart:math';
 
 class RetailerDispatchScreen extends StatefulWidget {
   final ConsumerOrderModel order;
-  final LatLng storeLocation; // موقع السوبر ماركت
+  final LatLng storeLocation; // موقع السوبر ماركت (نقطة الاستلام)
 
   const RetailerDispatchScreen({
     super.key,
@@ -42,27 +41,39 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
   }
 
   Future<void> _initializeDispatch() async {
-    // 1. جلب العناوين نصياً للعرض
+    // 1. جلب العناوين نصياً للعرض على الشاشة (الاستلام والتسليم)
     _getAddress(widget.storeLocation, true);
-    // تأكد أن موديل الطلب يحتوي على LatLng للعميل
-    // لو مش موجود حالياً، هنفترض وجود حقل customerLatLng في الموديل
     _getAddress(widget.order.customerLatLng, false);
 
-    // 2. حساب التكلفة للموتوسيكل فقط فوراً
+    // 2. حساب المسافة بدقة بين النقطتين
     double distance = _deliveryService.calculateDistance(
-      widget.storeLocation.latitude, widget.storeLocation.longitude,
-      widget.order.customerLatLng.latitude, widget.order.customerLatLng.longitude
+      widget.storeLocation.latitude, 
+      widget.storeLocation.longitude,
+      widget.order.customerLatLng.latitude, 
+      widget.order.customerLatLng.longitude
     );
 
+    // 3. حساب التكلفة بناءً على المسافة ونوع المركبة
     final results = await _deliveryService.calculateDetailedTripCost(
       distanceInKm: distance,
-      vehicleType: "motorcycle" // ثابت للموتوسيكل
+      vehicleType: "motorcycle" 
     );
 
-    setState(() {
-      _pricingDetails = results;
-      _estimatedPrice = results['totalPrice']!;
-    });
+    if (mounted) {
+      setState(() {
+        _pricingDetails = results;
+        _estimatedPrice = results['totalPrice']!;
+      });
+      _fitMapBounds();
+    }
+  }
+
+  void _fitMapBounds() {
+    final bounds = LatLngBounds.fromPoints([
+      widget.storeLocation,
+      widget.order.customerLatLng,
+    ]);
+    _mapController.fitCamera(CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)));
   }
 
   Future<void> _getAddress(LatLng position, bool isPickup) async {
@@ -70,13 +81,20 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
       List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
-        setState(() {
-          String addr = "${place.street ?? ''} ${place.locality ?? ''}";
-          if (isPickup) _pickupAddress = addr; else _dropoffAddress = addr;
-        });
+        if (mounted) {
+          setState(() {
+            String addr = "${place.street ?? ''} ${place.locality ?? ''}";
+            if (isPickup) _pickupAddress = addr; else _dropoffAddress = addr;
+          });
+        }
       }
     } catch (e) {
-      if (mounted) setState(() { if (isPickup) _pickupAddress = "موقع المتجر"; else _dropoffAddress = "موقع العميل"; });
+      if (mounted) {
+        setState(() { 
+          if (isPickup) _pickupAddress = "موقع المتجر"; 
+          else _dropoffAddress = widget.order.customerAddress; 
+        });
+      }
     }
   }
 
@@ -90,34 +108,46 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
       final user = FirebaseAuth.instance.currentUser;
       final String securityCode = _generateOTP();
 
-      // الرفع لنفس المجموعة (specialRequests) مع الحقل المميز
+      // 🚀 رفع الطلب للرادار بكافة بيانات التواصل (أمان كامل وتنسيق سهل)
       await FirebaseFirestore.instance.collection('specialRequests').add({
         'userId': user?.uid ?? 'anonymous_retailer',
-        'userPhone': widget.order.customerPhone, // هاتف العميل للتوصيل
+        
+        // 🏪 بيانات التاجر (الاستلام)
+        'retailerName': widget.order.supermarketName,
+        'retailerPhone': widget.order.supermarketPhone, 
+        
+        // 👤 بيانات العميل (التسليم)
+        'customerName': widget.order.customerName,
+        'userPhone': widget.order.customerPhone, // هاتف المستلم
+        
+        // 📍 المواقع الجغرافية
         'pickupLocation': GeoPoint(widget.storeLocation.latitude, widget.storeLocation.longitude),
         'pickupAddress': _pickupAddress,
         'dropoffLocation': GeoPoint(widget.order.customerLatLng.latitude, widget.order.customerLatLng.longitude),
         'dropoffAddress': _dropoffAddress,
+        
+        // 💰 الحسابات المالية
         'totalPrice': _pricingDetails['totalPrice'],
         'commissionAmount': _pricingDetails['commissionAmount'],
         'driverNet': _pricingDetails['driverNet'],
         'vehicleType': 'motorcycle',
-        'details': "طلب من متجر: رقم الطلب ${widget.order.orderId}",
+        
+        // 📝 تفاصيل إضافية
+        'details': "توصيل طلب متجر: ${widget.order.supermarketName} | عميل: ${widget.order.customerName}",
         'status': 'pending',
         'verificationCode': securityCode,
         'createdAt': FieldValue.serverTimestamp(),
-        // ✅ الحقل المميز للتفريق بين طلب المستهلك وطلب التاجر
         'requestSource': 'retailer', 
-        'originalOrderId': widget.order.id, // ربط الطلبين ببعض
+        'originalOrderId': widget.order.id, 
       });
 
       if (!mounted) return;
-      Navigator.pop(context); // العودة لصفحة الطلبات
+      Navigator.pop(context); 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(backgroundColor: Colors.green, content: Text("🚀 تم بث الطلب للرادار بنجاح!"))
+        const SnackBar(backgroundColor: Colors.green, content: Text("🚀 تم بث الطلب لرادار المناديب بنجاح!"))
       );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ أثناء البث: $e")));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -129,9 +159,10 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text("تأكيد مسار التوصيل", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+          title: const Text("تأكيد مسار التوصيل", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 18)),
           backgroundColor: Colors.white,
           elevation: 1,
+          leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.black), onPressed: () => Navigator.pop(context)),
           centerTitle: true,
         ),
         body: Stack(
@@ -151,18 +182,20 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
                   markers: [
                     Marker(
                       point: widget.storeLocation,
-                      child: const Icon(Icons.store, color: Colors.green, size: 40),
+                      width: 50, height: 50,
+                      child: const Icon(Icons.storefront_rounded, color: Colors.green, size: 45),
                     ),
                     Marker(
                       point: widget.order.customerLatLng,
-                      child: const Icon(Icons.person_pin_circle, color: Colors.red, size: 40),
+                      width: 50, height: 50,
+                      child: const Icon(Icons.person_pin_circle, color: Colors.red, size: 45),
                     ),
                   ],
                 ),
               ],
             ),
             _buildDispatchCard(),
-            if (_isLoading) Container(color: Colors.black26, child: const Center(child: CircularProgressIndicator())),
+            if (_isLoading) Container(color: Colors.black45, child: const Center(child: CircularProgressIndicator(color: Colors.white))),
           ],
         ),
       ),
@@ -173,38 +206,54 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
     return Align(
       alignment: Alignment.bottomCenter,
       child: Container(
-        margin: const EdgeInsets.all(15),
+        margin: const EdgeInsets.fromLTRB(15, 0, 15, 30),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10)],
+          borderRadius: BorderRadius.circular(25),
+          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 15, offset: Offset(0, -5))],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildLocationRow(Icons.circle, Colors.green, "الاستلام: $_pickupAddress"),
-            const SizedBox(height: 10),
-            _buildLocationRow(Icons.location_on, Colors.red, "التسليم: $_dropoffAddress"),
-            const Divider(height: 30),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+            const SizedBox(height: 20),
+            _buildLocationRow(Icons.circle, Colors.green, "الاستلام من المتجر:", _pickupAddress),
+            const Padding(padding: EdgeInsets.only(right: 7), child: SizedBox(height: 15, child: VerticalDivider(width: 2, color: Colors.grey))),
+            _buildLocationRow(Icons.location_on, Colors.red, "التسليم للعميل:", _dropoffAddress),
+            const Divider(height: 40),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text("تكلفة التوصيل (موتوسيكل):", style: TextStyle(fontWeight: FontWeight.bold)),
-                Text("${_estimatedPrice.toStringAsFixed(0)} ج.م", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green)),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("تكلفة التوصيل المقدرة", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    Text("المستلم: ${widget.order.customerName}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
+                  ],
+                ),
+                Text("${_estimatedPrice.toStringAsFixed(0)} ج.م", style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Colors.green)),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 25),
             SizedBox(
               width: double.infinity,
-              height: 55,
+              height: 60,
               child: ElevatedButton(
                 onPressed: _sendToRadar,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.orange[800],
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18))
                 ),
-                child: const Text("تأكيد وبث للرادار الآن", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.radar, color: Colors.white),
+                    SizedBox(width: 10),
+                    Text("تأكيد وبث لجميع المناديب", style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+                  ],
+                ),
               ),
             ),
           ],
@@ -213,12 +262,21 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
     );
   }
 
-  Widget _buildLocationRow(IconData icon, Color color, String text) {
+  Widget _buildLocationRow(IconData icon, Color color, String label, String address) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: color, size: 16),
-        const SizedBox(width: 10),
-        Expanded(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
+        Padding(padding: const EdgeInsets.only(top: 4), child: Icon(icon, color: color, size: 18)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+              Text(address, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ),
       ],
     );
   }
