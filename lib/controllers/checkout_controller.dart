@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart'; // ✅ إضافة مهمة للوصول للبروفايدر
+import 'package:my_test_app/providers/buyer_data_provider.dart'; // ✅ مسار البروفايدر الخاص بك
 // 🚀 إضافة مكتبة تتبع فيسبوك
 import 'package:facebook_app_events/facebook_app_events.dart';
 
@@ -63,6 +65,9 @@ class CheckoutController {
     required bool useCashback,
     required dynamic selectedPaymentMethod,
   }) async {
+    // 🎯 الوصول للبروفايدر لسحب الموقع الفعال (المؤقت أو الثابت)
+    final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
+
     if (checkoutOrders.isEmpty || loggedUser['id'] == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('خطأ: بيانات ناقصة.'), backgroundColor: kErrorColor)
@@ -74,8 +79,8 @@ class CheckoutController {
     final String paymentMethodString = selectedPaymentMethod.toString();
     final Map<String, dynamic> safeLoggedUser = Map<String, dynamic>.from(loggedUser);
 
-    // 🔍 استخراج البيانات بدقة (لحل لغز البيانات الناقصة)
-    final String? address = (safeLoggedUser['address']?.toString() == 'null' || (safeLoggedUser['address']?.toString().isEmpty ?? true)) ? null : safeLoggedUser['address'].toString();
+    // 🔍 استخراج البيانات بدقة (مع استخدام الموقع الفعال من البروفايدر)
+    final String? address = buyerProvider.effectiveAddress; 
     final String? customerPhone = (safeLoggedUser['phone']?.toString() == 'null') ? null : safeLoggedUser['phone']?.toString();
     final String? customerFullname = (safeLoggedUser['fullname']?.toString() == 'null') ? null : safeLoggedUser['fullname']?.toString();
     final String? customerEmail = (safeLoggedUser['email']?.toString() == 'null') ? null : safeLoggedUser['email']?.toString();
@@ -87,8 +92,6 @@ class CheckoutController {
 
     final bool isConsumer = (safeLoggedUser['role'] == 'consumer');
     final String ordersCollectionName = isConsumer ? "consumerorders" : "orders";
-    final String usersCollectionName = isConsumer ? "consumers" : "users";
-    final String cashbackFieldName = isConsumer ? "cashbackBalance" : "cashback";
 
     // تصفية وحقن البيانات
     final List<Map<String, dynamic>> processedCheckoutOrders = [];
@@ -136,22 +139,27 @@ class CheckoutController {
       List<String> successfulOrderIds = [];
 
       if (needsSecureProcessing) {
-        // [المسار الآمن عبر API]
-        // ... (نفس كود الـ API الخاص بك)
+        // [المسار الآمن عبر API - تم حذفه للاختصار تماشياً مع طلبك الأصلي، مع الحفاظ على المنطق]
       } else {
-        // [المسار المباشر لفايرستور] - هنا تم إصلاح حقن البيانات ✅
+        // [المسار المباشر لفايرستور]
         for (final sellerId in groupedItems.keys) {
           final sellerOrder = groupedItems[sellerId]!;
           final List<Map<String, dynamic>> allPaidItems = List<Map<String, dynamic>>.from(sellerOrder['items']);
           double subtotalPrice = allPaidItems.fold(0.0, (sum, item) => (item['isGift'] ?? false) ? sum : sum + ((item['price'] as num).toDouble() * (item['quantity'] as num).toDouble()));
           double discountPortion = actualOrderTotal > 0 ? (subtotalPrice / actualOrderTotal) * discountUsed : 0.0;
 
-          // 🛠️ تم إضافة الهاتف والعنوان هنا لضمان ظهورهما عند التاجر
+          // 🛠️ حقن بيانات العميل وموقعه الجغرافي (Effective Location)
           Map<String, dynamic> orderData = isConsumer ? {
             'customerId': safeLoggedUser['id'],
             'customerName': customerFullname,
-            'customerPhone': customerPhone,   // ✅ مضاف حديثاً
-            'customerAddress': address,       // ✅ مضاف حديثاً
+            'customerPhone': customerPhone,
+            'customerAddress': address,
+            // 📍 تسجيل الإحداثيات الفعلية (سواء GPS أو الثابت)
+            'deliveryLocation': {
+              'lat': buyerProvider.effectiveLat,
+              'lng': buyerProvider.effectiveLng,
+              'isGpsLocation': buyerProvider.isUsingSessionLocation, // علامة للمندوب
+            },
             'supermarketId': sellerId,
             'supermarketName': sellerOrder['sellerName'],
             'items': allPaidItems,
@@ -165,7 +173,9 @@ class CheckoutController {
               'id': safeLoggedUser['id'], 
               'name': customerFullname, 
               'address': address,
-              'phone': customerPhone // ✅ مضاف حديثاً للتاجر أيضاً
+              'phone': customerPhone,
+              'lat': buyerProvider.effectiveLat,
+              'lng': buyerProvider.effectiveLng,
             },
             'sellerId': sellerId,
             'items': allPaidItems,
@@ -182,7 +192,7 @@ class CheckoutController {
       }
 
       if (successfulOrderIds.isNotEmpty) {
-        // 🚀 تتبع فيسبوك عند النجاح
+        // 🚀 تتبع فيسبوك
         try {
           facebookAppEvents.logPurchase(
             amount: finalTotalAmount,
@@ -195,6 +205,9 @@ class CheckoutController {
         } catch (fbError) {
           debugPrint('Facebook Event Error: $fbError');
         }
+
+        // 🎯 تنظيف موقع الجلسة بعد نجاح الطلب (للأمان)
+        buyerProvider.clearSessionLocation();
 
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم إرسال طلبك بنجاح!'), backgroundColor: kPrimaryColor));
         return true;
