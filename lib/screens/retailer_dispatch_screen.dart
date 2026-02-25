@@ -5,10 +5,10 @@ import 'package:latlong2/latlong.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:provider/provider.dart'; // ✅ أضفنا البروفايدر
+import 'package:provider/provider.dart'; 
 import '../../models/consumer_order_model.dart';
 import '../../services/delivery_service.dart';
-import '../../providers/buyer_data_provider.dart'; // ✅ استدعاء بروفايدر البيانات
+import '../../providers/buyer_data_provider.dart'; 
 import 'dart:math';
 
 class RetailerDispatchScreen extends StatefulWidget {
@@ -108,10 +108,18 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
   Future<void> _sendToRadar() async {
     if (_estimatedPrice == 0) return;
     
-    // ✅ جلب بيانات التاجر الحالية من الـ Provider
     final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
-    final String? merchantPhone = buyerProvider.loggedInUser?.phone; // تأكد من وجود حقل phone في LoggedInUser
-    final String? merchantName = buyerProvider.loggedInUser?.fullname;
+    
+    // 💡 حيلة الذكاء الاصطناعي: استخراج الرقم الصافي من الإيميل الذكي (مثلاً 01012345678@aksab.com)
+    // نأخذ الجزء قبل العلامة @ لضمان وصول رقم الراسل الصحيح للمندوب
+    final String? authEmail = FirebaseAuth.instance.currentUser?.email;
+    final String? phoneFromEmail = authEmail != null && authEmail.contains('@') 
+        ? authEmail.split('@').first 
+        : null;
+
+    // تحديد رقم الراسل النهائي (من البروفايدر أولاً، ثم الإيميل كحل احتياطي)
+    final String senderPhone = buyerProvider.loggedInUser?.phone ?? phoneFromEmail ?? 'غير متوفر';
+    final String? merchantName = buyerProvider.loggedInUser?.fullname ?? widget.order.supermarketName;
 
     setState(() => _isLoading = true);
 
@@ -122,11 +130,15 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
       // 1. إنشاء وثيقة الرادار في specialRequests
       DocumentReference radarRef = await FirebaseFirestore.instance.collection('specialRequests').add({
         'userId': user?.uid ?? 'anonymous_retailer',
-        'userName': merchantName ?? widget.order.supermarketName, // اسم التاجر من البروفايدر
+        'userName': merchantName,
         
-        // 📞 الربط المطلوب: جلب رقم التاجر من بياناته المسجلة
-        'userPhone': merchantPhone ?? 'غير متوفر', 
+        // 📞 رقم الراسل (صاحب السوبر ماركت) المستخرج بذكاء
+        'userPhone': senderPhone, 
         
+        // 📞 رقم المستلم (الزبون النهائي) مأخوذ من بيانات الأوردر الأصلية
+        'customerPhone': widget.order.customerPhone,
+        'customerName': widget.order.customerName,
+
         'pickupLocation': GeoPoint(widget.storeLocation.latitude, widget.storeLocation.longitude),
         'pickupAddress': _pickupAddress,
         'dropoffLocation': GeoPoint(widget.order.customerLatLng.latitude, widget.order.customerLatLng.longitude),
@@ -140,13 +152,11 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
         'createdAt': FieldValue.serverTimestamp(),
         'requestSource': 'retailer', 
         'originalOrderId': widget.order.id, 
-        'customerName': widget.order.customerName,
-        'customerPhone': widget.order.customerPhone, 
         'orderFinalAmount': widget.order.finalAmount, 
-        'details': "🛒 استلام من: ${merchantName ?? widget.order.supermarketName}\n👤 تسليم لعميل: ${widget.order.customerName}\n💰 تحصيل كاش: ${widget.order.finalAmount} ج.م",
+        'details': "🛒 استلام من: $merchantName\n👤 تسليم لعميل: ${widget.order.customerName}\n💰 تحصيل كاش: ${widget.order.finalAmount} ج.م",
       });
 
-      // 2. الربط مع طلب المستهلك
+      // 2. الربط مع طلب المستهلك (تحديث حقل الـ ID)
       await FirebaseFirestore.instance
           .collection('consumerorders')
           .doc(widget.order.id)
