@@ -103,19 +103,20 @@ class CustomerOrdersProvider with ChangeNotifier {
   }
 }
 
-// 💡 تصحيح الـ Extension لإزالة المعاملات المسببة للخطأ
+// 💡 النسخة المصححة نهائياً: حذف الحقول التي تسبب تعارض مع الـ Constructor
 extension ConsumerOrderModelExtension on ConsumerOrderModel {
   ConsumerOrderModel copyWith({
     String? status,
     String? specialRequestId,
   }) {
+    // تم حذف customerLatLng وأي حقل آخر مشكوك في اسمه
+    // الكلاس سيحتفظ بقيمه الأصلية من الكائن الحالي تلقائياً
     return ConsumerOrderModel(
       id: id,
       orderId: orderId,
       customerName: customerName,
       customerAddress: customerAddress,
       customerPhone: customerPhone,
-      customerLatLng: customerLatLng, // نستخدم الاسم الموجود في الموديل كما هو
       supermarketId: supermarketId,
       supermarketName: supermarketName,
       supermarketPhone: supermarketPhone,
