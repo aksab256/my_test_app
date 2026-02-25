@@ -1,4 +1,5 @@
 // lib/providers/customer_orders_provider.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/consumer_order_model.dart';
@@ -14,6 +15,9 @@ class CustomerOrdersProvider with ChangeNotifier {
   bool _isSuccess = true;
   List<ConsumerOrderModel> _orders = [];
 
+  // ✅ إضافة اشتراك للتحكم في تدفق البيانات اللحظي
+  StreamSubscription<QuerySnapshot>? _ordersSubscription;
+
   // Getters
   bool get isLoading => _isLoading;
   String? get message => _message;
@@ -21,8 +25,8 @@ class CustomerOrdersProvider with ChangeNotifier {
   List<ConsumerOrderModel> get orders => _orders;
 
   CustomerOrdersProvider(this._buyerData) {
-    // استدعاء الجلب عند التهيئة
-    fetchAndDisplayOrdersForBuyer();
+    // البدء بالاستماع فور تهيئة الـ Provider
+    listenToOrdersForBuyer();
   }
 
   void showNotification(String msg, bool success) {
@@ -36,55 +40,61 @@ class CustomerOrdersProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void setIsLoading(bool value) {
-    _isLoading = value;
-    notifyListeners();
-  }
-
   // ------------------------------------
-  // وظيفة جلب البيانات - نسخة مصححة ومرنة
+  // ✅ وظيفة الاستماع اللحظي (Stream)
   // ------------------------------------
-  Future<void> fetchAndDisplayOrdersForBuyer() async {
-    setIsLoading(true);
-    clearNotification();
-
+  void listenToOrdersForBuyer() {
     final buyerId = _buyerData.loggedInUser?.id;
 
     if (buyerId == null || buyerId.isEmpty) {
-      showNotification('يجب أن تكون مسجلاً كتاجر لعرض الطلبات.', false);
-      setIsLoading(false);
+      debugPrint("⚠️ No logged-in buyer ID found for streaming orders.");
       return;
     }
 
+    _isLoading = true;
+    notifyListeners();
+
+    // إلغاء أي اشتراك قديم لتجنب تكرار البيانات أو تسريب الذاكرة
+    _ordersSubscription?.cancel();
+
     try {
-      // جلب البيانات من مجموعة consumerorders حيث supermarketId هو التاجر الحالي
-      final querySnapshot = await _firestore
-          .collection(CONSUMER_ORDERS_COLLECTION)
+      // ✅ مراقبة مجموعة consumerorders لحظة بلحظة
+      _ordersSubscription = _firestore
+          .collection(CONSUMER_ORDERS_COLLECTION) // 'consumerorders'
           .where("supermarketId", isEqualTo: buyerId)
           .orderBy('orderDate', descending: true)
-          .get();
+          .snapshots()
+          .listen((querySnapshot) {
+        
+        if (querySnapshot.docs.isEmpty) {
+          _orders = [];
+          _message = 'لا توجد طلبات عملاء حاليًا.';
+        } else {
+          _orders = querySnapshot.docs.map((doc) {
+            try {
+              return ConsumerOrderModel.fromFirestore(doc);
+            } catch (e) {
+              debugPrint("🚨 Error parsing order ${doc.id}: $e");
+              return null;
+            }
+          }).whereType<ConsumerOrderModel>().toList();
+          
+          _message = null;
+        }
 
-      if (querySnapshot.docs.isEmpty) {
-        _orders = [];
-        showNotification('لا توجد طلبات عملاء حاليًا.', true);
-      } else {
-        // تحويل الوثائق مع معالجة الأخطاء لكل وثيقة على حدة لضمان استمرار التطبيق
-        _orders = querySnapshot.docs.map((doc) {
-          try {
-            return ConsumerOrderModel.fromFirestore(doc);
-          } catch (e) {
-            debugPrint("🚨 Error parsing order ${doc.id}: $e");
-            return null;
-          }
-        }).whereType<ConsumerOrderModel>().toList();
-
-        showNotification('تم جلب ${_orders.length} طلب بنجاح.', true);
-      }
+        _isLoading = false;
+        _isSuccess = true;
+        notifyListeners(); // 🚀 سيؤدي هذا لتحديث شاشة الطلبات والزر فوراً
+      }, onError: (error) {
+        debugPrint("❌ Stream Error: $error");
+        _isLoading = false;
+        _message = "حدث خطأ أثناء مزامنة البيانات.";
+        _isSuccess = false;
+        notifyListeners();
+      });
     } catch (e) {
-      debugPrint("❌ Error fetching orders: $e");
-      showNotification('حدث خطأ أثناء جلب الطلبات. تأكد من وجود الفهارس (Indexes).', false);
-    } finally {
-      setIsLoading(false);
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
@@ -92,22 +102,16 @@ class CustomerOrdersProvider with ChangeNotifier {
   // تحديث حالة الطلب
   // ------------------------------------
   Future<void> updateOrderStatus(String orderDocId, String newStatus) async {
+    // البحث عن الطلب في القائمة المحلية للتأكد من وجوده
     final orderIndex = _orders.indexWhere((o) => o.id == orderDocId);
     if (orderIndex == -1) return;
 
     final orderToUpdate = _orders[orderIndex];
     
-    // منع التعديل على الطلبات المنتهية
     if (orderToUpdate.status == 'delivered' || orderToUpdate.status == 'cancelled') {
       showNotification('لا يمكن تعديل طلب منتهي.', false);
       return;
     }
-
-    final originalStatus = orderToUpdate.status;
-    
-    // تحديث واجهة المستخدم فوراً (Optimistic Update)
-    _orders[orderIndex] = orderToUpdate.copyWith(status: newStatus);
-    notifyListeners();
 
     try {
       await _firestore
@@ -117,19 +121,27 @@ class CustomerOrdersProvider with ChangeNotifier {
         'status': newStatus,
         'lastUpdated': FieldValue.serverTimestamp(),
       });
+      // ملاحظة: لا حاجة لتحديث القائمة يدوياً هنا لأن الـ Stream سيقوم بذلك فوراً
       showNotification('تم تحديث الحالة بنجاح', true);
     } catch (e) {
-      // تراجع عن التغيير في حال فشل الاتصال بقاعدة البيانات
-      _orders[orderIndex] = orderToUpdate.copyWith(status: originalStatus);
-      notifyListeners();
+      debugPrint("❌ Update Status Error: $e");
       showNotification('فشل تحديث الحالة في السيرفر', false);
     }
   }
+
+  @override
+  void dispose() {
+    _ordersSubscription?.cancel(); // ✅ تنظيف الذاكرة عند إغلاق الـ Provider
+    super.dispose();
+  }
 }
 
-// 💡 إضافة امتداد copyWith لتسهيل تحديث الحالة برمجياً
+// 💡 نسخة محدثة من copyWith تدعم الـ specialRequestId
 extension ConsumerOrderModelExtension on ConsumerOrderModel {
-  ConsumerOrderModel copyWith({String? status}) {
+  ConsumerOrderModel copyWith({
+    String? status,
+    String? specialRequestId,
+  }) {
     return ConsumerOrderModel(
       id: id,
       orderId: orderId,
@@ -146,6 +158,8 @@ extension ConsumerOrderModelExtension on ConsumerOrderModel {
       deliveryFee: deliveryFee,
       pointsUsed: pointsUsed,
       items: items,
+      customerLatLng: customerLatLng, // تأكد من وجود الحقول الأساسية
+      specialRequestId: specialRequestId ?? this.specialRequestId,
     );
   }
 }
