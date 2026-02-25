@@ -20,14 +20,18 @@ class ConsumerOrdersScreen extends StatelessWidget {
     final ordersProvider = Provider.of<CustomerOrdersProvider>(context);
     
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Colors.white, // خلفية فاتحة وصريحة
       appBar: AppBar(
         title: Text('إدارة عهدة الطلبات', 
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16.sp, fontFamily: 'Cairo')),
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18.sp, fontFamily: 'Cairo')),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF4CAF50),
-        elevation: 0.5,
+        elevation: 0,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: Colors.grey[200], height: 1),
+        ),
       ),
       body: SafeArea(
         child: ordersProvider.isLoading
@@ -37,15 +41,15 @@ class ConsumerOrdersScreen extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.inventory_2_outlined, size: 50.sp, color: Colors.grey[300]),
-                        const SizedBox(height: 15),
+                        Icon(Icons.inventory_2_outlined, size: 60.sp, color: Colors.grey[300]),
+                        SizedBox(height: 2.h),
                         Text(ordersProvider.message ?? 'لا توجد سجلات عهدة حالية.',
-                            style: TextStyle(color: Colors.grey[600], fontFamily: 'Cairo')),
+                            style: TextStyle(color: Colors.grey[600], fontSize: 14.sp, fontFamily: 'Cairo')),
                       ],
                     ),
                   )
                 : ListView.builder(
-                    padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
+                    padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 2.h),
                     physics: const BouncingScrollPhysics(),
                     itemCount: ordersProvider.orders.length,
                     itemBuilder: (context, index) {
@@ -106,11 +110,16 @@ class _OrderCardState extends State<OrderCard> {
     final order = widget.order;
     final buyerProvider = Provider.of<BuyerDataProvider>(context);
     
-    final borderColor = order.status == OrderStatuses.NEW_ORDER
+    // 🚩 تحديد اللون بناءً على الحالة: أصفر للجديد، أحمر للمرتجع، أخضر للباقي
+    Color borderColor = order.status == OrderStatuses.NEW_ORDER
         ? const Color(0xFFFFC107)
         : const Color(0xFF4CAF50);
+    
+    // إذا كانت هناك علامة مرتجع، نتحول للون الأحمر فوراً
+    if (order.returnRequested == true) {
+      borderColor = Colors.redAccent;
+    }
 
-    // 🛡️ القفل الذكي: يُغلق الزرار في الحالات النهائية أو إذا كان الشحن بواسطة مندوب الرادار
     final bool isLockedByRadar = order.status == OrderStatuses.SHIPPED && 
                                 (order.specialRequestId != null && order.specialRequestId!.isNotEmpty);
 
@@ -119,100 +128,133 @@ class _OrderCardState extends State<OrderCard> {
                            isLockedByRadar;
 
     return Container(
-      margin: EdgeInsets.only(bottom: 2.h),
+      margin: EdgeInsets.only(bottom: 2.5.h),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
-        border: Border.all(color: borderColor.withOpacity(0.4), width: 1.5),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: borderColor.withOpacity(0.1),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          )
+        ],
+        border: Border.all(color: borderColor.withOpacity(0.6), width: 2.5), // شريط أعرض وأوضح
       ),
       child: ExpansionTile(
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(15))),
-        collapsedShape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(15))),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         onExpansionChanged: (val) => setState(() => _isExpanded = val),
-        trailing: Icon(_isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: borderColor),
+        trailing: Icon(_isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: borderColor, size: 25.sp),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('سجل عهدة رقم: ${order.orderId}', 
-                style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.bold, color: Colors.black87, fontFamily: 'Cairo')),
-            Text(order.customerName, style: TextStyle(fontSize: 11.sp, color: Colors.grey[700], fontFamily: 'Cairo')),
+            Text('سجل عهدة: #${order.orderId}', 
+                style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900, color: Colors.black87, fontFamily: 'Cairo')),
+            SizedBox(height: 0.5.h),
+            Text(order.customerName, 
+                style: TextStyle(fontSize: 13.sp, color: Colors.grey[800], fontWeight: FontWeight.w600, fontFamily: 'Cairo')),
           ],
         ),
-        subtitle: Text('قيمة العهدة: ${order.finalAmount.toStringAsFixed(2)} ج.م', 
-            style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.bold, fontSize: 10.sp)),
+        subtitle: Padding(
+          padding: EdgeInsets.only(top: 1.h),
+          child: Text('قيمة العهدة: ${order.finalAmount.toStringAsFixed(2)} ج.م', 
+              style: TextStyle(color: borderColor, fontWeight: FontWeight.w800, fontSize: 13.sp)),
+        ),
         children: [
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 1.h),
+            padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (order.returnRequested == true) ...[
+                   Container(
+                     width: double.infinity,
+                     padding: EdgeInsets.all(12),
+                     decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(10)),
+                     child: Row(
+                       children: [
+                         Icon(Icons.warning_amber_rounded, color: Colors.red),
+                         SizedBox(width: 10),
+                         Expanded(
+                           child: Text("تنبيه: العميل رفض الاستلام، العهدة في طريق العودة.",
+                               style: TextStyle(color: Colors.red[900], fontWeight: FontWeight.bold, fontSize: 11.sp, fontFamily: 'Cairo')),
+                         ),
+                       ],
+                     ),
+                   ),
+                   SizedBox(height: 2.h),
+                ],
                 const Divider(),
                 _buildInfoRow(Icons.phone, 'تواصل الوجهة', order.customerPhone),
                 _buildInfoRow(Icons.location_on, 'موقع التسليم', order.customerAddress),
                 _buildInfoRow(Icons.calendar_today, 'توقيت الإنشاء', order.orderDate?.toLocaleString() ?? 'غير متوفر'),
                 
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 10),
-                  child: Text('تفاصيل محتويات العهدة:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF4CAF50), fontFamily: 'Cairo')),
+                Padding(
+                  padding: EdgeInsets.symmetric(vertical: 2.h),
+                  child: Text('تفاصيل محتويات العهدة:', 
+                      style: TextStyle(fontWeight: FontWeight.w900, color: const Color(0xFF4CAF50), fontSize: 13.sp, fontFamily: 'Cairo')),
                 ),
                 _buildItemsList(order),
                 
-                const Divider(height: 30),
-                Text(isLockedByRadar ? 'الحالة (مُدارة بواسطة المندوب):' : 'إدارة حالة العهدة:', 
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-                const SizedBox(height: 10),
+                const Divider(height: 40),
+                Text(isLockedByRadar ? 'الحالة (بعهدة المندوب):' : 'إدارة حالة العهدة:', 
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.sp, fontFamily: 'Cairo')),
+                SizedBox(height: 1.5.h),
                 
                 DropdownButtonFormField<String>(
                   value: _selectedStatus,
                   items: OrderStatusesHelpers.allStatuses.map((status) {
-                    return DropdownMenuItem(value: status, child: Text(getStatusDisplayName(status), style: const TextStyle(fontFamily: 'Cairo')));
+                    return DropdownMenuItem(
+                      value: status, 
+                      child: Text(getStatusDisplayName(status), style: TextStyle(fontFamily: 'Cairo', fontSize: 12.sp, fontWeight: FontWeight.bold))
+                    );
                   }).toList(),
                   onChanged: isDisabled ? null : (newValue) => setState(() => _selectedStatus = newValue!),
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: isDisabled ? Colors.grey[100] : Colors.grey[50],
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 1.5.h),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
                   ),
                 ),
-                const SizedBox(height: 15),
+                SizedBox(height: 2.h),
                 
                 Row(
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: isDisabled ? null : () => widget.provider.updateOrderStatus(order.id, _selectedStatus),
-                        icon: const Icon(Icons.save_as_outlined, size: 18),
-                        label: const Text('تثبيت الحالة', style: TextStyle(fontFamily: 'Cairo')),
+                        icon: const Icon(Icons.save_as_outlined),
+                        label: Text('تثبيت الحالة', style: TextStyle(fontFamily: 'Cairo', fontSize: 12.sp, fontWeight: FontWeight.bold)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF4CAF50),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: EdgeInsets.symmetric(vertical: 1.8.h),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    SizedBox(width: 3.w),
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () async => await OrderPrinterHelper.printOrderReceipt(order),
-                        icon: const Icon(Icons.print, size: 18),
-                        label: const Text('طباعة السند', style: TextStyle(fontFamily: 'Cairo')),
+                        icon: const Icon(Icons.print),
+                        label: Text('طباعة السند', style: TextStyle(fontFamily: 'Cairo', fontSize: 12.sp, fontWeight: FontWeight.bold)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF2c3e50),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: EdgeInsets.symmetric(vertical: 1.8.h),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                       ),
                     ),
                   ],
                 ),
                 
-                const SizedBox(height: 15),
+                SizedBox(height: 2.h),
                 
-                // 🔄 المستمع لطلب الرادار (اللوجيستيات)
+                // 🔄 زرار اللوجيستيات (الرادار)
                 StreamBuilder<DocumentSnapshot>(
                   stream: (order.specialRequestId != null && order.specialRequestId!.isNotEmpty)
                       ? FirebaseFirestore.instance.collection('specialRequests').doc(order.specialRequestId).snapshots()
@@ -235,17 +277,18 @@ class _OrderCardState extends State<OrderCard> {
                         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RetailerTrackingScreen(orderId: order.specialRequestId!))),
                         label: 'جاري البحث عن مندوب...',
                         icon: Icons.hourglass_empty,
-                        color: Colors.grey[600]!,
+                        color: Colors.grey[700]!,
                         isProcessing: true,
                       );
                     }
 
-                    if (['accepted', 'at_pickup', 'picked_up'].contains(radarStatus)) {
+                    // في حالة تم القبول أو الاستلام أو الرجوع (مرتجع)
+                    if (['accepted', 'at_pickup', 'picked_up', 'returning_to_seller'].contains(radarStatus)) {
                       return _buildActionButton(
                         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RetailerTrackingScreen(orderId: order.specialRequestId!))),
-                        label: 'تتبع مسار نقل العهدة',
+                        label: (order.returnRequested == true) ? 'تتبع عودة العهدة (مرتجع)' : 'تتبع مسار نقل العهدة',
                         icon: Icons.location_on_outlined,
-                        color: Colors.blue[800]!,
+                        color: (order.returnRequested == true) ? Colors.red[800]! : Colors.blue[800]!,
                       );
                     }
 
@@ -257,7 +300,7 @@ class _OrderCardState extends State<OrderCard> {
                     );
                   },
                 ),
-                const SizedBox(height: 10),
+                SizedBox(height: 2.h),
               ],
             ),
           )
@@ -272,14 +315,15 @@ class _OrderCardState extends State<OrderCard> {
       child: ElevatedButton.icon(
         onPressed: onPressed,
         icon: isProcessing 
-          ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white.withOpacity(0.7)))
-          : Icon(icon, size: 22),
-        label: Text(label, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+          ? SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white.withOpacity(0.7)))
+          : Icon(icon, size: 24.sp),
+        label: Text(label, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900, fontFamily: 'Cairo')),
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
           foregroundColor: Colors.white,
-          padding: EdgeInsets.symmetric(vertical: 1.8.h),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: EdgeInsets.symmetric(vertical: 2.h),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          elevation: 5,
         ),
       ),
     );
@@ -287,40 +331,42 @@ class _OrderCardState extends State<OrderCard> {
 
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: EdgeInsets.symmetric(vertical: 0.8.h),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: Colors.grey[600]),
-          const SizedBox(width: 10),
-          Text('$label: ', style: TextStyle(fontSize: 10.sp, color: Colors.grey[600], fontFamily: 'Cairo')),
-          Expanded(child: Text(value, style: TextStyle(fontSize: 10.sp, fontWeight: FontWeight.w500, fontFamily: 'Cairo'))),
+          Icon(icon, size: 18.sp, color: Colors.grey[600]),
+          SizedBox(width: 4.w),
+          Text('$label: ', style: TextStyle(fontSize: 12.sp, color: Colors.grey[600], fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+          Expanded(child: Text(value, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, fontFamily: 'Cairo', color: Colors.black87))),
         ],
       ),
     );
   }
 
   Widget _buildItemsList(ConsumerOrderModel order) {
-    if (order.items.isEmpty) return const Text('لا توجد عناصر مسجلة.');
+    if (order.items.isEmpty) return Text('لا توجد عناصر.', style: TextStyle(fontSize: 12.sp));
     return Column(
       children: order.items.map((item) {
         return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(10)),
+          margin: EdgeInsets.only(bottom: 1.5.h),
+          padding: EdgeInsets.all(15),
+          decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey[200]!)),
           child: Row(
             children: [
               if (item.imageUrl != null && item.imageUrl!.isNotEmpty)
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(item.imageUrl!, width: 45, height: 45, fit: BoxFit.cover),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.network(item.imageUrl!, width: 55, height: 55, fit: BoxFit.cover),
                 ),
-              const SizedBox(width: 12),
+              SizedBox(width: 5.w),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item.name ?? 'عنصر غير محدد', style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-                    Text('الكمية: ${item.quantity ?? 1}', style: TextStyle(color: Colors.grey[600], fontSize: 11)),
+                    Text(item.name ?? 'عنصر غير محدد', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.sp, fontFamily: 'Cairo')),
+                    SizedBox(height: 0.5.h),
+                    Text('الكمية المطلوبة: ${item.quantity ?? 1}', style: TextStyle(color: Colors.grey[700], fontSize: 11.sp, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
@@ -329,21 +375,5 @@ class _OrderCardState extends State<OrderCard> {
         );
       }).toList(),
     );
-  }
-}
-
-extension OrderStatusesHelpers on OrderStatuses {
-  static List<String> get allStatuses => [
-    OrderStatuses.NEW_ORDER,
-    OrderStatuses.PROCESSING,
-    OrderStatuses.SHIPPED,
-    OrderStatuses.DELIVERED,
-    OrderStatuses.CANCELLED,
-  ];
-}
-
-extension DateParsing on DateTime {
-  String toLocaleString() {
-    return this.toString().split('.')[0];
   }
 }
