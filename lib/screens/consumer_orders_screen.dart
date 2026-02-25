@@ -2,14 +2,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:latlong2/latlong.dart'; // ✅ ضروري للتعامل مع الإحداثيات
+import 'package:latlong2/latlong.dart';
 
 import '../providers/customer_orders_provider.dart';
-import '../providers/buyer_data_provider.dart'; // ✅ بروفايدر بيانات التاجر (الاستلام)
+import '../providers/buyer_data_provider.dart';
 import '../models/consumer_order_model.dart';
 import '../constants/constants.dart';
 import '../helpers/order_printer_helper.dart';
-import 'retailer_dispatch_screen.dart'; // ✅ صفحة الرادار/الخريطة
+import 'retailer_dispatch_screen.dart';
+import 'buyer/retailer_tracking_screen.dart'; // ✅ استدعاء صفحة التتبع من المسار الجديد
 
 class ConsumerOrdersScreen extends StatelessWidget {
   const ConsumerOrdersScreen({super.key});
@@ -84,14 +85,12 @@ class _OrderCardState extends State<OrderCard> {
     }
   }
 
-  // 🚀 دالة الانتقال لصفحة طلب المندوب مع تمرير الإحداثيات
   void _openDispatchScreen(BuyerDataProvider buyerProvider) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => RetailerDispatchScreen(
-          order: widget.order, // يمرر العميل وإحداثيات التسليم عبر الموديل
-          // 🏪 نقطة الاستلام: موقع التاجر المخزن في BuyerDataProvider
+          order: widget.order,
           storeLocation: LatLng(
             buyerProvider.userLat ?? 31.2001,
             buyerProvider.userLng ?? 29.9187,
@@ -147,7 +146,6 @@ class _OrderCardState extends State<OrderCard> {
   @override
   Widget build(BuildContext context) {
     final order = widget.order;
-    // استدعاء بروفايدر بيانات التاجر هنا للحصول على إحداثيات الاستلام
     final buyerProvider = Provider.of<BuyerDataProvider>(context);
     
     final borderColor = order.status == OrderStatuses.NEW_ORDER
@@ -240,22 +238,89 @@ class _OrderCardState extends State<OrderCard> {
                   ],
                 ),
                 
-                // 🏁 الزرار الجديد: اطلب مندوب ديلفيري
                 const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: isDisabled ? null : () => _openDispatchScreen(buyerProvider),
-                    icon: const Icon(Icons.delivery_dining, size: 22),
-                    label: const Text('اطلب مندوب ديلفيري', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange[800],
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      elevation: 4,
-                    ),
-                  ),
+                
+                // 🔄 استماع ذكي لحالة الرادار لتغيير شكل الزرار
+                StreamBuilder<DocumentSnapshot>(
+                  stream: (order.specialRequestId != null && order.specialRequestId!.isNotEmpty)
+                      ? FirebaseFirestore.instance.collection('specialRequests').doc(order.specialRequestId).snapshots()
+                      : const Stream.empty(),
+                  builder: (context, snapshot) {
+                    // إذا لم يتم طلب مندوب ديلفيري بعد
+                    if (!snapshot.hasData || !snapshot.data!.exists) {
+                      return SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: isDisabled ? null : () => _openDispatchScreen(buyerProvider),
+                          icon: const Icon(Icons.delivery_dining, size: 22),
+                          label: const Text('اطلب مندوب ديلفيري', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange[800],
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 15),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            elevation: 4,
+                          ),
+                        ),
+                      );
+                    }
+
+                    var radarData = snapshot.data!.data() as Map<String, dynamic>;
+                    String radarStatus = radarData['status'] ?? 'pending';
+
+                    // الحالة 1: جاري البحث عن مندوب
+                    if (radarStatus == 'pending') {
+                      return SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RetailerTrackingScreen(orderId: order.specialRequestId!))),
+                          icon: const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                          label: const Text('جاري البحث عن مندوب...', style: TextStyle(fontSize: 15)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.grey[600],
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 15),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      );
+                    }
+
+                    // الحالة 2: المندوب وافق أو استلم أو في الطريق
+                    if (['accepted', 'at_pickup', 'picked_up'].contains(radarStatus)) {
+                      return SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RetailerTrackingScreen(orderId: order.specialRequestId!))),
+                          icon: const Icon(Icons.map_outlined, size: 22),
+                          label: const Text('تتبع مكان المندوب الآن', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue[800],
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 15),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            elevation: 6,
+                          ),
+                        ),
+                      );
+                    }
+
+                    // الحالة الافتراضية إذا انتهى الطلب أو غير ذلك
+                    return SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: isDisabled ? null : () => _openDispatchScreen(buyerProvider),
+                        icon: const Icon(Icons.delivery_dining, size: 22),
+                        label: const Text('اطلب مندوب ديلفيري', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange[800],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 10),
               ],
