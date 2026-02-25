@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart'; // ✅ مضافة لتحويل الإحداثيات لنص
+import 'package:geocoding/geocoding.dart'; 
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' show LatLng, Distance;
 import 'package:provider/provider.dart';
@@ -58,6 +58,42 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     ) ?? false;
   }
 
+  // دالة جلب العنوان مطابقة تماماً لـ LocationPickerScreen
+  Future<void> _getAddress(Position position, BuyerDataProvider provider) async {
+    try {
+      setState(() { _isLoading = true; _loadingMessage = 'تحليل العنوان...'; });
+      
+      // استدعاء مطابق تماماً للنسخة التي أرسلتها (بدور باراميتر اللغة)
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude, 
+        position.longitude
+      );
+      
+      String readableAddress = "موقعي الحالي (GPS)";
+      if (placemarks.isNotEmpty) {
+        Placemark p = placemarks[0];
+        // بناء نص العنوان بنفس التنسيق
+        readableAddress = "${p.street ?? ''} ${p.subLocality ?? ''}, ${p.locality ?? ''}";
+      }
+
+      // تخزين البيانات
+      provider.setSessionLocation(
+        lat: position.latitude,
+        lng: position.longitude,
+        address: readableAddress, 
+      );
+    } catch (e) {
+      debugPrint("Geocoding Error: $e");
+      provider.setSessionLocation(
+        lat: position.latitude,
+        lng: position.longitude,
+        address: "موقع غير مسمى", 
+      );
+    } finally {
+      if (mounted) setState(() { _isLoading = false; });
+    }
+  }
+
   Future<void> _promptLocationSelection() async {
     final buyerDataProvider = Provider.of<BuyerDataProvider>(context, listen: false);
     final bool hasValidRegisteredLocation = (buyerDataProvider.userLat != null && buyerDataProvider.userLat != 0);
@@ -74,43 +110,14 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
       if (position != null) {
         _currentSearchLocation = LatLng(position.latitude, position.longitude);
         
-        // 🎯 [تعديل جوهري] تحويل الإحداثيات لعنوان نصي حقيقي قبل التخزين
-        String readableAddress = "موقعي الحالي (GPS)"; 
-        try {
-          setState(() { _isLoading = true; _loadingMessage = 'تحليل العنوان...'; });
-          List<Placemark> placemarks = await placemarkFromCoordinates(
-            position.latitude, 
-            position.longitude,
-            localeIdentifier: "ar" // لضمان ظهور العنوان باللغة العربية
-          );
-          
-          if (placemarks.isNotEmpty) {
-            Placemark p = placemarks[0];
-            // بناء نص العنوان (الشارع، الحي، المدينة)
-            readableAddress = "${p.street ?? ''}, ${p.subLocality ?? ''}, ${p.locality ?? ''}";
-            // تنظيف الفواصل الزائدة إن وجدت
-            readableAddress = readableAddress.replaceAll(RegExp(r'^, |, $'), '').trim();
-          }
-        } catch (e) {
-          debugPrint("Geocoding Error: $e");
-          readableAddress = "موقعي الحالي (إحداثيات GPS)";
-        }
-
-        // تخزين البيانات في الجلسة المؤقتة بالعنوان النصي الجديد
-        buyerDataProvider.setSessionLocation(
-          lat: position.latitude,
-          lng: position.longitude,
-          address: readableAddress, 
-        );
+        // تنفيذ جلب العنوان بالنسخة الجديدة
+        await _getAddress(position, buyerDataProvider);
         
         _searchAndDisplayStores(_currentSearchLocation!);
       }
     } else if (selectedOption == 'registered' && hasValidRegisteredLocation) {
       _currentSearchLocation = LatLng(buyerDataProvider.userLat!, buyerDataProvider.userLng!);
-      
-      // مسح موقع الجلسة والعودة للعنوان المسجل رسمياً
       buyerDataProvider.clearSessionLocation();
-      
       _searchAndDisplayStores(_currentSearchLocation!);
     }
   }
