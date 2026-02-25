@@ -5,8 +5,10 @@ import 'package:latlong2/latlong.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:provider/provider.dart'; // ✅ أضفنا البروفايدر
 import '../../models/consumer_order_model.dart';
 import '../../services/delivery_service.dart';
+import '../../providers/buyer_data_provider.dart'; // ✅ استدعاء بروفايدر البيانات
 import 'dart:math';
 
 class RetailerDispatchScreen extends StatefulWidget {
@@ -105,6 +107,12 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
 
   Future<void> _sendToRadar() async {
     if (_estimatedPrice == 0) return;
+    
+    // ✅ جلب بيانات التاجر الحالية من الـ Provider
+    final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
+    final String? merchantPhone = buyerProvider.loggedInUser?.phone; // تأكد من وجود حقل phone في LoggedInUser
+    final String? merchantName = buyerProvider.loggedInUser?.fullname;
+
     setState(() => _isLoading = true);
 
     try {
@@ -114,8 +122,11 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
       // 1. إنشاء وثيقة الرادار في specialRequests
       DocumentReference radarRef = await FirebaseFirestore.instance.collection('specialRequests').add({
         'userId': user?.uid ?? 'anonymous_retailer',
-        'userName': widget.order.supermarketName,
-        'userPhone': widget.order.supermarketPhone, 
+        'userName': merchantName ?? widget.order.supermarketName, // اسم التاجر من البروفايدر
+        
+        // 📞 الربط المطلوب: جلب رقم التاجر من بياناته المسجلة
+        'userPhone': merchantPhone ?? 'غير متوفر', 
+        
         'pickupLocation': GeoPoint(widget.storeLocation.latitude, widget.storeLocation.longitude),
         'pickupAddress': _pickupAddress,
         'dropoffLocation': GeoPoint(widget.order.customerLatLng.latitude, widget.order.customerLatLng.longitude),
@@ -132,12 +143,12 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
         'customerName': widget.order.customerName,
         'customerPhone': widget.order.customerPhone, 
         'orderFinalAmount': widget.order.finalAmount, 
-        'details': "🛒 استلام من: ${widget.order.supermarketName}\n👤 تسليم لعميل: ${widget.order.customerName}\n💰 تحصيل كاش: ${widget.order.finalAmount} ج.م",
+        'details': "🛒 استلام من: ${merchantName ?? widget.order.supermarketName}\n👤 تسليم لعميل: ${widget.order.customerName}\n💰 تحصيل كاش: ${widget.order.finalAmount} ج.م",
       });
 
-      // 2. 🔗 الربط: تحديث الحقل في مجموعة consumerorders (كلها حروف صغيرة)
+      // 2. الربط مع طلب المستهلك
       await FirebaseFirestore.instance
-          .collection('consumerorders') // ✅ تم التصحيح لـ lowercase
+          .collection('consumerorders')
           .doc(widget.order.id)
           .update({
         'specialRequestId': radarRef.id,
@@ -181,7 +192,6 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
               children: [
                 TileLayer(
                   urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
-                  additionalOptions: {'accessToken': mapboxToken},
                 ),
                 MarkerLayer(
                   markers: [
