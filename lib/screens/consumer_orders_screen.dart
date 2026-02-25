@@ -20,7 +20,7 @@ class ConsumerOrdersScreen extends StatelessWidget {
     final ordersProvider = Provider.of<CustomerOrdersProvider>(context);
     
     return Scaffold(
-      backgroundColor: Colors.white, // خلفية فاتحة وصريحة
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text('إدارة عهدة الطلبات', 
             style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18.sp, fontFamily: 'Cairo')),
@@ -110,12 +110,10 @@ class _OrderCardState extends State<OrderCard> {
     final order = widget.order;
     final buyerProvider = Provider.of<BuyerDataProvider>(context);
     
-    // 🚩 تحديد اللون بناءً على الحالة: أصفر للجديد، أحمر للمرتجع، أخضر للباقي
     Color borderColor = order.status == OrderStatuses.NEW_ORDER
         ? const Color(0xFFFFC107)
         : const Color(0xFF4CAF50);
     
-    // إذا كانت هناك علامة مرتجع، نتحول للون الأحمر فوراً
     if (order.returnRequested == true) {
       borderColor = Colors.redAccent;
     }
@@ -139,7 +137,7 @@ class _OrderCardState extends State<OrderCard> {
             offset: const Offset(0, 8),
           )
         ],
-        border: Border.all(color: borderColor.withOpacity(0.6), width: 2.5), // شريط أعرض وأوضح
+        border: Border.all(color: borderColor.withOpacity(0.6), width: 2.5),
       ),
       child: ExpansionTile(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -170,12 +168,12 @@ class _OrderCardState extends State<OrderCard> {
                 if (order.returnRequested == true) ...[
                    Container(
                      width: double.infinity,
-                     padding: EdgeInsets.all(12),
+                     padding: const EdgeInsets.all(12),
                      decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(10)),
                      child: Row(
                        children: [
-                         Icon(Icons.warning_amber_rounded, color: Colors.red),
-                         SizedBox(width: 10),
+                         const Icon(Icons.warning_amber_rounded, color: Colors.red),
+                         const SizedBox(width: 10),
                          Expanded(
                            child: Text("تنبيه: العميل رفض الاستلام، العهدة في طريق العودة.",
                                style: TextStyle(color: Colors.red[900], fontWeight: FontWeight.bold, fontSize: 11.sp, fontFamily: 'Cairo')),
@@ -188,7 +186,8 @@ class _OrderCardState extends State<OrderCard> {
                 const Divider(),
                 _buildInfoRow(Icons.phone, 'تواصل الوجهة', order.customerPhone),
                 _buildInfoRow(Icons.location_on, 'موقع التسليم', order.customerAddress),
-                _buildInfoRow(Icons.calendar_today, 'توقيت الإنشاء', order.orderDate?.toLocaleString() ?? 'غير متوفر'),
+                // ✅ تم إصلاح مشكلة toLocaleString ببديل أصلي متوافق مع الـ Build
+                _buildInfoRow(Icons.calendar_today, 'توقيت الإنشاء', order.orderDate?.toString().split('.')[0] ?? 'غير متوفر'),
                 
                 Padding(
                   padding: EdgeInsets.symmetric(vertical: 2.h),
@@ -204,7 +203,14 @@ class _OrderCardState extends State<OrderCard> {
                 
                 DropdownButtonFormField<String>(
                   value: _selectedStatus,
-                  items: OrderStatusesHelpers.allStatuses.map((status) {
+                  // ✅ تم إصلاح مشكلة OrderStatusesHelpers
+                  items: [
+                    OrderStatuses.NEW_ORDER,
+                    OrderStatuses.PROCESSING,
+                    OrderStatuses.SHIPPED,
+                    OrderStatuses.DELIVERED,
+                    OrderStatuses.CANCELLED,
+                  ].map((status) {
                     return DropdownMenuItem(
                       value: status, 
                       child: Text(getStatusDisplayName(status), style: TextStyle(fontFamily: 'Cairo', fontSize: 12.sp, fontWeight: FontWeight.bold))
@@ -254,7 +260,6 @@ class _OrderCardState extends State<OrderCard> {
                 
                 SizedBox(height: 2.h),
                 
-                // 🔄 زرار اللوجيستيات (الرادار)
                 StreamBuilder<DocumentSnapshot>(
                   stream: (order.specialRequestId != null && order.specialRequestId!.isNotEmpty)
                       ? FirebaseFirestore.instance.collection('specialRequests').doc(order.specialRequestId).snapshots()
@@ -282,7 +287,6 @@ class _OrderCardState extends State<OrderCard> {
                       );
                     }
 
-                    // في حالة تم القبول أو الاستلام أو الرجوع (مرتجع)
                     if (['accepted', 'at_pickup', 'picked_up', 'returning_to_seller'].contains(radarStatus)) {
                       return _buildActionButton(
                         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RetailerTrackingScreen(orderId: order.specialRequestId!))),
@@ -315,7 +319,7 @@ class _OrderCardState extends State<OrderCard> {
       child: ElevatedButton.icon(
         onPressed: onPressed,
         icon: isProcessing 
-          ? SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white.withOpacity(0.7)))
+          ? SizedBox(width: 22, height: 22, child: const CircularProgressIndicator(strokeWidth: 3, color: Colors.white))
           : Icon(icon, size: 24.sp),
         label: Text(label, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900, fontFamily: 'Cairo')),
         style: ElevatedButton.styleFrom(
@@ -350,7 +354,7 @@ class _OrderCardState extends State<OrderCard> {
       children: order.items.map((item) {
         return Container(
           margin: EdgeInsets.only(bottom: 1.5.h),
-          padding: EdgeInsets.all(15),
+          padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey[200]!)),
           child: Row(
             children: [
@@ -375,5 +379,17 @@ class _OrderCardState extends State<OrderCard> {
         );
       }).toList(),
     );
+  }
+}
+
+// ✅ إضافة الدوال المساعدة خارج الكلاس لضمان عمل الـ Build
+String getStatusDisplayName(String status) {
+  switch (status) {
+    case OrderStatuses.NEW_ORDER: return 'طلب جديد';
+    case OrderStatuses.PROCESSING: return 'قيد التجهيز';
+    case OrderStatuses.SHIPPED: return 'تم الشحن/عهدة';
+    case OrderStatuses.DELIVERED: return 'تم التسليم';
+    case OrderStatuses.CANCELLED: return 'ملغي/مرتجع';
+    default: return status;
   }
 }
