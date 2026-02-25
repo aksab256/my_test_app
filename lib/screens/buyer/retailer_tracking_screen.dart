@@ -8,13 +8,12 @@ import 'package:url_launcher/url_launcher.dart';
 
 class RetailerTrackingScreen extends StatelessWidget {
   static const routeName = '/retailerTracking';
-  final String orderId; // معرف الطلب في specialRequests
+  final String orderId; 
 
   const RetailerTrackingScreen({super.key, required this.orderId});
 
   final String mapboxToken = "pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw";
 
-  // دالة الإلغاء من طرف التاجر
   Future<void> _handleRetailerCancel(BuildContext context, String currentStatus, String? originalOrderId) async {
     bool isAccepted = currentStatus != 'pending';
     
@@ -24,15 +23,15 @@ class RetailerTrackingScreen extends StatelessWidget {
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text("إلغاء طلب التوصيل"),
+          title: const Text("إلغاء طلب التوصيل", style: TextStyle(fontFamily: 'Cairo')),
           content: Text(isAccepted 
               ? "المندوب وافق بالفعل وهو في الطريق إليك. إلغاء الطلب الآن قد يترتب عليه رسوم تعويض. هل أنت متأكد؟" 
-              : "هل تريد إلغاء البحث عن مندوب؟"),
+              : "هل تريد إلغاء البحث عن مندوب؟", style: const TextStyle(fontFamily: 'Cairo')),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("تراجع")),
             TextButton(
               onPressed: () => Navigator.pop(ctx, true), 
-              child: const Text("تأكيد وإلغاء", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
+              child: const Text("تأكيد وإلغاء", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontFamily: 'Cairo'))
             ),
           ],
         ),
@@ -42,17 +41,15 @@ class RetailerTrackingScreen extends StatelessWidget {
     if (!confirm) return;
 
     try {
-      // 1. تحديث حالة طلب الرادار
       await FirebaseFirestore.instance.collection('specialRequests').doc(orderId).update({
         'status': isAccepted ? 'cancelled_by_retailer_after_accept' : 'cancelled_by_retailer_before_accept',
         'cancelledAt': FieldValue.serverTimestamp(),
         'cancelledBy': 'retailer'
       });
 
-      // 2. 🔗 فك الارتباط من الطلب الأصلي لكي يرجع الزر لحالته الأولى
       if (originalOrderId != null && originalOrderId.isNotEmpty) {
         await FirebaseFirestore.instance.collection('consumerorders').doc(originalOrderId).update({
-          'specialRequestId': FieldValue.delete(), // حذف الحقل ليعود الزر برتقالي
+          'specialRequestId': FieldValue.delete(),
         });
       }
 
@@ -75,9 +72,11 @@ class RetailerTrackingScreen extends StatelessWidget {
 
         var orderData = orderSnapshot.data!.data() as Map<String, dynamic>;
         String status = orderData['status'] ?? "pending";
-        String? originalOrderId = orderData['originalOrderId']; // لجلب ID الأوردر الأصلي
+        String? originalOrderId = orderData['originalOrderId'];
+        
+        // ✅ جلب كود التحقق الموحد من الفايربيز
+        String verificationCode = orderData['verificationCode'] ?? "----";
 
-        // إغلاق الشاشة عند الإلغاء أو انتهاء التسليم بنجاح
         if (status.contains('cancelled') || status == 'delivered') {
            WidgetsBinding.instance.addPostFrameCallback((_) {
             if (context.mounted) Navigator.of(context).pop();
@@ -114,7 +113,7 @@ class RetailerTrackingScreen extends StatelessWidget {
                   backgroundColor: Colors.white.withOpacity(0.9),
                   elevation: 0,
                   iconTheme: const IconThemeData(color: Colors.black),
-                  title: Text("متابعة خط سير المندوب", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16.sp, color: Colors.black)),
+                  title: Text("متابعة خط سير المندوب", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16.sp, color: Colors.black, fontFamily: 'Cairo')),
                   centerTitle: true,
                   leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.black), onPressed: () => Navigator.pop(context)),
                 ),
@@ -140,7 +139,7 @@ class RetailerTrackingScreen extends StatelessWidget {
                     Align(
                       alignment: Alignment.bottomCenter,
                       child: SafeArea(
-                        child: _buildRetailerBottomPanel(context, status, orderData, driverData, originalOrderId),
+                        child: _buildRetailerBottomPanel(context, status, orderData, driverData, originalOrderId, verificationCode),
                       ),
                     ),
                   ],
@@ -153,7 +152,7 @@ class RetailerTrackingScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildRetailerBottomPanel(BuildContext context, String status, Map<String, dynamic> order, Map<String, dynamic>? driver, String? originalOrderId) {
+  Widget _buildRetailerBottomPanel(BuildContext context, String status, Map<String, dynamic> order, Map<String, dynamic>? driver, String? originalOrderId, String code) {
     double progress = 0.1;
     String statusDesc = "جاري البحث عن مندوب...";
     Color mainColor = Colors.orange;
@@ -181,8 +180,25 @@ class RetailerTrackingScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text(statusDesc, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.sp, color: mainColor)),
+          Text(statusDesc, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.sp, color: mainColor, fontFamily: 'Cairo')),
           const Divider(height: 25),
+
+          // ✅ كارت الكود (يظهر للتاجر أيضاً بمجرد قبول المندوب للطلب)
+          if (status == 'accepted' || status == 'at_pickup' || status == 'picked_up')
+            Container(
+              margin: const EdgeInsets.only(bottom: 15),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.amber[50], borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.amber.shade300)),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.security, color: Colors.amber),
+                  const SizedBox(width: 10),
+                  const Text("كود التحقق: ", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                  Text(code, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w900, color: Colors.red[900])),
+                ],
+              ),
+            ),
 
           Container(
             margin: const EdgeInsets.only(bottom: 15),
@@ -196,12 +212,12 @@ class RetailerTrackingScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("العميل المستلم:", style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
-                      Text("${order['customerName']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      const Text("العميل المستلم:", style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                      Text("${order['customerName']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, fontFamily: 'Cairo')),
                     ],
                   ),
                 ),
-                Text("${order['orderFinalAmount']} ج.م", style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.green)),
+                Text("${order['orderFinalAmount']} ج.م", style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.green, fontFamily: 'Cairo')),
               ],
             ),
           ),
@@ -214,8 +230,8 @@ class RetailerTrackingScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(driver != null ? driver['fullname'] : "في انتظار قبول مندوب...", style: const TextStyle(fontWeight: FontWeight.bold)),
-                    Text(driver != null ? "رقم المندوب: ${driver['phone']}" : "تتبع مباشر", style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                    Text(driver != null ? driver['fullname'] : "في انتظار قبول مندوب...", style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                    Text(driver != null ? "رقم المندوب: ${driver['phone']}" : "تتبع مباشر", style: const TextStyle(fontSize: 10, color: Colors.grey, fontFamily: 'Cairo')),
                   ],
                 ),
               ),
@@ -232,7 +248,7 @@ class RetailerTrackingScreen extends StatelessWidget {
               padding: const EdgeInsets.only(top: 10),
               child: TextButton(
                 onPressed: () => _handleRetailerCancel(context, status, originalOrderId),
-                child: const Text("إلغاء الاستدعاء", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                child: const Text("إلغاء الاستدعاء", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
               ),
             ),
         ],
