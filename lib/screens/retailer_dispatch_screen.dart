@@ -111,19 +111,15 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
       final user = FirebaseAuth.instance.currentUser;
       final String securityCode = _generateOTP();
 
-      // تم عكس الحقول هنا ليكون السوبر ماركت هو الطرف الأول (الراسل)
-      await FirebaseFirestore.instance.collection('specialRequests').add({
+      // 1. إنشاء وثيقة الرادار في specialRequests
+      DocumentReference radarRef = await FirebaseFirestore.instance.collection('specialRequests').add({
         'userId': user?.uid ?? 'anonymous_retailer',
-        
-        // الحقول الأساسية لطلب الخدمة (الآن تشير للمتجر ليتصل به المندوب أولاً)
         'userName': widget.order.supermarketName,
         'userPhone': widget.order.supermarketPhone, 
-        
         'pickupLocation': GeoPoint(widget.storeLocation.latitude, widget.storeLocation.longitude),
         'pickupAddress': _pickupAddress,
         'dropoffLocation': GeoPoint(widget.order.customerLatLng.latitude, widget.order.customerLatLng.longitude),
         'dropoffAddress': _dropoffAddress,
-        
         'totalPrice': _pricingDetails['totalPrice'],
         'commissionAmount': _pricingDetails['commissionAmount'],
         'driverNet': _pricingDetails['driverNet'],
@@ -131,22 +127,29 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
         'status': 'pending',
         'verificationCode': securityCode,
         'createdAt': FieldValue.serverTimestamp(),
-        
         'requestSource': 'retailer', 
         'originalOrderId': widget.order.id, 
-        
-        // بيانات العميل (المستلم) والتحصيل المالي
         'customerName': widget.order.customerName,
         'customerPhone': widget.order.customerPhone, 
         'orderFinalAmount': widget.order.finalAmount, 
-        
         'details': "🛒 استلام من: ${widget.order.supermarketName}\n👤 تسليم لعميل: ${widget.order.customerName}\n💰 تحصيل كاش: ${widget.order.finalAmount} ج.م",
+      });
+
+      // 2. 🔗 الربط: تحديث الحقل في مجموعة consumerorders (كلها حروف صغيرة)
+      await FirebaseFirestore.instance
+          .collection('consumerorders') // ✅ تم التصحيح لـ lowercase
+          .doc(widget.order.id)
+          .update({
+        'specialRequestId': radarRef.id,
       });
 
       if (!mounted) return;
       Navigator.pop(context); 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(backgroundColor: Colors.green, content: Text("🚀 تم بث الطلب للرادار بنجاح!"))
+        const SnackBar(
+          backgroundColor: Colors.green, 
+          content: Text("🚀 تم بث الطلب للرادار وربطه بنجاح!", style: TextStyle(fontFamily: 'Cairo'))
+        )
       );
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ أثناء الإرسال: $e")));
@@ -196,7 +199,6 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
                 ),
               ],
             ),
-            // استخدام SafeArea هنا لضمان عدم تداخل الكارت مع حواف الشاشة أو أزرار النظام
             SafeArea(
               child: Align(
                 alignment: Alignment.bottomCenter,
