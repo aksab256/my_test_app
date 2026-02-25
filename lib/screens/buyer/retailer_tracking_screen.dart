@@ -14,6 +14,7 @@ class RetailerTrackingScreen extends StatelessWidget {
 
   final String mapboxToken = "pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw";
 
+  // دالة الإلغاء الاحترافية
   Future<void> _handleRetailerCancel(BuildContext context, String currentStatus, String? originalOrderId) async {
     bool isAccepted = currentStatus != 'pending';
     
@@ -25,7 +26,7 @@ class RetailerTrackingScreen extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text("إلغاء طلب التوصيل", style: TextStyle(fontFamily: 'Cairo')),
           content: Text(isAccepted 
-              ? "المندوب وافق بالفعل وهو في الطريق إليك. إلغاء الطلب الآن قد يترتب عليه رسوم تعويض. هل أنت متأكد؟" 
+              ? "المندوب وافق بالفعل وهو في طريقه إليك. إلغاء الطلب الآن قد يترتب عليه رسوم تعويض نتيجة حجز العهدة. هل أنت متأكد؟" 
               : "هل تريد إلغاء البحث عن مندوب؟", style: const TextStyle(fontFamily: 'Cairo')),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("تراجع")),
@@ -73,8 +74,6 @@ class RetailerTrackingScreen extends StatelessWidget {
         var orderData = orderSnapshot.data!.data() as Map<String, dynamic>;
         String status = orderData['status'] ?? "pending";
         String? originalOrderId = orderData['originalOrderId'];
-        
-        // ✅ جلب كود التحقق الموحد من الفايربيز
         String verificationCode = orderData['verificationCode'] ?? "----";
 
         if (status.contains('cancelled') || status == 'delivered') {
@@ -113,17 +112,14 @@ class RetailerTrackingScreen extends StatelessWidget {
                   backgroundColor: Colors.white.withOpacity(0.9),
                   elevation: 0,
                   iconTheme: const IconThemeData(color: Colors.black),
-                  title: Text("متابعة خط سير المندوب", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16.sp, color: Colors.black, fontFamily: 'Cairo')),
+                  title: Text("متابعة العهدة والنقل", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16.sp, color: Colors.black, fontFamily: 'Cairo')),
                   centerTitle: true,
                   leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.black), onPressed: () => Navigator.pop(context)),
                 ),
                 body: Stack(
                   children: [
                     FlutterMap(
-                      options: MapOptions(
-                        initialCenter: driverLatLng ?? pickupLatLng, 
-                        initialZoom: 14.0
-                      ),
+                      options: MapOptions(initialCenter: driverLatLng ?? pickupLatLng, initialZoom: 14.0),
                       children: [
                         TileLayer(urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken'),
                         MarkerLayer(
@@ -154,12 +150,12 @@ class RetailerTrackingScreen extends StatelessWidget {
 
   Widget _buildRetailerBottomPanel(BuildContext context, String status, Map<String, dynamic> order, Map<String, dynamic>? driver, String? originalOrderId, String code) {
     double progress = 0.1;
-    String statusDesc = "جاري البحث عن مندوب...";
+    String statusDesc = "جاري البحث عن مندوب لتمثيل العهدة...";
     Color mainColor = Colors.orange;
 
-    if (status == 'accepted') { progress = 0.4; statusDesc = "تم قبول الطلب.. المندوب في طريقه للمحل"; mainColor = Colors.blue; }
-    else if (status == 'at_pickup') { progress = 0.6; statusDesc = "المندوب وصل للمحل (الاستلام)"; mainColor = Colors.indigo; }
-    else if (status == 'picked_up') { progress = 0.8; statusDesc = "المندوب استلم وهو في طريقه للعميل"; mainColor = Colors.green; }
+    if (status == 'accepted') { progress = 0.4; statusDesc = "تم تخصيص مندوب.. في طريقه للاستلام"; mainColor = Colors.blue; }
+    else if (status == 'at_pickup') { progress = 0.6; statusDesc = "المندوب في نقطة الاستلام (توقيع العهدة)"; mainColor = Colors.indigo; }
+    else if (status == 'picked_up') { progress = 0.8; statusDesc = "العهدة في حوزة المندوب (قيد التوصيل)"; mainColor = Colors.green; }
 
     return Container(
       margin: const EdgeInsets.fromLTRB(10, 0, 10, 15),
@@ -183,23 +179,57 @@ class RetailerTrackingScreen extends StatelessWidget {
           Text(statusDesc, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.sp, color: mainColor, fontFamily: 'Cairo')),
           const Divider(height: 25),
 
-          // ✅ كارت الكود (يظهر للتاجر أيضاً بمجرد قبول المندوب للطلب)
-          if (status == 'accepted' || status == 'at_pickup' || status == 'picked_up')
+          // ✅ كارت تأمين العهدة (يظهر بمجرد قبول المندوب وحتى لحظة الاستلام)
+          if (status == 'accepted' || status == 'at_pickup')
             Container(
               margin: const EdgeInsets.only(bottom: 15),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.amber[50], borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.amber.shade300)),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                color: Colors.amber[50], 
+                borderRadius: BorderRadius.circular(15), 
+                border: Border.all(color: Colors.amber.shade300)
+              ),
+              child: Column(
                 children: [
-                  const Icon(Icons.security, color: Colors.amber),
-                  const SizedBox(width: 10),
-                  const Text("كود التحقق: ", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-                  Text(code, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w900, color: Colors.red[900])),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.security, color: Colors.amber, size: 22),
+                      const SizedBox(width: 10),
+                      const Text("كود تأكيد العهدة: ", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                      Text(code, style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.red[900])),
+                    ],
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8.0),
+                    child: Divider(color: Colors.amber, thickness: 0.5),
+                  ),
+                  const Text(
+                    "⚠️ تنبيه: إدخال المندوب لهذا الكود في تطبيقه بمثابة (توقيع إلكتروني) باستلام العهدة وتأمين قيمتها في حسابك لضمان النقل الآمن.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 9, color: Colors.black87, fontFamily: 'Cairo', fontWeight: FontWeight.w600, height: 1.4),
+                  ),
                 ],
               ),
             ),
 
+          // ✅ حالة نجاح نقل العهدة
+          if (status == 'picked_up')
+            Container(
+              margin: const EdgeInsets.only(bottom: 15),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(15)),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green),
+                  SizedBox(width: 10),
+                  Text("تم نقل العهدة وتأمينها بنجاح", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                ],
+              ),
+            ),
+
+          // تفاصيل الشحنة
           Container(
             margin: const EdgeInsets.only(bottom: 15),
             padding: const EdgeInsets.all(12),
@@ -212,7 +242,7 @@ class RetailerTrackingScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("العميل المستلم:", style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                      const Text("الوجهة المستلمة:", style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
                       Text("${order['customerName']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, fontFamily: 'Cairo')),
                     ],
                   ),
@@ -222,6 +252,7 @@ class RetailerTrackingScreen extends StatelessWidget {
             ),
           ),
 
+          // بيانات المندوب المسؤول
           Row(
             children: [
               CircleAvatar(radius: 25, backgroundColor: Colors.grey[100], child: const Icon(Icons.delivery_dining, color: Colors.black)),
@@ -230,8 +261,8 @@ class RetailerTrackingScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(driver != null ? driver['fullname'] : "في انتظار قبول مندوب...", style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-                    Text(driver != null ? "رقم المندوب: ${driver['phone']}" : "تتبع مباشر", style: const TextStyle(fontSize: 10, color: Colors.grey, fontFamily: 'Cairo')),
+                    Text(driver != null ? driver['fullname'] : "في انتظار تأكيد مندوب...", style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                    Text(driver != null ? "معرف المسؤول: ${driver['phone']}" : "تتبع مباشر للعهدة", style: const TextStyle(fontSize: 10, color: Colors.grey, fontFamily: 'Cairo')),
                   ],
                 ),
               ),
@@ -248,7 +279,7 @@ class RetailerTrackingScreen extends StatelessWidget {
               padding: const EdgeInsets.only(top: 10),
               child: TextButton(
                 onPressed: () => _handleRetailerCancel(context, status, originalOrderId),
-                child: const Text("إلغاء الاستدعاء", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                child: const Text("إلغاء طلب العهدة", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
               ),
             ),
         ],
