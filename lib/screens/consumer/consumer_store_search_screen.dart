@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart'; // ✅ مضافة لتحويل الإحداثيات لنص
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' show LatLng, Distance;
 import 'package:provider/provider.dart';
@@ -73,11 +74,33 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
       if (position != null) {
         _currentSearchLocation = LatLng(position.latitude, position.longitude);
         
-        // 🎯 [تعديل جوهري] تخزين موقع الـ GPS في الجلسة المؤقتة لاستخدامه في الـ Checkout
+        // 🎯 [تعديل جوهري] تحويل الإحداثيات لعنوان نصي حقيقي قبل التخزين
+        String readableAddress = "موقعي الحالي (GPS)"; 
+        try {
+          setState(() { _isLoading = true; _loadingMessage = 'تحليل العنوان...'; });
+          List<Placemark> placemarks = await placemarkFromCoordinates(
+            position.latitude, 
+            position.longitude,
+            localeIdentifier: "ar" // لضمان ظهور العنوان باللغة العربية
+          );
+          
+          if (placemarks.isNotEmpty) {
+            Placemark p = placemarks[0];
+            // بناء نص العنوان (الشارع، الحي، المدينة)
+            readableAddress = "${p.street ?? ''}, ${p.subLocality ?? ''}, ${p.locality ?? ''}";
+            // تنظيف الفواصل الزائدة إن وجدت
+            readableAddress = readableAddress.replaceAll(RegExp(r'^, |, $'), '').trim();
+          }
+        } catch (e) {
+          debugPrint("Geocoding Error: $e");
+          readableAddress = "موقعي الحالي (إحداثيات GPS)";
+        }
+
+        // تخزين البيانات في الجلسة المؤقتة بالعنوان النصي الجديد
         buyerDataProvider.setSessionLocation(
           lat: position.latitude,
           lng: position.longitude,
-          address: "موقعي الحالي (GPS)", 
+          address: readableAddress, 
         );
         
         _searchAndDisplayStores(_currentSearchLocation!);
@@ -85,7 +108,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     } else if (selectedOption == 'registered' && hasValidRegisteredLocation) {
       _currentSearchLocation = LatLng(buyerDataProvider.userLat!, buyerDataProvider.userLng!);
       
-      // 🎯 [تعديل جوهري] مسح موقع الجلسة والعودة للعنوان المسجل رسمياً
+      // مسح موقع الجلسة والعودة للعنوان المسجل رسمياً
       buyerDataProvider.clearSessionLocation();
       
       _searchAndDisplayStores(_currentSearchLocation!);
@@ -303,7 +326,6 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
                   style: ElevatedButton.styleFrom(backgroundColor: brandGreen, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
                   onPressed: () {
                     Navigator.pop(context);
-                    // عند الدخول للمتجر، الموقع يكون مخزن بالفعل في الـ Provider بفضل دالة _promptLocationSelection
                     Navigator.pushNamed(context, MarketplaceHomeScreen.routeName, arguments: {'storeId': store['id'], 'storeName': store['supermarketName']});
                   },
                   child: const Text("دخول المتجر", style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900)),
