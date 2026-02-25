@@ -1,7 +1,7 @@
 // lib/models/consumer_order_model.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:latlong2/latlong.dart'; // ✅ ضروري للـ LatLng
+import 'package:latlong2/latlong.dart'; 
 import '../constants/constants.dart';
 
 // نموذج المنتج داخل الطلب
@@ -31,7 +31,7 @@ class OrderItem {
   }
 }
 
-// نموذج الطلب الرئيسي
+// نموذج الطلب الرئيسي المحدث
 class ConsumerOrderModel {
   final String id;
   final String orderId;
@@ -49,12 +49,13 @@ class ConsumerOrderModel {
   final int pointsUsed;
   final List<OrderItem> items;
   
-  // 🎯 الحقول لدعم الإحداثيات (الرادار)
   final double? lat;
   final double? lng;
-
-  // 🔗 الحقل المسؤول عن ربط طلب السوبر ماركت بطلب الرادار (المندوب الحر)
   final String? specialRequestId; 
+
+  // 🎯 الحقول الجديدة لدعم منطق المرتجع (لحل أخطاء البناء)
+  final bool returnRequested; 
+  final String? returnVerificationCode;
 
   ConsumerOrderModel({
     required this.id,
@@ -74,24 +75,21 @@ class ConsumerOrderModel {
     required this.items,
     this.lat,
     this.lng,
-    this.specialRequestId, // ✅ مضاف للربط
+    this.specialRequestId,
+    this.returnRequested = false, // القيمة الافتراضية
+    this.returnVerificationCode,
   });
 
-  // 🚀 الـ Getter الذي تحتاجه شاشة تتبع الخريطة
   LatLng get customerLatLng => LatLng(lat ?? 0.0, lng ?? 0.0);
 
   factory ConsumerOrderModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>?;
 
-    // 1. تحويل مصفوفة المنتجات
     final itemsList = (data?['items'] as List<dynamic>?)
             ?.map((item) => OrderItem.fromMap(item as Map<String, dynamic>))
             .toList() ?? <OrderItem>[];
 
-    // 2. 🎯 منطق جلب مصاريف التوصيل الموحد
-    double extractedFee = 0.0;
-    extractedFee = (data?['deliveryFee'] as num?)?.toDouble() ?? 0.0;
-
+    double extractedFee = (data?['deliveryFee'] as num?)?.toDouble() ?? 0.0;
     if (extractedFee == 0) {
       for (var item in itemsList) {
         if (item.productId == 'DELIVERY_FEE' || 
@@ -102,10 +100,8 @@ class ConsumerOrderModel {
       }
     }
 
-    // 3. 📍 استخراج الإحداثيات الجغرافية
     double? extractedLat;
     double? extractedLng;
-
     if (data?['deliveryLocation'] != null && data?['deliveryLocation'] is Map) {
       extractedLat = (data?['deliveryLocation']['lat'] as num?)?.toDouble();
       extractedLng = (data?['deliveryLocation']['lng'] as num?)?.toDouble();
@@ -115,11 +111,11 @@ class ConsumerOrderModel {
       extractedLng = (data?['customerLatLng'] as GeoPoint).longitude;
     }
 
-    // 4. استخراج حقل الربط بالرادار
     final String? specialId = data?['specialRequestId'] as String?;
-
-    final finalAmount = (data?['finalAmount'] as num?)?.toDouble() ?? 0.0;
-    final pointsUsed = (data?['pointsUsed'] as num?)?.toInt() ?? 0;
+    
+    // 🚩 استخراج حقول المرتجع من Firestore
+    final bool isReturnReq = data?['returnRequested'] ?? false;
+    final String? returnCode = data?['returnVerificationCode']?.toString();
 
     DateTime? parsedDate;
     var rawDate = data?['orderDate'];
@@ -138,16 +134,18 @@ class ConsumerOrderModel {
       supermarketId: data?['supermarketId'] ?? '',
       supermarketName: data?['supermarketName'] ?? 'غير معروف',
       supermarketPhone: data?['supermarketPhone'] ?? '', 
-      finalAmount: finalAmount,
+      finalAmount: (data?['finalAmount'] as num?)?.toDouble() ?? 0.0,
       status: data?['status'] ?? 'new-order', 
       orderDate: parsedDate,
       paymentMethod: data?['paymentMethod'] ?? 'كاش',
       deliveryFee: extractedFee, 
-      pointsUsed: pointsUsed,
+      pointsUsed: (data?['pointsUsed'] as num?)?.toInt() ?? 0,
       items: itemsList,
       lat: extractedLat,
       lng: extractedLng,
-      specialRequestId: specialId, // ✅ إرجاع القيمة المستخرجة من Firestore
+      specialRequestId: specialId,
+      returnRequested: isReturnReq, // ✅ ربط القيمة
+      returnVerificationCode: returnCode, // ✅ ربط القيمة
     );
   }
 }
