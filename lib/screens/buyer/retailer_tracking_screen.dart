@@ -14,8 +14,8 @@ class RetailerTrackingScreen extends StatelessWidget {
 
   final String mapboxToken = "pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw";
 
-  // دالة الإلغاء من طرف التاجر (صاحب الطلب)
-  Future<void> _handleRetailerCancel(BuildContext context, String currentStatus) async {
+  // دالة الإلغاء من طرف التاجر
+  Future<void> _handleRetailerCancel(BuildContext context, String currentStatus, String? originalOrderId) async {
     bool isAccepted = currentStatus != 'pending';
     
     bool confirm = await showDialog(
@@ -42,11 +42,20 @@ class RetailerTrackingScreen extends StatelessWidget {
     if (!confirm) return;
 
     try {
+      // 1. تحديث حالة طلب الرادار
       await FirebaseFirestore.instance.collection('specialRequests').doc(orderId).update({
         'status': isAccepted ? 'cancelled_by_retailer_after_accept' : 'cancelled_by_retailer_before_accept',
         'cancelledAt': FieldValue.serverTimestamp(),
         'cancelledBy': 'retailer'
       });
+
+      // 2. 🔗 فك الارتباط من الطلب الأصلي لكي يرجع الزر لحالته الأولى
+      if (originalOrderId != null && originalOrderId.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('consumerorders').doc(originalOrderId).update({
+          'specialRequestId': FieldValue.delete(), // حذف الحقل ليعود الزر برتقالي
+        });
+      }
+
       if (context.mounted) Navigator.of(context).pop();
     } catch (e) {
       debugPrint("Cancel Error: $e");
@@ -66,6 +75,7 @@ class RetailerTrackingScreen extends StatelessWidget {
 
         var orderData = orderSnapshot.data!.data() as Map<String, dynamic>;
         String status = orderData['status'] ?? "pending";
+        String? originalOrderId = orderData['originalOrderId']; // لجلب ID الأوردر الأصلي
 
         // إغلاق الشاشة عند الإلغاء أو انتهاء التسليم بنجاح
         if (status.contains('cancelled') || status == 'delivered') {
@@ -111,7 +121,10 @@ class RetailerTrackingScreen extends StatelessWidget {
                 body: Stack(
                   children: [
                     FlutterMap(
-                      options: MapOptions(initialCenter: driverLatLng ?? pickupLatLng, initialZoom: 14.0),
+                      options: MapOptions(
+                        initialCenter: driverLatLng ?? pickupLatLng, 
+                        initialZoom: 14.0
+                      ),
                       children: [
                         TileLayer(urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken'),
                         MarkerLayer(
@@ -127,7 +140,7 @@ class RetailerTrackingScreen extends StatelessWidget {
                     Align(
                       alignment: Alignment.bottomCenter,
                       child: SafeArea(
-                        child: _buildRetailerBottomPanel(context, status, orderData, driverData),
+                        child: _buildRetailerBottomPanel(context, status, orderData, driverData, originalOrderId),
                       ),
                     ),
                   ],
@@ -140,7 +153,7 @@ class RetailerTrackingScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildRetailerBottomPanel(BuildContext context, String status, Map<String, dynamic> order, Map<String, dynamic>? driver) {
+  Widget _buildRetailerBottomPanel(BuildContext context, String status, Map<String, dynamic> order, Map<String, dynamic>? driver, String? originalOrderId) {
     double progress = 0.1;
     String statusDesc = "جاري البحث عن مندوب...";
     Color mainColor = Colors.orange;
@@ -171,7 +184,6 @@ class RetailerTrackingScreen extends StatelessWidget {
           Text(statusDesc, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.sp, color: mainColor)),
           const Divider(height: 25),
 
-          // عرض بيانات العميل المستلم للتاجر
           Container(
             margin: const EdgeInsets.only(bottom: 15),
             padding: const EdgeInsets.all(12),
@@ -219,7 +231,7 @@ class RetailerTrackingScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 10),
               child: TextButton(
-                onPressed: () => _handleRetailerCancel(context, status),
+                onPressed: () => _handleRetailerCancel(context, status, originalOrderId),
                 child: const Text("إلغاء الاستدعاء", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
               ),
             ),
