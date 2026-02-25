@@ -50,7 +50,7 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
     await _getAddress(widget.storeLocation, true);
     await _getAddress(widget.order.customerLatLng, false);
 
-    // 2. حساب المسافة
+    // 2. حساب المسافة بدقة بين النقطتين
     double distance = _deliveryService.calculateDistance(
       widget.storeLocation.latitude, 
       widget.storeLocation.longitude,
@@ -115,7 +115,7 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
       final user = FirebaseAuth.instance.currentUser;
       final String securityCode = _generateOTP();
 
-      // الهيكل الموحد لضمان التوافق مع LocationPickerScreen
+      // الهيكل الموحد لضمان التوافق مع تطبيق المندوب
       await FirebaseFirestore.instance.collection('specialRequests').add({
         // بيانات أساسية (مشتركة مع الطرود)
         'userId': user?.uid ?? 'anonymous_retailer',
@@ -135,16 +135,16 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
         'requestSource': 'retailer', 
         'originalOrderId': widget.order.id, 
         
-        // بيانات المستلم والتحصيل المالي (مهم جداً للمندوب)
+        // بيانات المستلم والتحصيل المالي (تم التعديل لـ finalAmount ليتوافق مع الموديل)
         'customerName': widget.order.customerName,
         'userPhone': widget.order.customerPhone, // هاتف المستلم
-        'orderFinalAmount': widget.order.totalAmount, // المبلغ المطلوب تحصيله كاش
+        'orderFinalAmount': widget.order.finalAmount, // المبلغ المطلوب تحصيله كاش
         
         // بيانات التواصل مع المتجر
         'retailerName': widget.order.supermarketName,
         'retailerPhone': widget.order.supermarketPhone, 
 
-        'details': "🛒 طلب متجر: ${widget.order.supermarketName}\n👤 العميل: ${widget.order.customerName}\n💰 المطلوب تحصيله: ${widget.order.totalAmount} ج.م",
+        'details': "🛒 طلب متجر: ${widget.order.supermarketName}\n👤 العميل: ${widget.order.customerName}\n💰 المطلوب تحصيله: ${widget.order.finalAmount} ج.م",
       });
 
       if (!mounted) return;
@@ -242,7 +242,8 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     const Text("ثمن الأوردر (كاش)", style: TextStyle(color: Colors.grey, fontSize: 12, fontFamily: 'Cairo')),
-                    Text("${widget.order.totalAmount} ج.م", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.green, fontFamily: 'Cairo')),
+                    // تم تصحيح المسمى هنا لـ finalAmount ليتطابق مع الموديل
+                    Text("${widget.order.finalAmount.toStringAsFixed(0)} ج.م", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.green, fontFamily: 'Cairo')),
                   ],
                 ),
               ],
