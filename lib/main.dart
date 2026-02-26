@@ -21,6 +21,8 @@ import 'package:my_test_app/theme/app_theme.dart';
 import 'package:my_test_app/providers/theme_notifier.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:my_test_app/widgets/connectivity_wrapper.dart';
+
 
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/providers/manufacturers_provider.dart';
@@ -153,6 +155,7 @@ class MyApp extends StatelessWidget {
           navigatorKey: navigatorKey,
           title: 'أسواق أكسب',
           debugShowCheckedModeBanner: false,
+          builder: (context, child) => ConnectivityWrapper(child: child!),
           locale: const Locale('ar', 'EG'),
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
