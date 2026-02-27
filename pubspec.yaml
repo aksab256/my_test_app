@@ -87,7 +87,7 @@ flutter_launcher_icons:
   adaptive_icon_background: "#1B5E20"
   adaptive_icon_foreground: "assets/flutter_logo.png"
   # السطر التالي يضمن توسيط العربة وتصغيرها لتناسب "المنطقة الآمنة"
-  adaptive_icon_foreground_inset: 100
+  adaptive_icon_foreground_inset: 150
 
 flutter:
   uses-material-design: true
