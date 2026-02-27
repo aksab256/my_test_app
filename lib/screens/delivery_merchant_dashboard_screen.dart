@@ -3,8 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/widgets/delivery_merchant_sidebar_widget.dart';
-// تأكد من عمل import لصفحة السجلات التي صممناها
-// import 'package:my_test_app/screens/merchant_point_balance_screen.dart'; 
+// ✨ تم تفعيل الاستيراد وتصحيح اسم الملف بناءً على مسمياتك
+import 'package:my_test_app/screens/merchant_balance_screen.dart'; 
 
 // 1. موديل البيانات المحدث ليشمل العهدة
 class DashboardData {
@@ -193,7 +193,6 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
     );
   }
 
-  // ✨ الجريد المحدث لعرض كروت البيانات
   Widget _buildStatsGrid(DashboardData data, BuildContext context) {
     return GridView.count(
       crossAxisCount: MediaQuery.of(context).size.width > 600 ? 5 : 2,
@@ -202,17 +201,16 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: [
-        // 🛡️ كارت "نقاط الأمان" (قابل للضغط لفتح صفحة السجلات)
         _DashboardCard(
           icon: Icons.verified_user_outlined,
           title: 'نقاط الأمان',
           value: '${data.securityPoints.toStringAsFixed(0)} ن',
           color: Colors.teal,
           onTap: () {
-            // هنا نفتح صفحة السجلات التي صممناها
+            // ✨ الآن الكلاس معرف بفضل الـ Import الصحيح وبدون كلمة const
             Navigator.push(
               context, 
-              MaterialPageRoute(builder: (context) =>  MerchantPointBalanceScreen())
+              MaterialPageRoute(builder: (context) => MerchantPointBalanceScreen())
             );
           },
         ),
@@ -276,13 +274,12 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
   }
 }
 
-// ✨ كلاس الكارت المحدث بخاصية النقر (InkWell)
 class _DashboardCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String value;
   final Color color;
-  final VoidCallback? onTap; // إضافة إمكانية النقر
+  final VoidCallback? onTap;
 
   const _DashboardCard({
     required this.icon, 
