@@ -84,7 +84,7 @@ flutter_launcher_icons:
   ios: true
   image_path: "assets/flutter_logo.png"
   # إعدادات الأيقونة التكيفية (Adaptive Icon) لمنع القص
-  adaptive_icon_background: "#4CAF50"
+  adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/flutter_logo.png"
   # السطر التالي يضمن توسيط العربة وتصغيرها لتناسب "المنطقة الآمنة"
   adaptive_icon_foreground_inset: 0
