@@ -53,9 +53,13 @@ class _TradersScreenState extends State<TradersScreen> {
     switch (index) {
       case 0:
         break;
-      case 1:
-        Navigator.of(context).pushNamedAndRemoveUntil('/buyerHome', (route) => false);
-        break;
+      
+          case 1:
+    // بدل ما نفتح الرئيسية من جديد ونمسح كله
+    // نكتفي بالرجوع للرئيسية اللي مستنية تحتنا في الـ Stack
+    Navigator.of(context).pop(); 
+    break;
+
       case 2:
         Navigator.pushReplacementNamed(context, '/myOrders');
         break;
