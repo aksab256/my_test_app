@@ -225,7 +225,7 @@ class ConsumerFooterNav extends StatelessWidget {
                 } else {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("لا توجد طلبات سابقة"), backgroundColor: Colors.black87),
+                      const SnackBar(content: Text("لا توجد طلبات نشطه حاليا لمتابعتها"), backgroundColor: Colors.black87),
                     );
                   }
                 }
