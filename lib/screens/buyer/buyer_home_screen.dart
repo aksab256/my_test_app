@@ -173,17 +173,27 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     if (mounted) setState(() => _newOrdersCount = q.size);
   }
 
-  void _onItemTapped(int index) {
+    void _onItemTapped(int index) {
     if (index == _selectedIndex) return;
     switch (index) {
-      case 0: Navigator.pushReplacementNamed(context, '/traders'); break;
-      case 1: break;
+      case 0: 
+        // ❌ كان: Navigator.pushReplacementNamed(context, '/traders');
+        // ✅ الصح:
+        Navigator.pushNamed(context, '/traders'); 
+        break;
+      case 1: 
+        break; // نحن هنا بالفعل
       case 2:
         Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
         break;
-      case 3: Navigator.pushReplacementNamed(context, '/wallet'); break;
+      case 3: 
+        // ❌ كان: Navigator.pushReplacementNamed(context, '/wallet');
+        // ✅ الصح:
+        Navigator.pushNamed(context, '/wallet'); 
+        break;
     }
   }
+
 
   void _handleLogout() async {
     try {
