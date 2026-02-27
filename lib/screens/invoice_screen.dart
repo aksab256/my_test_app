@@ -18,8 +18,9 @@ class InvoiceScreen extends StatefulWidget {
 
 class _InvoiceScreenState extends State<InvoiceScreen> {
   final SellerDataSource _sellerDataSource = SellerDataSource();
-  SellerModel _sellerDetails = SellerModel.defaultPlaceholder();
+  SellerModel? _sellerDetails; // تغييرها لتقبل null للتأكد من حالة التحميل
   bool _isLoadingSeller = true;
+  String _errorMessage = '';
 
   @override
   void initState() {
@@ -29,16 +30,25 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
   Future<void> _fetchSellerDetails() async {
     try {
+      // 🎯 التأكد من إرسال الـ sellerId الموجود داخل موديل الطلب
       final details = await _sellerDataSource.getSellerDetails(widget.order.sellerId);
+      
       if (mounted) {
         setState(() {
-          _sellerDetails = details;
+          if (details != null) {
+            _sellerDetails = details;
+          } else {
+            _errorMessage = 'بيانات المتجر غير موجودة';
+          }
           _isLoadingSeller = false;
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoadingSeller = false);
+        setState(() {
+          _errorMessage = 'خطأ في جلب بيانات المورد';
+          _isLoadingSeller = false;
+        });
       }
     }
   }
@@ -47,6 +57,11 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     final pdf = pw.Document();
     final font = await PdfGoogleFonts.cairoRegular();
     final boldFont = await PdfGoogleFonts.cairoBold();
+    
+    // استخدام البيانات المجلوبة أو اسم افتراضي في حالة الطوارئ
+    final String storeName = _sellerDetails?.name ?? "متجر موثق";
+    final String storePhone = _sellerDetails?.phone ?? "غير مسجل";
+    final String storeAddress = _sellerDetails?.address ?? "غير محدد";
 
     pdf.addPage(
       pw.Page(
@@ -62,18 +77,17 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  // --- الترويسة الاحترافية ---
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
                       pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
-                          pw.Text(_sellerDetails.name, 
+                          pw.Text(storeName,
                               style: pw.TextStyle(font: boldFont, fontSize: 22, color: PdfColors.green900)),
                           pw.SizedBox(height: 5),
-                          pw.Text('هاتف: ${_sellerDetails.phone}', style: pw.TextStyle(font: font, fontSize: 11)),
-                          pw.Text('العنوان: ${_sellerDetails.address}', style: pw.TextStyle(font: font, fontSize: 11)),
+                          pw.Text('هاتف: $storePhone', style: pw.TextStyle(font: font, fontSize: 11)),
+                          pw.Text('العنوان: $storeAddress', style: pw.TextStyle(font: font, fontSize: 11)),
                         ],
                       ),
                       pw.Column(
@@ -95,16 +109,14 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   pw.Divider(thickness: 2, color: PdfColors.green800),
                   pw.SizedBox(height: 20),
 
-                  // --- بيانات العميل ---
                   pw.Text('فاتورة إلى:', style: pw.TextStyle(font: boldFont, fontSize: 12, color: PdfColors.grey700)),
                   pw.Container(
                     width: double.infinity,
                     padding: const pw.EdgeInsets.all(12),
                     decoration: pw.BoxDecoration(
-                      color: PdfColors.grey50,
-                      borderRadius: pw.BorderRadius.circular(5),
-                      border: pw.Border.all(color: PdfColors.grey200)
-                    ),
+                        color: PdfColors.grey50,
+                        borderRadius: pw.BorderRadius.circular(5),
+                        border: pw.Border.all(color: PdfColors.grey200)),
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
@@ -117,15 +129,14 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   ),
                   pw.SizedBox(height: 25),
 
-                  // --- جدول المنتجات ---
                   pw.TableHelper.fromTextArray(
                     headers: ['اسم الصنف', 'الكمية', 'سعر الوحدة', 'الإجمالي'],
                     data: widget.order.items.map((item) => [
-                      item.name,
-                      '${item.quantity}',
-                      '${item.unitPrice.toStringAsFixed(2)} ج.م',
-                      '${(item.quantity * item.unitPrice).toStringAsFixed(2)} ج.م'
-                    ]).toList(),
+                          item.name,
+                          '${item.quantity}',
+                          '${item.unitPrice.toStringAsFixed(2)} ج.م',
+                          '${(item.quantity * item.unitPrice).toStringAsFixed(2)} ج.م'
+                        ]).toList(),
                     headerStyle: pw.TextStyle(font: boldFont, color: PdfColors.white, fontSize: 10),
                     headerDecoration: const pw.BoxDecoration(color: PdfColors.green800),
                     cellStyle: pw.TextStyle(font: font, fontSize: 10),
@@ -137,45 +148,41 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                       3: const pw.FlexColumnWidth(1.5),
                     },
                   ),
-                  
                   pw.SizedBox(height: 30),
 
-                  // --- الملخص المالي والباركود ---
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      // QR Code
                       pw.Column(
                         children: [
                           pw.Container(
-                            height: 70, width: 70,
+                            height: 70,
+                            width: 70,
                             child: pw.BarcodeWidget(
                               barcode: pw.Barcode.qrCode(),
-                              data: 'Order: ${widget.order.id} | Store: ${_sellerDetails.name}',
+                              data: 'Order: ${widget.order.id} | Store: $storeName',
                             ),
                           ),
                           pw.SizedBox(height: 5),
                           pw.Text('امسح للتحقق', style: pw.TextStyle(font: font, fontSize: 8, color: PdfColors.grey600)),
                         ],
                       ),
-                      // الحسابات
                       pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.end,
                         children: [
                           _summaryRow('الإجمالي قبل الخصم:', '${widget.order.grossTotal.toStringAsFixed(2)} ج.م', font),
                           _summaryRow('خصم الكاش باك:', '-${widget.order.cashbackApplied.toStringAsFixed(2)} ج.م', font, color: PdfColors.red700),
-                          pw.SizedBox(width: 150, child: pw.Divider(thickness: 1, color: PdfColors.grey400)), // الإصلاح هنا ✅
+                          pw.SizedBox(width: 150, child: pw.Divider(thickness: 1, color: PdfColors.grey400)),
                           _summaryRow('صافي المبلغ المطلوب:', '${widget.order.totalAmount.toStringAsFixed(2)} ج.م', boldFont, fontSize: 14, color: PdfColors.green900),
                         ],
                       ),
                     ],
                   ),
-
                   pw.Spacer(),
                   pw.Divider(thickness: 0.5, color: PdfColors.grey400),
                   pw.Center(
-                    child: pw.Text('نشكركم لثقتكم في ${_sellerDetails.name} - تم الإنشاء بواسطة أسواق اكسب 2025', 
+                    child: pw.Text('نشكركم لثقتكم في $storeName - تم الإنشاء بواسطة أسواق اكسب 2026',
                         style: pw.TextStyle(font: font, fontSize: 9, color: PdfColors.grey500)),
                   ),
                 ],
@@ -206,18 +213,22 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('معاينة الفاتورة للطباعة'), 
+        title: const Text('معاينة الفاتورة للطباعة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF28A745),
         centerTitle: true,
       ),
-      body: _isLoadingSeller
-          ? const Center(child: CircularProgressIndicator())
-          : PdfPreview(
-              build: (format) => _buildA4Invoice(format),
-              canChangePageFormat: false,
-              initialPageFormat: PdfPageFormat.a4,
-              pdfFileName: "Aksab_Invoice_${widget.order.id.substring(0,8)}.pdf",
-            ),
+      body: SafeArea(
+        child: _isLoadingSeller
+            ? const Center(child: CircularProgressIndicator())
+            : _errorMessage.isNotEmpty
+                ? Center(child: Text(_errorMessage, style: const TextStyle(color: Colors.red, fontFamily: 'Cairo')))
+                : PdfPreview(
+                    build: (format) => _buildA4Invoice(format),
+                    canChangePageFormat: false,
+                    initialPageFormat: PdfPageFormat.a4,
+                    pdfFileName: "Aksab_Invoice_${widget.order.id.substring(0, 8)}.pdf",
+                  ),
+      ),
     );
   }
 }

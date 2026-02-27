@@ -3,16 +3,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/widgets/delivery_merchant_sidebar_widget.dart';
-// ✨ تم تفعيل الاستيراد وتصحيح اسم الملف بناءً على مسمياتك
+// استيراد صفحة السجلات (تأكد من وجود الملف بهذا الاسم في مشروعك)
 import 'package:my_test_app/screens/merchant_balance_screen.dart'; 
 
-// 1. موديل البيانات المحدث ليشمل العهدة
 class DashboardData {
   final int totalProducts;
   final int totalOrders;
   final int pendingOrders;
   final double totalSales;
-  final double securityPoints; // ✨ نقاط الأمان (العهدة)
+  final double securityPoints;
 
   DashboardData({
     required this.totalProducts,
@@ -36,22 +35,23 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
   Future<DashboardData>? _dashboardDataFuture;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // 2. جلب البيانات الشاملة من فايرستور
   Future<DashboardData> _fetchDashboardData(String userId) async {
-    // جلب عدد المنتجات النشطة
+    // 1. جلب عدد المنتجات النشطة
     final productsSnapshot = await _firestore.collection("marketOffer")
         .where("ownerId", isEqualTo: userId)
         .where("status", isEqualTo: "active")
         .count().get();
 
-    // جلب إحصائيات الطلبات
+    // 2. جلب إحصائيات الطلبات
     final ordersRef = _firestore.collection("consumerorders");
     final allOrdersSnapshot = await ordersRef.where("supermarketId", isEqualTo: userId).count().get();
+    
+    // الطلبات في حالة الانتظار أو المعالجة
     final pendingOrdersSnapshot = await ordersRef
         .where("supermarketId", isEqualTo: userId)
         .where("status", whereIn: ["new-order", "pending", "processing"]).count().get();
 
-    // حساب إجمالي المبيعات للطلبات المسلمة
+    // 3. حساب إجمالي المبيعات (الطلبات التي تم تسليمها فقط)
     final deliveredOrdersDocs = await ordersRef
         .where("supermarketId", isEqualTo: userId)
         .where("status", isEqualTo: "delivered").get();
@@ -64,7 +64,7 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
       }
     }
 
-    // ✨ جلب "نقاط الأمان" من سجلات السوبر ماركت (العهدة المباشرة)
+    // 4. جلب نقاط الأمان (العهدة) من سجلات السوبر ماركت
     final merchantSnapshot = await _firestore.collection("deliverySupermarkets")
         .where("ownerId", isEqualTo: userId)
         .limit(1).get();
@@ -114,46 +114,50 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
         foregroundColor: Colors.black87,
       ),
       drawer: const DeliveryMerchantSidebarWidget(),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          setState(() {
-            _dashboardDataFuture = _fetchDashboardData(buyerProvider.loggedInUser!.id!);
-          });
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Colors.white, Colors.blue.withOpacity(0.05)],
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: () async {
+            setState(() {
+              _dashboardDataFuture = _fetchDashboardData(buyerProvider.loggedInUser!.id!);
+            });
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.white, Colors.blue.withOpacity(0.05)],
+              ),
             ),
-          ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildWelcomeHeader(userName, planName),
-                const SizedBox(height: 32),
-                FutureBuilder<DashboardData>(
-                  future: _dashboardDataFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: Padding(
-                        padding: EdgeInsets.all(50.0),
-                        child: CircularProgressIndicator(),
-                      ));
-                    } else if (snapshot.hasError) {
-                      return _buildErrorState(snapshot.error.toString());
-                    } else if (snapshot.hasData) {
-                      return _buildStatsGrid(snapshot.data!, context);
-                    }
-                    return const Center(child: Text('لا توجد بيانات متاحة حالياً.'));
-                  },
-                ),
-                const SizedBox(height: 40),
-                _buildInfoFooter(),
-              ],
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 24.0, bottom: 40.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildWelcomeHeader(userName, planName),
+                  const SizedBox(height: 32),
+                  FutureBuilder<DashboardData>(
+                    future: _dashboardDataFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: Padding(
+                          padding: EdgeInsets.all(50.0),
+                          child: CircularProgressIndicator(),
+                        ));
+                      } else if (snapshot.hasError) {
+                        return _buildErrorState(snapshot.error.toString());
+                      } else if (snapshot.hasData) {
+                        return _buildStatsGrid(snapshot.data!, context);
+                      }
+                      return const Center(child: Text('لا توجد بيانات متاحة حالياً.'));
+                    },
+                  ),
+                  const SizedBox(height: 40),
+                  _buildInfoFooter(),
+                  const SizedBox(height: 20),
+                ],
+              ),
             ),
           ),
         ),
@@ -207,7 +211,6 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
           value: '${data.securityPoints.toStringAsFixed(0)} ن',
           color: Colors.teal,
           onTap: () {
-            // ✨ الآن الكلاس معرف بفضل الـ Import الصحيح وبدون كلمة const
             Navigator.push(
               context, 
               MaterialPageRoute(builder: (context) => MerchantPointBalanceScreen())
@@ -246,7 +249,7 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(12)),
-      child: Text('خطأ في الاتصال بالسيرفر', style: const TextStyle(color: Colors.red, fontFamily: 'Cairo'), textAlign: TextAlign.center),
+      child: const Text('خطأ في مزامنة البيانات السحابية', style: TextStyle(color: Colors.red, fontFamily: 'Cairo'), textAlign: TextAlign.center),
     );
   }
 
@@ -264,7 +267,7 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'يمكنك الضغط على كارت "نقاط الأمان" لمراجعة تفاصيل عهدة الطلبات والتسويات اللوجستية.',
+              'يمكنك الضغط على كارت "نقاط الأمان" لمراجعة سجل استحقاقات العهدة والتسويات اللوجستية لطلباتك.',
               style: TextStyle(color: Colors.grey[700], fontSize: 11, fontFamily: 'Cairo'),
             ),
           ),
@@ -323,7 +326,7 @@ class _DashboardCard extends StatelessWidget {
                 fit: BoxFit.scaleDown,
                 child: Text(
                   value,
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.black87),
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.black87),
                 ),
               ),
             ],
@@ -333,3 +336,4 @@ class _DashboardCard extends StatelessWidget {
     );
   }
 }
+

@@ -1,11 +1,10 @@
-// lib/screens/orders_screen.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:my_test_app/data_sources/order_data_source.dart';
 import 'package:my_test_app/models/order_model.dart';
 import 'package:my_test_app/services/excel_exporter.dart';
 import 'package:my_test_app/screens/invoice_screen.dart';
-import 'package:my_test_app/services/user_session.dart'; 
+import 'package:my_test_app/services/user_session.dart';
 import 'package:sizer/sizer.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -221,7 +220,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900)),
                       ),
                     ),
-                    // 🎯 التعديل الجوهري: نستخدم UserSession.canEdit لضمان ظهور القائمة للمالك
                     if (UserSession.canEdit && order.status != 'delivered' && order.status != 'cancelled') ...[
                       SizedBox(width: 3.w),
                       Expanded(flex: 3, child: _buildStatusDropdown(order)),
@@ -278,36 +276,33 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   void _handleStatusChange(OrderModel order, String? newVal) async {
     if (newVal == null || newVal == order.status) return;
-    
-    // تأكيد إضافي للصلاحية برمجياً
     if (!UserSession.canEdit) return;
-
     bool confirm = true;
     if (newVal == 'delivered' || newVal == 'cancelled') {
       confirm = await showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: Text("تأكيد الحالة", style: TextStyle(fontSize: 17.sp, fontWeight: FontWeight.w900)),
-              content: Text(
-                newVal == 'delivered'
-                    ? "هل تم تسليم الطلب وتحصيل المبلغ فعلاً؟"
-                    : "هل تريد إلغاء الطلب؟ سيتم استرداد الكاش باك للعميل.",
-                style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w700),
-              ),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: Text("تراجع", style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.bold))),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: newVal == 'delivered' ? Colors.green : Colors.red),
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text("تأكيد", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-          ) ?? false;
+              context: context,
+              builder: (context) => AlertDialog(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    title: Text("تأكيد الحالة", style: TextStyle(fontSize: 17.sp, fontWeight: FontWeight.w900)),
+                    content: Text(
+                      newVal == 'delivered'
+                          ? "هل تم تسليم الطلب وتحصيل المبلغ فعلاً؟"
+                          : "هل تريد إلغاء الطلب؟ سيتم استرداد الكاش باك للعميل.",
+                      style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w700),
+                    ),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: Text("تراجع", style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.bold))),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: newVal == 'delivered' ? Colors.green : Colors.red),
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text("تأكيد", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  )) ??
+          false;
     }
 
     if (confirm) {
@@ -321,47 +316,55 @@ class _OrdersScreenState extends State<OrdersScreen> {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
-      builder: (context) => Container(
-        height: 75.h,
-        padding: EdgeInsets.all(5.w),
-        child: Column(
-          children: [
-            Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
-            SizedBox(height: 2.h),
-            Text("أصناف الطلب #${order.id.substring(0, 5)}",
-                style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900)),
-            const Divider(thickness: 2),
-            Expanded(
-              child: ListView.builder(
-                itemCount: order.items.length,
-                itemBuilder: (context, i) => ListTile(
-                  leading: CircleAvatar(
-                      backgroundColor: Colors.green.shade50,
-                      child: Text("${i + 1}",
-                          style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.bold, fontSize: 13.sp))),
-                  title: Text(order.items[i].name,
-                      style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w900)),
-                  subtitle: Text("الكمية: ${order.items[i].quantity}",
-                      style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700)),
-                  trailing: Text(
-                      "${(order.items[i].unitPrice * order.items[i].quantity).toStringAsFixed(2)} ج.م",
-                      style: TextStyle(
-                          fontSize: 14.sp, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
+      builder: (context) => SafeArea( // ✨ التعديل هنا: إضافة SafeArea
+        child: Container(
+          height: 75.h,
+          padding: EdgeInsets.only(
+            left: 5.w,
+            right: 5.w,
+            top: 2.h,
+            bottom: 2.h, // تأمين مسافة سفلية
+          ),
+          child: Column(
+            children: [
+              Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
+              SizedBox(height: 2.h),
+              Text("أصناف الطلب #${order.id.substring(0, 5)}",
+                  style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900)),
+              const Divider(thickness: 2),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: order.items.length,
+                  itemBuilder: (context, i) => ListTile(
+                    leading: CircleAvatar(
+                        backgroundColor: Colors.green.shade50,
+                        child: Text("${i + 1}",
+                            style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.bold, fontSize: 13.sp))),
+                    title: Text(order.items[i].name,
+                        style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w900)),
+                    subtitle: Text("الكمية: ${order.items[i].quantity}",
+                        style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700)),
+                    trailing: Text(
+                        "${(order.items[i].unitPrice * order.items[i].quantity).toStringAsFixed(2)} ج.م",
+                        style: TextStyle(
+                            fontSize: 14.sp, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
+                  ),
                 ),
               ),
-            ),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                  minimumSize: Size(double.infinity, 8.h),
-                  backgroundColor: const Color(0xFF1B5E20),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
-              onPressed: () =>
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => InvoiceScreen(order: order))),
-              icon: Icon(Icons.print, color: Colors.white, size: 18.sp),
-              label: Text("معاينة الفاتورة والطباعة",
-                  style: TextStyle(fontSize: 16.sp, color: Colors.white, fontWeight: FontWeight.w900)),
-            )
-          ],
+              const SizedBox(height: 1.h), // مسافة بسيطة قبل الزر
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                    minimumSize: Size(double.infinity, 8.h),
+                    backgroundColor: const Color(0xFF1B5E20),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+                onPressed: () =>
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => InvoiceScreen(order: order))),
+                icon: Icon(Icons.print, color: Colors.white, size: 18.sp),
+                label: Text("معاينة الفاتورة والطباعة",
+                    style: TextStyle(fontSize: 16.sp, color: Colors.white, fontWeight: FontWeight.w900)),
+              )
+            ],
+          ),
         ),
       ),
     );
@@ -400,7 +403,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
         ],
       ));
 
-  Widget _buildErrorState(String error) =>
-      Center(child: Text("خطأ في الاتصال: $error", style: TextStyle(fontSize: 16.sp, color: Colors.red, fontWeight: FontWeight.bold)));
+  Widget _buildErrorState(String error) => Center(
+      child: Text("خطأ في الاتصال: $error",
+          style: TextStyle(fontSize: 16.sp, color: Colors.red, fontWeight: FontWeight.bold)));
 }
 

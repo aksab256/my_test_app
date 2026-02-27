@@ -13,7 +13,6 @@ class ForgotPasswordScreen extends StatefulWidget {
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final Color primaryGreen = const Color(0xff28a745);
-  
   String _selectedRole = 'consumers'; // القيمة الافتراضية
   bool _isLoading = false;
   bool _isVerified = false; // هل تم التحقق من وجود الرقم؟
@@ -51,10 +50,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         // إذا وجدنا المستخدم
         setState(() {
           _isVerified = true;
-          // جلب الاسم سواء كان fullname أو supermarketName (حسب الصور)
-          _userName = result.docs.first.data()['fullname'] ?? 
-                      result.docs.first.data()['supermarketName'] ?? 
-                      "عميل أكسب";
+          // جلب الاسم سواء كان fullname أو supermarketName
+          _userName = result.docs.first.data()['fullname'] ??
+              result.docs.first.data()['supermarketName'] ??
+              "عميل أكسب";
         });
         _showSnackBar('تم التحقق بنجاح، يمكنك التواصل مع الدعم الآن', Colors.green);
       } else {
@@ -74,7 +73,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('عذراً، غير موجود', textAlign: TextAlign.right, style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        title: const Text('عذراً، غير موجود',
+            textAlign: TextAlign.right,
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
         content: Text(
           'هذا الرقم غير مسجل لدينا كـ ${_roles[_selectedRole]}. تأكد من الرقم أو نوع الحساب، أو قم بإنشاء حساب جديد.',
           textAlign: TextAlign.right,
@@ -88,10 +89,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: primaryGreen),
             onPressed: () {
-              Navigator.pop(context);
-              // أضف كود التوجه لصفحة التسجيل هنا
+              Navigator.pop(context); // إغلاق الديالوج
+              // 🎯 التوجه لمسار تسجيل عميل جديد الموحد
+              Navigator.pushNamed(context, '/register');
             },
-            child: const Text('تسجيل حساب جديد', style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
+            child: const Text('تسجيل حساب جديد',
+                style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
           ),
         ],
       ),
@@ -102,8 +105,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   void _contactSupport() async {
     String phone = _phoneController.text.trim();
     String whatsappNumber = "201021070462"; // رقم الدعم الفني
-    String message = "مرحباً دعم أكسب، أنا $_userName، مسجل كـ ${_roles[_selectedRole]} برقم: $phone. فقدت كلمة السر وأريد استعادتها.";
-    
+    String message =
+        "مرحباً دعم أكسب، أنا $_userName، مسجل كـ ${_roles[_selectedRole]} برقم: $phone. فقدت كلمة السر وأريد استعادتها.";
     String url = "https://wa.me/$whatsappNumber?text=${Uri.encodeComponent(message)}";
     final Uri uri = Uri.parse(url);
 
@@ -116,7 +119,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   void _showSnackBar(String msg, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg, textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: color),
+      SnackBar(
+          content: Text(msg,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontFamily: 'Cairo')),
+          backgroundColor: color),
     );
   }
 
@@ -125,7 +132,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF9),
       appBar: AppBar(
-        title: const Text('استعادة الحساب', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        title: const Text('استعادة الحساب',
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
@@ -139,7 +147,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             children: [
               const Icon(Icons.shield_outlined, size: 100, color: Color(0xff28a745)),
               SizedBox(height: 3.h),
-              Text('التحقق من الهوية', style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+              Text('التحقق من الهوية',
+                  style: TextStyle(
+                      fontSize: 18.sp,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'Cairo')),
               SizedBox(height: 4.h),
 
               // اختيار نوع الحساب
@@ -151,7 +163,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   fillColor: Colors.white,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                 ),
-                items: _roles.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontFamily: 'Cairo')))).toList(),
+                items: _roles.entries
+                    .map((e) => DropdownMenuItem(
+                        value: e.key,
+                        child: Text(e.value,
+                            style: const TextStyle(fontFamily: 'Cairo'))))
+                    .toList(),
                 onChanged: (val) => setState(() {
                   _selectedRole = val!;
                   _isVerified = false; // إعادة التصفير عند تغيير الاختيار
@@ -176,29 +193,47 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
               SizedBox(height: 4.h),
 
-              // زر التحقق أو زر الواتساب (يتغير حسب الحالة)
+              // زر التحقق أو زر الواتساب
               SizedBox(
                 width: double.infinity,
                 height: 55,
-                child: _isLoading 
-                  ? const Center(child: CircularProgressIndicator())
-                  : _isVerified 
-                    ? ElevatedButton.icon(
-                        onPressed: _contactSupport,
-                        icon: const Icon(Icons.message, color: Colors.white),
-                        label: const Text('تواصل مع الدعم الفني الآن', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-                        style: ElevatedButton.styleFrom(backgroundColor: primaryGreen, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
-                      )
-                    : ElevatedButton(
-                        onPressed: _verifyUser,
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2C3E50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
-                        child: const Text('تحقق من وجود الحساب', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-                      ),
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _isVerified
+                        ? ElevatedButton.icon(
+                            onPressed: _contactSupport,
+                            icon: const Icon(Icons.message, color: Colors.white),
+                            label: const Text('تواصل مع الدعم الفني الآن',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Cairo')),
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryGreen,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(15))),
+                          )
+                        : ElevatedButton(
+                            onPressed: _verifyUser,
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2C3E50),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(15))),
+                            child: const Text('تحقق من وجود الحساب',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Cairo')),
+                          ),
               ),
-              
+
               if (_isVerified) ...[
                 SizedBox(height: 2.h),
-                Text("أهلاً $_userName، تم العثور على حسابك.", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                Text("أهلاً $_userName، تم العثور على حسابك.",
+                    style: const TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Cairo')),
               ]
             ],
           ),
@@ -207,3 +242,4 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 }
+
