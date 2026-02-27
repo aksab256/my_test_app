@@ -372,4 +372,4 @@ class PostRegistrationMessageScreen extends StatelessWidget {
       ),
     );
   }
-}
+
