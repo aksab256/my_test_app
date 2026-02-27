@@ -212,7 +212,7 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
             // هنا نفتح صفحة السجلات التي صممناها
             Navigator.push(
               context, 
-              MaterialPageRoute(builder: (context) => const MerchantPointBalanceScreen())
+              MaterialPageRoute(builder: (context) =>  MerchantPointBalanceScreen())
             );
           },
         ),
