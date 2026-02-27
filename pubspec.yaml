@@ -2,7 +2,7 @@ name: my_test_app
 description: A new Flutter project.
 publish_to: 'none'
 # تم تحديث الإصدار ليكون Build 3 جاهز للرفع النهائي
-version: 1.0.2+12
+version: 1.0.2+13
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -84,10 +84,10 @@ flutter_launcher_icons:
   ios: true
   image_path: "assets/flutter_logo.png"
   # إعدادات الأيقونة التكيفية (Adaptive Icon) لمنع القص
-  adaptive_icon_background: "#1B5E20"
+  adaptive_icon_background: "#4CAF50"
   adaptive_icon_foreground: "assets/flutter_logo.png"
   # السطر التالي يضمن توسيط العربة وتصغيرها لتناسب "المنطقة الآمنة"
-  adaptive_icon_foreground_inset: 30
+  adaptive_icon_foreground_inset: 0
 
 flutter:
   uses-material-design: true
