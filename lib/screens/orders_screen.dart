@@ -315,56 +315,56 @@ class _OrdersScreenState extends State<OrdersScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
-      builder: (context) => SafeArea( // ✨ التعديل هنا: إضافة SafeArea
-        child: Container(
-          height: 75.h,
-          padding: EdgeInsets.only(
-            left: 5.w,
-            right: 5.w,
-            top: 2.h,
-            bottom: 2.h, // تأمين مسافة سفلية
-          ),
-          child: Column(
-            children: [
-              Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
-              SizedBox(height: 2.h),
-              Text("أصناف الطلب #${order.id.substring(0, 5)}",
-                  style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900)),
-              const Divider(thickness: 2),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: order.items.length,
-                  itemBuilder: (context, i) => ListTile(
-                    leading: CircleAvatar(
-                        backgroundColor: Colors.green.shade50,
-                        child: Text("${i + 1}",
-                            style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.bold, fontSize: 13.sp))),
-                    title: Text(order.items[i].name,
-                        style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w900)),
-                    subtitle: Text("الكمية: ${order.items[i].quantity}",
-                        style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700)),
-                    trailing: Text(
-                        "${(order.items[i].unitPrice * order.items[i].quantity).toStringAsFixed(2)} ج.م",
-                        style: TextStyle(
-                            fontSize: 14.sp, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
-                  ),
+      builder: (context) => Container(
+        height: 75.h,
+        padding: EdgeInsets.only(
+          left: 5.w,
+          right: 5.w,
+          top: 2.h,
+          // ✨ الحل هنا: مسافة أمان سفلية متغيرة حسب نوع الجهاز تمنع اختفاء الزرار
+          bottom: MediaQuery.of(context).padding.bottom + 1.h, 
+        ),
+        child: Column(
+          children: [
+            Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
+            SizedBox(height: 2.h),
+            Text("أصناف الطلب #${order.id.substring(0, 5)}",
+                style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900)),
+            const Divider(thickness: 2),
+            Expanded(
+              child: ListView.builder(
+                itemCount: order.items.length,
+                itemBuilder: (context, i) => ListTile(
+                  leading: CircleAvatar(
+                      backgroundColor: Colors.green.shade50,
+                      child: Text("${i + 1}",
+                          style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.bold, fontSize: 13.sp))),
+                  title: Text(order.items[i].name,
+                      style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w900)),
+                  subtitle: Text("الكمية: ${order.items[i].quantity}",
+                      style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700)),
+                  trailing: Text(
+                      "${(order.items[i].unitPrice * order.items[i].quantity).toStringAsFixed(2)} ج.م",
+                      style: TextStyle(
+                          fontSize: 14.sp, fontWeight: FontWeight.w900, color: Colors.green.shade700)),
                 ),
               ),
-               SizedBox(height: 1.h), // مسافة بسيطة قبل الزر
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                    minimumSize: Size(double.infinity, 8.h),
-                    backgroundColor: const Color(0xFF1B5E20),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
-                onPressed: () =>
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => InvoiceScreen(order: order))),
-                icon: Icon(Icons.print, color: Colors.white, size: 18.sp),
-                label: Text("معاينة الفاتورة والطباعة",
-                    style: TextStyle(fontSize: 16.sp, color: Colors.white, fontWeight: FontWeight.w900)),
-              )
-            ],
-          ),
+            ),
+            SizedBox(height: 1.h),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                  minimumSize: Size(double.infinity, 8.h),
+                  backgroundColor: const Color(0xFF1B5E20),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+              onPressed: () =>
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => InvoiceScreen(order: order))),
+              icon: Icon(Icons.print, color: Colors.white, size: 18.sp),
+              label: Text("معاينة الفاتورة والطباعة",
+                  style: TextStyle(fontSize: 16.sp, color: Colors.white, fontWeight: FontWeight.w900)),
+            )
+          ],
         ),
       ),
     );
@@ -407,4 +407,3 @@ class _OrdersScreenState extends State<OrdersScreen> {
       child: Text("خطأ في الاتصال: $error",
           style: TextStyle(fontSize: 16.sp, color: Colors.red, fontWeight: FontWeight.bold)));
 }
-
