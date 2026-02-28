@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:sizer/sizer.dart';
+import 'package:permission_handler/permission_handler.dart'; // 🎯 إضافة مكتبة إدارة الأذونات
 
 // 🎯 الألوان والثوابت المعتمدة
 const Color primaryColor = Color(0xff28a745);
@@ -95,7 +96,50 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
     }
   }
 
+  // 🛡️ دالة رفع اللوجو المحدثة (فحص ذكي للإذن)
   Future<void> _uploadLogo() async {
+    // 1. فحص حالة الإذن الحالية بدقة
+    PermissionStatus status = await Permission.photos.status;
+    
+    // ملاحظة: في أندرويد 13+، قد نحتاج لفحص Permission.photos أو Permission.videos
+    // الكود التالي يتعامل مع الحالات التي تتطلب "إفصاح"
+    if (status.isDenied || status.isPermanentlyDenied || status.isRestricted) {
+      
+      // إظهار رسالة الإفصاح فقط إذا كان الإذن غير متاح
+      final bool? proceed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Icon(Icons.photo_library, color: primaryColor, size: 22.sp),
+              SizedBox(width: 8.sp),
+              Text("تحديث شعار المتجر", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14.sp)),
+            ],
+          ),
+          content: Text(
+            "نحتاج للوصول إلى معرض الصور لاختيار شعار متجرك. سيتم عرض الشعار للمستهلكين لتمييز علامتك التجارية وضمان هوية النشاط.",
+            style: TextStyle(fontFamily: 'Cairo', fontSize: 12.sp, height: 1.5),
+            textAlign: TextAlign.right,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text("إلغاء", style: TextStyle(fontFamily: 'Cairo', fontSize: 12.sp, color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              onPressed: () => Navigator.pop(context, true),
+              child: Text("موافق", style: TextStyle(fontFamily: 'Cairo', fontSize: 12.sp, color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+
+      if (proceed != true) return;
+    }
+
+    // 2. فتح المعرض (نظام أندرويد سيتولى إظهار نافذة الإذن الرسمية إذا لزم الأمر)
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
 
