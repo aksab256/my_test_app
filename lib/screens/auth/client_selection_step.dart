@@ -25,21 +25,19 @@ class ClientSelectionStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      // زيادة المسافات الجانبية لتوسيع الكروت
       padding: EdgeInsets.symmetric(horizontal: 5.w),
       child: Column(
         children: [
           SizedBox(height: 3.h),
           Text(
             stepNumber == 1 ? 'أين يقع نشاطك التجاري؟' : 'ما هو دورك في المنصة؟',
-            // ✅ تكبير عنوان الصفحة الرئيسي
-            style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w900, color: const Color(0xFF1A1A1A)),
+            style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w900, color: const Color(0xFF1A1A1A), fontFamily: 'Cairo'),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: 1.h),
           Text(
             stepNumber == 1 ? 'اختر الدولة لبدء تخصيص تجربتك' : 'اختر نوع الحساب المناسب لطبيعة عملك',
-            style: TextStyle(fontSize: 12.sp, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 12.sp, color: Colors.grey.shade600, fontFamily: 'Cairo'),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: 4.h),
@@ -56,7 +54,7 @@ class ClientSelectionStep extends StatelessWidget {
               child: TextButton.icon(
                 onPressed: onGoBack,
                 icon: const Icon(Icons.arrow_forward_ios_rounded, size: 20),
-                label: Text('العودة للخطوة السابقة', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold)),
+                label: Text('العودة للخطوة السابقة', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
                 style: TextButton.styleFrom(foregroundColor: Colors.grey[700]),
               ),
             ),
@@ -77,7 +75,6 @@ class ClientSelectionStep extends StatelessWidget {
           onTap: () => onCountrySelected('egypt'),
         ),
         SizedBox(height: 3.h),
-        // ✅ كارت السعودية (قريباً) بتصميم باهت وغير قابل للضغط
         Opacity(
           opacity: 0.6,
           child: _OptionCard(
@@ -88,7 +85,7 @@ class ClientSelectionStep extends StatelessWidget {
             isActive: false,
             onTap: () {
                ScaffoldMessenger.of(context).showSnackBar(
-                 const SnackBar(content: Text("خدماتنا ستتوفر قريباً في المملكة العربية السعودية"))
+                 const SnackBar(content: Text("خدماتنا ستتوفر قريباً في المملكة العربية السعودية", style: TextStyle(fontFamily: 'Cairo')))
                );
             },
           ),
@@ -158,10 +155,10 @@ class _OptionCard extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
-        padding: EdgeInsets.all(2.h), // زيادة الحشو الداخلي للكارت
+        padding: EdgeInsets.all(2.h),
         decoration: BoxDecoration(
           color: isActive ? primary.withOpacity(0.08) : Colors.white,
-          borderRadius: BorderRadius.circular(25), // حواف دائرية أكثر احترافية
+          borderRadius: BorderRadius.circular(25),
           border: Border.all(
             color: isActive ? primary : Colors.grey.shade300,
             width: isActive ? 3 : 1.5,
@@ -177,7 +174,6 @@ class _OptionCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // أيقونة كبيرة وواضحة
             flagColors != null
               ? _buildFlagIcon(flagColors!)
               : Container(
@@ -189,29 +185,27 @@ class _OptionCard extends StatelessWidget {
                   child: Icon(icon, color: iconColor ?? primary, size: 35),
                 ),
             SizedBox(width: 5.w),
-            // نصوص الكارت
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    // ✅ الخط هنا 18 (معدل ليتناسب مع sizer)
                     style: TextStyle(
                       fontWeight: FontWeight.w900, 
-                      fontSize: 15.sp, // يعادل تقريباً 19-20 بكسل
-                      color: isActive ? primary : const Color(0xFFDEDEDE),
-
+                      fontSize: 15.sp,
+                      fontFamily: 'Cairo',
+                      color: isActive ? primary : Colors.black87, // تم تعديله من DEDEDE ليكون مقروءاً
                     ),
                   ),
                   SizedBox(height: 0.5.h),
                   Text(
                     subtitle,
-                    // ✅ خط الشرح واضح ومقروء
                     style: TextStyle(
                       fontSize: 11.sp, 
+                      fontFamily: 'Cairo',
                       color: Colors.grey.shade700,
-                      height: 1.3, // زيادة المسافة بين السطور لسهولة القراءة
+                      height: 1.3,
                     ),
                   ),
                 ],
