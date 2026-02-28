@@ -63,7 +63,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     _mapController = MapController();
   }
 
-  // ✅ رسالة الإفصاح قبل طلب الإذن (مطلب أساسي لجوجل)
+  // ✅ إفصاح الموقع (جوجل بلاي)
   Future<bool> _showLocationDisclosure() async {
     return await showDialog<bool>(
       context: context,
@@ -90,7 +90,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     ) ?? false;
   }
 
-  // ✅ تسلسل فتح الخريطة مع السيف أريا ورسالة الإفصاح
   Future<void> _handleMapOpeningSequence() async {
     LocationPermission permission = await Geolocator.checkPermission();
     
@@ -130,7 +129,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
           return Container(
             height: 90.h,
             decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
-            child: SafeArea( // ✅ إضافة سيف أريا لحماية المحتوى من الحواف السفلية
+            child: SafeArea(
               bottom: true,
               child: Column(
                 children: [
@@ -181,8 +180,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     );
   }
 
-  // ... [باقي الدوال (updateAddressText, cloudinary, pickFile) تظل كما هي بدون تغيير]
-
   Future<void> _updateAddressText(LatLng position) async {
     try {
       final placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
@@ -217,41 +214,55 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     }
   }
 
+  // 🔥 إصلاح خطأ الرفع من أول مرة (الربط المتسلسل للأذونات)
   Future<void> _pickFile(String field) async {
-    bool proceed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          title: const Text("رفع صور النشاط", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-          content: const Text("يتطلب رفع الشعار أو المستندات الوصول إلى معرض الصور الخاص بك لتأكيد هوية نشاطك التجاري."),
-          actions: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68)),
-              onPressed: () => Navigator.pop(context, true), 
-              child: const Text("موافق", style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
-            ),
-          ],
-        ),
-      ),
-    ) ?? false;
+    // 1. التأكد من حالة الإذن الحالية أولاً
+    PermissionStatus status = await Permission.photos.status;
 
-    if (proceed) {
-      final status = await Permission.photos.request();
-      if (status.isGranted) {
-        final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
-        if (pickedFile != null) {
-          final file = File(pickedFile.path);
-          setState(() {
-            if (field == 'logo') _logoPreview = file;
-            if (field == 'cr') _crPreview = file;
-            if (field == 'tc') _tcPreview = file;
-          });
-          await _uploadFileToCloudinary(file, field);
-        }
+    if (status.isDenied || status.isLimited || status.isPermanentlyDenied) {
+      // إظهار رسالة الإفصاح فقط عند الحاجة
+      bool proceed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            title: const Text("رفع صور النشاط", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+            content: const Text("يتطلب رفع الشعار أو المستندات الوصول إلى معرض الصور الخاص بك لتأكيد هوية نشاطك التجاري."),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68)),
+                onPressed: () => Navigator.pop(context, true), 
+                child: const Text("موافق", style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
+              ),
+            ],
+          ),
+        ),
+      ) ?? false;
+
+      if (!proceed) return;
+      
+      // طلب الإذن رسمياً وانتظار النتيجة
+      status = await Permission.photos.request();
+    }
+
+    // 2. إذا أصبح الإذن ممنوحاً (سواء كان قديماً أو منح الآن)
+    if (status.isGranted || status.isLimited) {
+      final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
+      if (pickedFile != null) {
+        final file = File(pickedFile.path);
+        setState(() {
+          if (field == 'logo') _logoPreview = file;
+          if (field == 'cr') _crPreview = file;
+          if (field == 'tc') _tcPreview = file;
+        });
+        // الرفع المباشر بعد الاختيار
+        await _uploadFileToCloudinary(file, field);
       }
+    } else if (status.isPermanentlyDenied) {
+      // توجيه المستخدم للإعدادات إذا رفض بشكل نهائي
+      openAppSettings();
     }
   }
 
@@ -305,7 +316,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     );
   }
 
-  // ✅ الحفاظ على الأكواد والـ Widgets كما هي لضمان استقرار التطبيق
   Widget _buildLocationPickerButton() {
     return InkWell(
       onTap: _handleMapOpeningSequence,
@@ -346,7 +356,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
           suffixIcon: isPassword ? IconButton(icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => _obscurePassword = !_obscurePassword)) : null,
           filled: true, fillColor: isReadOnly ? Colors.grey.shade50 : Colors.white,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.grey.shade200)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: const BorderSide(color: Color(0xFFF0F0F0))),
         ),
       ),
     );
