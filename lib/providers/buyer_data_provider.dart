@@ -25,6 +25,7 @@ class BuyerDataProvider with ChangeNotifier {
   String _userName = 'مرحباً بك!';
   LoggedInUser? _loggedInUser;
   String? _userId;
+  String? _userPhone; // 🚀 إضافة حقل الهاتف
   String _planName = 'باقة تجريبية'; 
 
   // 🏠 الموقع الثابت (المسجل في الحساب)
@@ -54,6 +55,7 @@ class BuyerDataProvider with ChangeNotifier {
   String get userName => _userName;
   LoggedInUser? get loggedInUser => _loggedInUser;
   String get planName => _planName; 
+  String? get userPhone => _userPhone; // 🚀 Getter للهاتف
 
   // الـ Getters الأصلية للعنوان الثابت
   double? get userLat => _userLat;
@@ -114,6 +116,10 @@ class BuyerDataProvider with ChangeNotifier {
 
           if (userDataJson != null) {
               final userData = json.decode(userDataJson);
+              
+              // 🚀 قراءة الهاتف من البيانات المخزنة
+              _userPhone = userData['phone']?.toString();
+
               final locationData = userData['location'];
 
               if (locationData is Map) {
@@ -134,6 +140,7 @@ class BuyerDataProvider with ChangeNotifier {
     } else {
       _loggedInUser = null;
       _userName = 'مرحباً بك!';
+      _userPhone = null; // تنظيف الهاتف عند الخروج
       clearSessionLocation(); // تأمين إضافي عند الخروج
     }
 
