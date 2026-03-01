@@ -248,6 +248,9 @@ class CheckoutController {
                         'status': 'new-order', 'orderDate': FieldValue.serverTimestamp(),
                         'commissionRate': commissionRatesCache[sellerId] ?? 0.0,
                         'cashbackApplied': discountPortion, 'isCashbackUsed': discountUsed > 0,
+                      'isFinancialSettled': false,
+                        'isCommissionProcessed': false,
+                        'deliveryHandled': false,
                     };
 
                     final docRef = await FirebaseFirestore.instance.collection(ordersCollectionName).add(removeNullValues(orderData));
