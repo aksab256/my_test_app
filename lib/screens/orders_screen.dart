@@ -57,53 +57,60 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
-      appBar: AppBar(
-        title: Text('إدارة الطلبات الواردة',
-            style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.white)),
-        backgroundColor: const Color(0xFF1B5E20),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.file_download_outlined, color: Colors.white, size: 24.sp),
-            onPressed: _exportToExcel,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildFilterBar(),
-          Expanded(
-            child: FutureBuilder<List<OrderModel>>(
-              future: _ordersFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) return _buildErrorState(snapshot.error.toString());
-
-                _loadedOrders = snapshot.data ?? [];
-                _loadedOrders.sort((a, b) => b.orderDate.compareTo(a.orderDate));
-
-                final filteredList = _selectedFilter == 'all'
-                    ? _loadedOrders
-                    : _loadedOrders.where((o) => o.status == _selectedFilter).toList();
-
-                if (filteredList.isEmpty) return _buildEmptyState();
-
-                return RefreshIndicator(
-                  onRefresh: () async => _refreshOrders(),
-                  child: ListView.builder(
-                    padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
-                    itemCount: filteredList.length,
-                    itemBuilder: (context, index) => _buildOrderCard(filteredList[index]),
-                  ),
-                );
-              },
+    return SafeArea( // ✨ حماية الجزء العلوي والسفلي للشاشة بالكامل
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF0F2F5),
+        appBar: AppBar(
+          title: Text('إدارة الطلبات الواردة',
+              style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.white, fontFamily: 'Cairo')),
+          backgroundColor: const Color(0xFF1B5E20),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              icon: Icon(Icons.file_download_outlined, color: Colors.white, size: 24.sp),
+              onPressed: _exportToExcel,
             ),
-          ),
-        ],
+          ],
+        ),
+        body: Column(
+          children: [
+            _buildFilterBar(),
+            Expanded(
+              child: FutureBuilder<List<OrderModel>>(
+                future: _ordersFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) return _buildErrorState(snapshot.error.toString());
+  
+                  _loadedOrders = snapshot.data ?? [];
+                  _loadedOrders.sort((a, b) => b.orderDate.compareTo(a.orderDate));
+  
+                  final filteredList = _selectedFilter == 'all'
+                      ? _loadedOrders
+                      : _loadedOrders.where((o) => o.status == _selectedFilter).toList();
+  
+                  if (filteredList.isEmpty) return _buildEmptyState();
+  
+                  return RefreshIndicator(
+                    onRefresh: () async => _refreshOrders(),
+                    child: ListView.builder(
+                      padding: EdgeInsets.only(
+                        left: 4.w, 
+                        right: 4.w, 
+                        top: 2.h, 
+                        bottom: MediaQuery.of(context).padding.bottom + 2.h // ✨ مسافة أمان سفلية للقائمة
+                      ),
+                      itemCount: filteredList.length,
+                      itemBuilder: (context, index) => _buildOrderCard(filteredList[index]),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -138,6 +145,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         label: Text(label,
             style: TextStyle(
                 fontSize: 13.sp,
+                fontFamily: 'Cairo',
                 fontWeight: FontWeight.w900,
                 color: isSelected ? Colors.white : Colors.black87)),
         selected: isSelected,
@@ -170,7 +178,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(order.buyerDetails.name,
-                style: TextStyle(fontSize: 17.sp, fontWeight: FontWeight.w900, color: Colors.black)),
+                style: TextStyle(fontSize: 17.sp, fontWeight: FontWeight.w900, color: Colors.black, fontFamily: 'Cairo')),
             Text("#${order.id.substring(0, 5).toUpperCase()}",
                 style: TextStyle(fontSize: 11.sp, color: Colors.grey.shade700, fontWeight: FontWeight.bold)),
           ],
@@ -180,7 +188,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           children: [
             SizedBox(height: 0.5.h),
             Text("المطلوب: ${order.totalAmount} ج.م",
-                style: TextStyle(color: statusColor, fontWeight: FontWeight.w900, fontSize: 16.sp)),
+                style: TextStyle(color: statusColor, fontWeight: FontWeight.w900, fontSize: 16.sp, fontFamily: 'Cairo')),
             Text(DateFormat('MMM dd, hh:mm a').format(order.orderDate),
                 style: TextStyle(fontSize: 11.sp, color: Colors.black54, fontWeight: FontWeight.w700)),
           ],
@@ -217,7 +225,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         ),
                         icon: Icon(Icons.inventory_2_outlined, size: 18.sp),
                         label: Text("📦 الأصناف",
-                            style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900)),
+                            style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900, fontFamily: 'Cairo')),
                       ),
                     ),
                     if (UserSession.canEdit && order.status != 'delivered' && order.status != 'cancelled') ...[
@@ -244,7 +252,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             child: Text(text,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w800, color: Colors.black87))),
+                style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w800, color: Colors.black87, fontFamily: 'Cairo'))),
       ]),
     );
   }
@@ -260,7 +268,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         child: DropdownButton<String>(
           value: order.status,
           isExpanded: true,
-          style: TextStyle(fontSize: 13.sp, color: Colors.black, fontWeight: FontWeight.w900),
+          style: TextStyle(fontSize: 13.sp, color: Colors.black, fontWeight: FontWeight.w900, fontFamily: 'Cairo'),
           items: const [
             DropdownMenuItem(value: 'new-order', child: Text('طلب جديد')),
             DropdownMenuItem(value: 'processing', child: Text('قيد التجهيز')),
@@ -283,22 +291,22 @@ class _OrdersScreenState extends State<OrdersScreen> {
               context: context,
               builder: (context) => AlertDialog(
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    title: Text("تأكيد الحالة", style: TextStyle(fontSize: 17.sp, fontWeight: FontWeight.w900)),
+                    title: Text("تأكيد الحالة", style: TextStyle(fontSize: 17.sp, fontWeight: FontWeight.w900, fontFamily: 'Cairo')),
                     content: Text(
                       newVal == 'delivered'
                           ? "هل تم تسليم الطلب وتحصيل المبلغ فعلاً؟"
                           : "هل تريد إلغاء الطلب؟ سيتم استرداد الكاش باك للعميل.",
-                      style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w700),
+                      style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w700, fontFamily: 'Cairo'),
                     ),
                     actions: [
                       TextButton(
                           onPressed: () => Navigator.pop(context, false),
-                          child: Text("تراجع", style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.bold))),
+                          child: Text("تراجع", style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo'))),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
                             backgroundColor: newVal == 'delivered' ? Colors.green : Colors.red),
                         onPressed: () => Navigator.pop(context, true),
-                        child: const Text("تأكيد", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        child: const Text("تأكيد", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
                       ),
                     ],
                   )) ??
@@ -323,7 +331,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           left: 5.w,
           right: 5.w,
           top: 2.h,
-          // ✨ الحل هنا: مسافة أمان سفلية متغيرة حسب نوع الجهاز تمنع اختفاء الزرار
+          // ✨ مسافة أمان سفلية لمنع تداخل الزرار مع شريط الهاتف
           bottom: MediaQuery.of(context).padding.bottom + 1.h, 
         ),
         child: Column(
@@ -331,7 +339,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
             SizedBox(height: 2.h),
             Text("أصناف الطلب #${order.id.substring(0, 5)}",
-                style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900)),
+                style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, fontFamily: 'Cairo')),
             const Divider(thickness: 2),
             Expanded(
               child: ListView.builder(
@@ -342,9 +350,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       child: Text("${i + 1}",
                           style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.bold, fontSize: 13.sp))),
                   title: Text(order.items[i].name,
-                      style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w900)),
+                      style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w900, fontFamily: 'Cairo')),
                   subtitle: Text("الكمية: ${order.items[i].quantity}",
-                      style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700)),
+                      style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700, fontFamily: 'Cairo')),
                   trailing: Text(
                       "${(order.items[i].unitPrice * order.items[i].quantity).toStringAsFixed(2)} ج.م",
                       style: TextStyle(
@@ -362,7 +370,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   Navigator.push(context, MaterialPageRoute(builder: (_) => InvoiceScreen(order: order))),
               icon: Icon(Icons.print, color: Colors.white, size: 18.sp),
               label: Text("معاينة الفاتورة والطباعة",
-                  style: TextStyle(fontSize: 16.sp, color: Colors.white, fontWeight: FontWeight.w900)),
+                  style: TextStyle(fontSize: 16.sp, color: Colors.white, fontWeight: FontWeight.w900, fontFamily: 'Cairo')),
             )
           ],
         ),
@@ -374,10 +382,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
     try {
       await ExcelExporter.exportOrders(_loadedOrders, 'seller');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("تم تصدير ملف الإكسيل بنجاح  ✅", style: TextStyle(fontSize: 13.sp))));
+          content: Text("تم تصدير ملف الإكسيل بنجاح  ✅", style: TextStyle(fontSize: 13.sp, fontFamily: 'Cairo'))));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("حدث خطأ: $e ❌", style: TextStyle(fontSize: 13.sp))));
+          content: Text("حدث خطأ: $e ❌", style: TextStyle(fontSize: 13.sp, fontFamily: 'Cairo'))));
     }
   }
 
@@ -399,11 +407,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
           Icon(Icons.inbox_outlined, size: 65.sp, color: Colors.grey),
           Text("لا توجد طلبات في قسم ${_getStatusText(_selectedFilter)}",
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 17.sp, color: Colors.grey, fontWeight: FontWeight.w900)),
+              style: TextStyle(fontSize: 17.sp, color: Colors.grey, fontWeight: FontWeight.w900, fontFamily: 'Cairo')),
         ],
       ));
 
   Widget _buildErrorState(String error) => Center(
       child: Text("خطأ في الاتصال: $error",
-          style: TextStyle(fontSize: 16.sp, color: Colors.red, fontWeight: FontWeight.bold)));
+          style: TextStyle(fontSize: 16.sp, color: Colors.red, fontWeight: FontWeight.bold, fontFamily: 'Cairo')));
 }
