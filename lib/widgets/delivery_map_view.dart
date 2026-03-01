@@ -8,7 +8,7 @@ import 'package:flutter/services.dart' show rootBundle;
 
 // 🛑 إعدادات Mapbox الجديدة
 const String MAPBOX_ACCESS_TOKEN = 'pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw';
-const String MAPBOX_STYLE_ID = 'mapbox/streets-v12'; // يمكنك استخدام light-v11 أو dark-v11 أيضاً
+const String MAPBOX_STYLE_ID = 'mapbox/streets-v12'; 
 
 // الرابط الخاص بـ Mapbox Tiles
 const String TILE_URL = 'https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}';
@@ -40,6 +40,7 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
   Map<String, dynamic>? _geoJsonData;
   bool _isLoading = true;
   String? _loadingError;
+  bool _isMapReady = false; // 🛡️ علامة أمان لضمان جاهزية الخريطة
 
   @override
   void initState() {
@@ -57,14 +58,17 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
         _loadingError = null;
       } catch (e) {
         _loadingError = '❌ فشل تحميل ملف GeoJSON من الأصول.';
-        print('FATAL ERROR: $e');
+        debugPrint('FATAL ERROR Loading GeoJSON: $e');
       }
     }
+
+    if (!mounted) return;
 
     setState(() {
       _isLoading = false;
       if (_geoJsonData != null) {
-        _updateMapAndPolygons(_selectedAreaNames);
+        // تحديث المضلعات بدون تحريك الكاميرا فوراً لأن الخريطة لم تُبنى بعد
+        _updatePolygonsOnly(_selectedAreaNames);
       }
     });
   }
@@ -86,41 +90,58 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
     _updateMapAndPolygons(newSelection);
   }
 
-  void _updateMapAndPolygons(List<String> areaNames) {
+  // 🛡️ دالة لتحديث المضلعات فقط دون لمس الـ Controller (تُستخدم قبل جاهزية الخريطة)
+  void _updatePolygonsOnly(List<String> areaNames) {
     if (_geoJsonData == null || areaNames.isEmpty) {
       setState(() => _polygons = []);
       return;
     }
 
-    final selectedFeatures = (_geoJsonData!['features'] as List)
-        .where((f) => areaNames.contains(f['properties']['name']))
-        .toList();
+    try {
+      final selectedFeatures = (_geoJsonData!['features'] as List)
+          .where((f) => areaNames.contains(f['properties']['name']))
+          .toList();
 
-    if (selectedFeatures.isEmpty) {
-      setState(() => _polygons = []);
-      return;
-    }
+      if (selectedFeatures.isEmpty) {
+        setState(() => _polygons = []);
+        return;
+      }
 
-    final geoJsonParser = GeoJsonParser(
-      defaultPolygonBorderColor: const Color(0xff28a745),
-      defaultPolygonFillColor: const Color(0xff28a745).withOpacity(0.5),
-    );
-
-    geoJsonParser.parseGeoJson({
-      'type': 'FeatureCollection',
-      'features': selectedFeatures
-    });
-
-    setState(() {
-      _polygons = geoJsonParser.polygons;
-    });
-
-    final allPoints = _polygons.expand((p) => p.points).toList();
-    if (allPoints.isNotEmpty) {
-      final bounds = LatLngBounds.fromPoints(allPoints);
-      _mapController.fitCamera(
-        CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)),
+      final geoJsonParser = GeoJsonParser(
+        defaultPolygonBorderColor: const Color(0xff28a745),
+        defaultPolygonFillColor: const Color(0xff28a745).withOpacity(0.5),
       );
+
+      geoJsonParser.parseGeoJson({
+        'type': 'FeatureCollection',
+        'features': selectedFeatures
+      });
+
+      setState(() {
+        _polygons = geoJsonParser.polygons;
+      });
+    } catch (e) {
+      debugPrint('Error parsing GeoJson: $e');
+    }
+  }
+
+  // 🛡️ الدالة الكاملة التي تحرك الكاميرا بأمان
+  void _updateMapAndPolygons(List<String> areaNames) {
+    _updatePolygonsOnly(areaNames);
+
+    // التأكد من أن الخريطة جاهزة والمضلعات موجودة قبل تحريك الكاميرا
+    if (_isMapReady && _polygons.isNotEmpty) {
+      try {
+        final allPoints = _polygons.expand((p) => p.points).toList();
+        if (allPoints.isNotEmpty) {
+          final bounds = LatLngBounds.fromPoints(allPoints);
+          _mapController.fitCamera(
+            CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)),
+          );
+        }
+      } catch (e) {
+        debugPrint('MapController not yet attached: $e');
+      }
     }
   }
 
@@ -132,7 +153,7 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
       return Center(child: Text(_loadingError!, style: const TextStyle(color: Colors.red)));
     }
 
-    final List<dynamic> features = _geoJsonData!['features'] as List;
+    final List<dynamic> features = _geoJsonData!['features'] as List? ?? [];
     final List<String> allAreaNames = features
         .map((f) => f['properties']['name'] as String?)
         .where((name) => name != null && name.isNotEmpty)
@@ -163,7 +184,11 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
           child: IgnorePointer(
             child: DropdownButtonFormField<String>(
               value: null,
-              decoration: InputDecoration(border: const OutlineInputBorder(), hintText: hintText),
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(), 
+                hintText: hintText,
+                hintStyle: const TextStyle(fontSize: 14)
+              ),
               items: const [],
               onChanged: (_) {},
             ),
@@ -180,12 +205,18 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
             borderRadius: BorderRadius.circular(8),
             child: FlutterMap(
               mapController: _mapController,
-              options: const MapOptions(
+              options: MapOptions(
                 initialCenter: MAP_CENTER,
                 initialZoom: MAP_ZOOM,
+                // 🛡️ استدعاء عند اكتمال بناء الخريطة
+                onMapReady: () {
+                  setState(() => _isMapReady = true);
+                  if (_selectedAreaNames.isNotEmpty) {
+                    _updateMapAndPolygons(_selectedAreaNames);
+                  }
+                },
               ),
               children: [
-                // 🟢 تعديل الـ TileLayer لاستخدام Mapbox
                 TileLayer(
                   urlTemplate: TILE_URL,
                   additionalOptions: {
@@ -208,7 +239,6 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
   }
 }
 
-// الـ Widget المساعد (MultiSelectAreaDialog) يبقى كما هو دون تغيير...
 class MultiSelectAreaDialog extends StatefulWidget {
   final List<String> allAreas;
   final List<String> initialSelection;
@@ -229,7 +259,7 @@ class _MultiSelectAreaDialogState extends State<MultiSelectAreaDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('اختيار المناطق الإدارية'),
+      title: const Text('اختيار المناطق الإدارية', textAlign: TextAlign.right),
       content: SizedBox(
         width: double.maxFinite,
         child: ListView.builder(
@@ -238,8 +268,9 @@ class _MultiSelectAreaDialogState extends State<MultiSelectAreaDialog> {
           itemBuilder: (context, index) {
             final item = widget.allAreas[index];
             return CheckboxListTile(
+              activeColor: const Color(0xff28a745),
               value: _selectedItems.contains(item),
-              title: Text(item),
+              title: Text(item, textAlign: TextAlign.right),
               onChanged: (isChecked) {
                 setState(() {
                   if (isChecked == true) _selectedItems.add(item);
@@ -251,13 +282,16 @@ class _MultiSelectAreaDialogState extends State<MultiSelectAreaDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+        TextButton(
+          onPressed: () => Navigator.pop(context), 
+          child: const Text('إلغاء')
+        ),
         ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xff28a745)),
           onPressed: () => Navigator.pop(context, _selectedItems),
-          child: Text('حفظ (${_selectedItems.length})'),
+          child: Text('حفظ (${_selectedItems.length})', style: const TextStyle(color: Colors.white)),
         ),
       ],
     );
   }
 }
-
