@@ -128,7 +128,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         builder: (context, setModalState) {
           return Container(
             height: 90.h,
-            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+            decoration:  BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
             child: SafeArea(
               bottom: true,
               child: Column(
