@@ -183,6 +183,9 @@ class CheckoutController {
                         'commissionRateSnapshot': commissionRatesCache[sellerId] ?? 0.0,
                         'cashbackApplied': discountPortion,
                         'isCashbackUsed': discountUsed > 0,
+                      'isFinancialSettled': false,
+                        'isCommissionProcessed': false,
+                        'deliveryHandled': false,
                         'buyer': { 
                             'id': safeLoggedUser['id'], 'name': customerFullname, 'phone': customerPhone, 
                             'email': customerEmail, 'address': address, 
