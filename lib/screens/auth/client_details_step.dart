@@ -241,7 +241,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     try {
       PermissionStatus status = await Permission.photos.status;
 
-      if (status.isDenied || status.isLimited || status.isPermanentlyDenied) {
+      if (status.isDenied) {
         bool proceed = await showDialog<bool>(
           context: context,
           barrierDismissible: false,
@@ -267,7 +267,9 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       }
 
       if (status.isGranted || status.isLimited) {
-        final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
+        final ImagePicker picker = ImagePicker();
+        final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+        
         if (pickedFile != null) {
           final file = File(pickedFile.path);
           if (mounted) {
@@ -279,7 +281,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
             await _uploadFileToCloudinary(file, field);
           }
         }
-      } else if (status.isPermanentlyDenied) {
+      } else if (status.isPermanentlyDenied || status.isDenied) {
         openAppSettings();
       }
     } catch (e) {
@@ -301,7 +303,18 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
               Text('إكمال بيانات الحساب', style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68), fontFamily: 'Cairo'), textAlign: TextAlign.center),
               SizedBox(height: 3.h),
               _buildSectionHeader('المعلومات الأساسية', Icons.badge_rounded),
-              _buildInputField('fullname', 'الاسم الكامل', Icons.person_rounded),
+              
+              // تم تعديل التسمية هنا لتوجيه المستخدم لكتابة اسم المحل
+              _buildInputField(
+                'fullname', 
+                widget.selectedUserType == 'seller' ? 'الاسم الكامل للمسؤول *' : 'اسم المحل / السوبر ماركت *', 
+                Icons.storefront_rounded
+              ),
+
+              // حقل إضافي لاسم صاحب النشاط (يظهر لغير الموردين فقط)
+              if (widget.selectedUserType != 'seller')
+                _buildInputField('ownerName', 'اسم صاحب النشاط (اختياري)', Icons.person_outline_rounded),
+
               _buildInputField('phone', 'رقم الهاتف', Icons.phone_android_rounded, keyboardType: TextInputType.phone),
               
               Padding(
@@ -371,6 +384,8 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         onTap: onTap,
         validator: (value) {
           if (value == null || value.isEmpty) {
+            // الحقول الاختيارية لا تسبب خطأ (مثل ownerName)
+            if (key == 'ownerName') return null;
             return isReadOnly ? "يرجى التحديد من الخريطة" : "هذا الحقل مطلوب";
           }
           if (key == 'confirmPassword' && value != widget.controllers['password']?.text) {
@@ -397,7 +412,8 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       decoration: BoxDecoration(color: const Color(0xFFF0F7F3), borderRadius: BorderRadius.circular(20)),
       child: Column(
         children: [
-          _buildInputField('merchantName', 'اسم النشاط التجاري', Icons.storefront_rounded),
+          // إضافة النجمة لتوضيح أنه إلزامي للموردين
+          _buildInputField('merchantName', 'اسم النشاط التجاري *', Icons.storefront_rounded),
           _buildBusinessTypeDropdown(),
           _buildUploadItem('شعار النشاط / اللوجو (اختياري)', 'logo', _logoPreview),
           _buildUploadItem('صورة السجل التجاري (اختياري)', 'cr', _crPreview),
