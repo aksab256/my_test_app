@@ -1,4 +1,3 @@
-// lib/screens/auth/client_details_step.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -63,7 +62,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     _mapController = MapController();
   }
 
-  // ✅ إفصاح الموقع (جوجل بلاي) - موجود ولم يتم حذفه
+  // ✅ إفصاح الموقع (لجوجل بلاي)
   Future<bool> _showLocationDisclosure() async {
     return await showDialog<bool>(
       context: context,
@@ -93,7 +92,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   Future<void> _handleMapOpeningSequence() async {
     try {
       LocationPermission permission = await Geolocator.checkPermission();
-      
       if (permission == LocationPermission.denied) {
         bool userAgreed = await _showLocationDisclosure();
         if (!userAgreed) return;
@@ -105,13 +103,8 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         if (lastPos != null) {
           if (mounted) setState(() => _selectedPosition = LatLng(lastPos.latitude, lastPos.longitude));
         }
-        
         _openMapPicker();
-
-        Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 10)
-        ).then((pos) {
+        Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high, timeLimit: const Duration(seconds: 10)).then((pos) {
           if (mounted) {
             setState(() {
               _selectedPosition = LatLng(pos.latitude, pos.longitude);
@@ -119,12 +112,10 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
               _updateAddressText(_selectedPosition);
             });
           }
-        }).catchError((e) {
-          debugPrint("Location error or timeout: $e");
-        });
+        }).catchError((e) => debugPrint("Location error: $e"));
       }
     } catch (e) {
-      debugPrint("Map sequence fatal error: $e");
+      debugPrint("Map error: $e");
     }
   }
 
@@ -137,7 +128,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         builder: (context, setModalState) {
           return Container(
             height: 90.h,
-            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(25)),
+            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
             child: SafeArea(
               bottom: true,
               child: Column(
@@ -199,9 +190,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         final place = placemarks.first;
         String formattedAddress = "${place.street ?? ''}, ${place.locality ?? ''}, ${place.subAdministrativeArea ?? ''}".replaceAll(", ,", ",");
         if (mounted && widget.controllers.containsKey('address')) {
-          setState(() {
-            widget.controllers['address']!.text = formattedAddress;
-          });
+          setState(() { widget.controllers['address']!.text = formattedAddress; });
         }
       }
     } catch (e) {
@@ -224,7 +213,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       }
     } catch (e) {
       debugPrint("Upload Error: $e");
-      _showSimpleSnackBar("فشل رفع الصورة، يرجى المحاولة لاحقاً");
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
@@ -267,6 +255,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         if (pickedFile != null) {
           final file = File(pickedFile.path);
           if (mounted) {
+            // ✅ تحديث العلامة الخضراء فوراً قبل الرفع
             setState(() {
               if (field == 'logo') _logoPreview = file;
               if (field == 'cr') _crPreview = file;
@@ -298,15 +287,17 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
               SizedBox(height: 3.h),
               _buildSectionHeader('المعلومات الأساسية', Icons.badge_rounded),
               
-              // ✨ تعديل: الحقل الأول هو اسم المحل للتاجر، واسم المسؤول للمورد
+              // الحقل الأول: مسميات ثابتة حسب طلبك
               _buildInputField(
                 'fullname', 
-                widget.selectedUserType == 'seller' ? 'الاسم الكامل للمسؤول *' : 'اسم المحل / السوبر ماركت *', 
-                Icons.storefront_rounded
+                widget.selectedUserType == 'seller' ? 'الاسم الكامل للمسؤول *' : 
+                (widget.selectedUserType == 'consumer' ? 'الاسم الكامل *' : 'اسم المحل / السوبر ماركت *'), 
+                Icons.person_rounded
               ),
 
-              // ✨ الحقل الجديد: اسم صاحب النشاط (يظهر للكل كتوثيق اختياري في اللوحة الأم)
-              _buildInputField('ownerName', 'اسم صاحب النشاط (اختياري)', Icons.person_outline_rounded),
+              // ✨ حقل اسم صاحب النشاط: يظهر للمورد (seller) وللتاجر (buyer) فقط.. ومختفي للمستهلك (consumer)
+              if (widget.selectedUserType != 'consumer')
+                _buildInputField('ownerName', 'اسم صاحب النشاط (اختياري)', Icons.person_outline_rounded),
 
               _buildInputField('phone', 'رقم الهاتف', Icons.phone_android_rounded, keyboardType: TextInputType.phone),
               
@@ -317,14 +308,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
 
               _buildSectionHeader('الموقع الجغرافي', Icons.map_rounded),
               _buildLocationPickerButton(),
-              
-              _buildInputField(
-                'address', 
-                'العنوان (اضغط للتحديد من الخريطة)', 
-                Icons.location_on_rounded,
-                isReadOnly: true,
-                onTap: _handleMapOpeningSequence
-              ),
+              _buildInputField('address', 'العنوان (اضغط للتحديد من الخريطة)', Icons.location_on_rounded, isReadOnly: true, onTap: _handleMapOpeningSequence),
 
               _buildSectionHeader('الأمان', Icons.security_rounded),
               _buildInputField('password', 'كلمة المرور', Icons.lock_open_rounded, isPassword: true),
@@ -347,21 +331,14 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     return InkWell(
       onTap: _handleMapOpeningSequence,
       child: Container(
-        padding: const EdgeInsets.all(18),
-        margin: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          color: _locationPicked ? const Color(0xFFF0F7F3) : Colors.white,
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: _locationPicked ? const Color(0xFF2D9E68) : Colors.grey.shade300, width: 2),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.map_rounded, color: _locationPicked ? const Color(0xFF2D9E68) : Colors.grey),
-            const SizedBox(width: 15),
-            Expanded(child: Text(_locationPicked ? "تم تحديث الموقع بنجاح ✅" : "اضغط لتحديد موقعك على الخريطة *", style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold))),
-            const Icon(Icons.open_in_new_rounded, size: 18, color: Colors.grey),
-          ],
-        ),
+        padding: const EdgeInsets.all(18), margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(color: _locationPicked ? const Color(0xFFF0F7F3) : Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: _locationPicked ? const Color(0xFF2D9E68) : Colors.grey.shade300, width: 2)),
+        child: Row(children: [
+          Icon(Icons.map_rounded, color: _locationPicked ? const Color(0xFF2D9E68) : Colors.grey),
+          const SizedBox(width: 15),
+          Expanded(child: Text(_locationPicked ? "تم تحديث الموقع بنجاح ✅" : "اضغط لتحديد موقعك على الخريطة *", style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold))),
+          const Icon(Icons.open_in_new_rounded, size: 18, color: Colors.grey),
+        ]),
       ),
     );
   }
@@ -377,17 +354,14 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         onTap: onTap,
         validator: (value) {
           if (value == null || value.isEmpty) {
-            if (key == 'ownerName') return null; // اختياري
+            if (key == 'ownerName') return null;
             return isReadOnly ? "يرجى التحديد من الخريطة" : "هذا الحقل مطلوب";
           }
-          if (key == 'confirmPassword' && value != widget.controllers['password']?.text) {
-            return "كلمتا المرور غير متطابقتين";
-          }
+          if (key == 'confirmPassword' && value != widget.controllers['password']?.text) return "كلمتا المرور غير متطابقتين";
           return null;
         },
         decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(fontFamily: 'Cairo'),
+          labelText: label, labelStyle: const TextStyle(fontFamily: 'Cairo'),
           prefixIcon: Icon(icon, color: const Color(0xFF2D9E68)),
           suffixIcon: isPassword ? IconButton(icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => _obscurePassword = !_obscurePassword)) : null,
           filled: true, fillColor: isReadOnly ? Colors.grey.shade50 : Colors.white,
@@ -400,17 +374,14 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
 
   Widget _buildSellerSpecificFields() {
     return Container(
-      padding: EdgeInsets.all(4.w),
-      decoration: BoxDecoration(color: const Color(0xFFF0F7F3), borderRadius: BorderRadius.circular(20)),
-      child: Column(
-        children: [
-          _buildInputField('merchantName', 'اسم النشاط التجاري *', Icons.storefront_rounded),
-          _buildBusinessTypeDropdown(),
-          _buildUploadItem('شعار النشاط / اللوجو (اختياري)', 'logo', _logoPreview),
-          _buildUploadItem('صورة السجل التجاري (اختياري)', 'cr', _crPreview),
-          _buildUploadItem('صورة البطاقة الضريبية (اختياري)', 'tc', _tcPreview),
-        ],
-      ),
+      padding: EdgeInsets.all(4.w), decoration: BoxDecoration(color: const Color(0xFFF0F7F3), borderRadius: BorderRadius.circular(20)),
+      child: Column(children: [
+        _buildInputField('merchantName', 'اسم النشاط التجاري *', Icons.storefront_rounded),
+        _buildBusinessTypeDropdown(),
+        _buildUploadItem('شعار النشاط / اللوجو (اختياري)', 'logo', _logoPreview),
+        _buildUploadItem('صورة السجل التجاري (اختياري)', 'cr', _crPreview),
+        _buildUploadItem('صورة البطاقة الضريبية (اختياري)', 'tc', _tcPreview),
+      ]),
     );
   }
 
@@ -424,10 +395,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         decoration: const InputDecoration(border: InputBorder.none, hintText: "نوع النشاط التجاري *", hintStyle: TextStyle(fontFamily: 'Cairo')),
         items: _businessTypes.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontFamily: 'Cairo')))).toList(),
         onChanged: (val) {
-          if (mounted) {
-            setState(() => _selectedBusinessType = val);
-            widget.controllers['businessType']?.text = val ?? "";
-          }
+          if (mounted) { setState(() { _selectedBusinessType = val; widget.controllers['businessType']?.text = val ?? ""; }); }
         },
       ),
     );
@@ -457,26 +425,13 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
 
   Widget _buildTermsCheckbox() {
     return CheckboxListTile(
-      value: _termsAgreed,
-      onChanged: (v) => setState(() => _termsAgreed = v ?? false),
-      activeColor: const Color(0xFF2D9E68),
+      value: _termsAgreed, onChanged: (v) => setState(() => _termsAgreed = v ?? false), activeColor: const Color(0xFF2D9E68),
       title: InkWell(
         onTap: () async {
           final url = Uri.parse('https://aksab.shop/');
           if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
         },
-        child: RichText(
-          text: TextSpan(
-            style: TextStyle(fontSize: 10.sp, fontFamily: 'Cairo', color: Colors.black),
-            children: const [
-              TextSpan(text: "أوافق على "),
-              TextSpan(
-                text: "سياسة الخصوصية وشروط الاستخدام",
-                style: TextStyle(color: Color(0xFF2D9E68), fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
-              ),
-            ],
-          ),
-        ),
+        child: RichText(text: TextSpan(style: TextStyle(fontSize: 10.sp, fontFamily: 'Cairo', color: Colors.black), children: const [TextSpan(text: "أوافق على "), TextSpan(text: "سياسة الخصوصية وشروط الاستخدام", style: TextStyle(color: Color(0xFF2D9E68), fontWeight: FontWeight.bold, decoration: TextDecoration.underline))])),
       ),
       controlAffinity: ListTileControlAffinity.leading,
     );
@@ -487,16 +442,9 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       width: double.infinity,
       child: ElevatedButton(
         onPressed: (widget.isSaving || !_termsAgreed || _isUploading) ? null : () async {
-          if (!_locationPicked) {
-            _showSimpleSnackBar("يرجى تحديد موقعك أولاً من الخريطة");
-            return;
-          }
+          if (!_locationPicked) { _showSimpleSnackBar("يرجى تحديد موقعك أولاً من الخريطة"); return; }
           if (_formKey.currentState?.validate() ?? false) {
-            try {
-              await facebookAppEvents.logCompletedRegistration(registrationMethod: widget.selectedUserType);
-            } catch (e) {
-              debugPrint("FB Event Error: $e");
-            }
+            try { await facebookAppEvents.logCompletedRegistration(registrationMethod: widget.selectedUserType); } catch (e) { debugPrint("FB Error: $e"); }
             widget.onRegister();
           }
         },
