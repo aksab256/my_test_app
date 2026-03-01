@@ -48,7 +48,13 @@ class _MerchantPointBalanceScreenState extends State<MerchantPointBalanceScreen>
             }
 
             final merchantDoc = mainSnapshot.data!.docs.first;
-            final walletBalance = merchantDoc['walletBalance']?.toString() ?? '0';
+            
+            // 🎯 التعديل التأميني هنا فقط لمنع الكراش:
+            // فحصنا إذا كان الحقل موجوداً في الـ Map قبل محاولة الوصول إليه
+            final merchantData = merchantDoc.data() as Map<String, dynamic>;
+            final walletBalance = merchantData.containsKey('walletBalance') 
+                ? merchantData['walletBalance'].toString() 
+                : '0';
 
             return Column(
               children: [
