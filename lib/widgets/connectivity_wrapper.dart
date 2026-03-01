@@ -17,11 +17,13 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
   @override
   void initState() {
     super.initState();
+    // مراقبة حالة الشبكة
     _subscription = Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> results) {
-      setState(() {
-        // لو القائمة فيها 'none' يبقى مفيش نت
-        _isOffline = results.contains(ConnectivityResult.none);
-      });
+      if (mounted) {
+        setState(() {
+          _isOffline = results.contains(ConnectivityResult.none);
+        });
+      }
     });
   }
 
@@ -33,30 +35,35 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Stack( // تغيير من Column إلى Stack لضمان ظهور الشريط فوق المحتوى
       children: [
-        Expanded(child: widget.child), // التطبيق بتاعك شغال هنا عادي
+        widget.child,
         if (_isOffline)
-          Material(
-            child: Container(
-              color: Colors.red[900],
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.wifi_off, color: Colors.white, size: 18),
-                  SizedBox(width: 10),
-                  Text(
-                    "أنت الآن خارج التغطية - تصفح بدون إنترنت",
-                    style: TextStyle(
-                      fontFamily: 'Cairo',
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                color: Colors.red[900]!.withOpacity(0.9),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.wifi_off_rounded, color: Colors.white, size: 18),
+                    SizedBox(width: 10),
+                    Text(
+                      "أنت الآن خارج التغطية - تصفح بدون إنترنت",
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -64,4 +71,3 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
     );
   }
 }
-
