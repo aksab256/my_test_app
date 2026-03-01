@@ -87,7 +87,7 @@ class CheckoutController {
         final String paymentMethodString = selectedPaymentMethod.toString();
         final Map<String, dynamic> safeLoggedUser = Map<String, dynamic>.from(loggedUser);
 
-        // 🔍 استخراج البيانات بدقة (باستخدام الموقع الفعال من البروفايدر كما في الكود الثاني)
+        // 🔍 استخراج البيانات بدقة (باستخدام الموقع الفعال من البروفايدر)
         final String? address = buyerProvider.effectiveAddress; 
         final String? repCode = (safeLoggedUser['repCode']?.toString() == 'null') ? null : safeLoggedUser['repCode']?.toString();
         final String? repName = (safeLoggedUser['repName']?.toString() == 'null') ? null : safeLoggedUser['repName']?.toString();
@@ -105,7 +105,7 @@ class CheckoutController {
         final String usersCollectionName = isConsumer ? "consumers" : "users";
         final String cashbackFieldName = isConsumer ? "cashbackBalance" : "cashback";
 
-        // 🌟🌟 [معالجة الطلبات وحقن بيانات الأقسام] 🌟🌟
+        // 🌟🌟 [معالجة الطلبات وحقن بيانات الأقسام لضمان عمل دالة اللامدا] 🌟🌟
         final List<Map<String, dynamic>> processedCheckoutOrders = [];
         for (var order in checkoutOrders) {
             Map<String, dynamic> processedOrder = Map<String, dynamic>.from(order);
@@ -163,7 +163,7 @@ class CheckoutController {
 
             if (needsSecureProcessing) {
                 // ===================================================================================
-                // 🔥🔥 المسار الآمن: API Gateway (تم استرجاعه بالكامل ليعمل الكاش باك)
+                // 🔥🔥 المسار الآمن: API Gateway (لمعالجة الكاش باك والهدايا)
                 // ===================================================================================
                 final List<Map<String, dynamic>> allOrdersData = [];
                 for (final sellerId in groupedItems.keys) {
@@ -181,12 +181,12 @@ class CheckoutController {
                         'status': 'new-order',
                         'orderDate': DateTime.now().toUtc().toIso8601String(),
                         'commissionRateSnapshot': commissionRatesCache[sellerId] ?? 0.0,
-                        'insurance_points': discountPortion, // المسمى اللوجستي للكاش باك
+                        'cashbackApplied': discountPortion,
                         'isCashbackUsed': discountUsed > 0,
                         'buyer': { 
                             'id': safeLoggedUser['id'], 'name': customerFullname, 'phone': customerPhone, 
                             'email': customerEmail, 'address': address, 
-                            'lat': buyerProvider.effectiveLat, // إحداثيات من البروفايدر
+                            'lat': buyerProvider.effectiveLat, 
                             'lng': buyerProvider.effectiveLng,
                             'repCode': repCode, 'repName': repName
                         },
@@ -231,8 +231,7 @@ class CheckoutController {
                         'supermarketId': sellerId, 'supermarketName': sellerOrder['sellerName'],
                         'items': allPaidItems, 
                         'subtotalPrice': subtotalPrice, 
-                        'order_value_points': subtotalPrice - discountPortion,
-                        'insurance_points': discountPortion,
+                        'finalAmount': subtotalPrice - discountPortion,
                         'paymentMethod': paymentMethodString, 'status': 'new-order',
                         'orderDate': FieldValue.serverTimestamp(),
                     } : {
@@ -242,11 +241,10 @@ class CheckoutController {
                         },
                         'sellerId': sellerId, 'items': allPaidItems,
                         'total': subtotalPrice, 
-                        'order_value_points': subtotalPrice - discountPortion,
-                        'insurance_points': discountPortion,
                         'paymentMethod': paymentMethodString,
                         'status': 'new-order', 'orderDate': FieldValue.serverTimestamp(),
                         'commissionRate': commissionRatesCache[sellerId] ?? 0.0,
+                        'cashbackApplied': discountPortion, 'isCashbackUsed': discountUsed > 0,
                     };
 
                     final docRef = await FirebaseFirestore.instance.collection(ordersCollectionName).add(removeNullValues(orderData));
@@ -254,7 +252,6 @@ class CheckoutController {
                     await docRef.update({'orderId': docRef.id});
                 }
 
-                // خصم الكاش باك في المسار المباشر
                 if (discountUsed > 0 && successfulOrderIds.isNotEmpty) {
                     await FirebaseFirestore.instance.collection(usersCollectionName).doc(safeLoggedUser['id']).update({
                         cashbackFieldName: currentCashback - discountUsed
@@ -263,7 +260,7 @@ class CheckoutController {
             }
 
             if (successfulOrderIds.isNotEmpty) {
-                // 🚀 تتبع فيسبوك (مضافة من الكود الثاني)
+                // 🚀 تتبع فيسبوك
                 try {
                     facebookAppEvents.logPurchase(
                         amount: finalTotalAmount,
