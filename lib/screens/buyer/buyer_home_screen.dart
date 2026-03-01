@@ -1,255 +1,273 @@
-// lib/screens/buyer/buyer_home_screen.dart
+// المسار: lib/screens/buyer/wallet_screen.dart
+
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'dart:convert';
+import 'package:provider/provider.dart';
+import 'package:sizer/sizer.dart'; 
+import 'package:google_fonts/google_fonts.dart';
+import '../../providers/cashback_provider.dart';
+import '../../providers/buyer_data_provider.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/buyer_mobile_nav_widget.dart';
+import 'gifts_tab.dart'; 
 
-// استيراد الـ Widgets والمحتويات
-import 'package:my_test_app/widgets/home_content.dart'; 
-import 'package:my_test_app/widgets/buyer_header_widget.dart';
-import 'package:my_test_app/widgets/buyer_mobile_nav_widget.dart';
-import 'package:my_test_app/widgets/chat_support_widget.dart'; 
-
-// 🎯 استيراد الصفحة مباشرة لضمان عمل التوجيه المستقل
+// 🎯 استيراد الصفحة مباشرة لضمان عمل التوجيه المباشر وزر الرجوع
 import 'package:my_test_app/screens/buyer/my_orders_screen.dart';
 
-final FirebaseAuth _auth = FirebaseAuth.instance;
-final FirebaseFirestore _db = FirebaseFirestore.instance;
-
-class BuyerHomeScreen extends StatefulWidget {
-  static const String routeName = '/buyerHome';
-  const BuyerHomeScreen({super.key});
+class WalletScreen extends StatefulWidget {
+  static const String routeName = '/wallet';
+  const WalletScreen({super.key});
 
   @override
-  State<BuyerHomeScreen> createState() => _BuyerHomeScreenState();
+  State<WalletScreen> createState() => _WalletScreenState();
 }
 
-class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  
-  // 🎯 نحن في الصفحة الرئيسية، لذا الاندكس هو 1 دائماً في هذا الملف
-  final int _selectedIndex = 1; 
-
-  String _userName = 'مرحباً بك!';
-  String? _currentUserId;
-  int _newOrdersCount = 0;
-  int _cartCount = 0;
-  bool _deliverySettingsAvailable = false;
-  bool _deliveryPricesAvailable = false;
-  bool _deliveryIsActive = false;
+class _WalletScreenState extends State<WalletScreen> {
 
   @override
   void initState() {
     super.initState();
-    _initializeAppLogic();
-  }
-
-  // --- منطق تهيئة التطبيق ---
-  void _initializeAppLogic() async {
-    final userAuth = _auth.currentUser;
-    if (userAuth == null) return;
-    _currentUserId = userAuth.uid;
-
-    _setupNotifications();
-
-    final prefs = await SharedPreferences.getInstance();
-    _updateCartCount(prefs);
-
-    try {
-      final userDoc = await _db.collection('users').doc(_currentUserId).get();
-      if (userDoc.exists && mounted) {
-        final fullName = userDoc.data()?['fullname'] ?? 'زائر أكسب';
-        setState(() => _userName = 'أهلاً بك، $fullName!');
-      }
-    } catch (e) {
-      debugPrint('Error loading user data: $e');
-    }
-    
-    // استدعاء دالة الفحص
-    await _checkDeliveryStatusAndDisplayIcons();
-    await _updateNewDealerOrdersCount();
-  }
-
-  // --- منطق الإشعارات ---
-  Future<void> _setupNotifications() async {
-    if (_currentUserId == null) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    bool alreadyShown = prefs.getBool('notifications_dialog_shown') ?? false;
-    if (alreadyShown) return;
-
-    if (!mounted) return;
-    
-    bool? userAgreed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text("تفعيل التنبيهات", textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
-        content: const Text("يرجى تفعيل التنبيهات لتتمكن من متابعة حالة طلباتك والعروض الجديدة فور حدوثها.", textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Tajawal')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("ليس الآن", style: TextStyle(color: Colors.grey))),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4CAF50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-            child: const Text("موافق", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    await prefs.setBool('notifications_dialog_shown', true);
-
-    if (userAgreed == true) {
-      FirebaseMessaging messaging = FirebaseMessaging.instance;
-      NotificationSettings settings = await messaging.requestPermission(alert: true, badge: true, sound: true);
-
-      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        String? token = await messaging.getToken();
-        if (token != null) {
-          await _db.collection('users').doc(_currentUserId).update({
-            'fcmToken': token,
-            'role': 'buyer',
-            'lastTokenUpdate': FieldValue.serverTimestamp(),
-            'notificationsEnabled': true,
-          });
-        }
-      }
-    }
-  }
-
-  void _updateCartCount(SharedPreferences prefs) {
-    String? cartData = prefs.getString('cart_items');
-    if (cartData != null) {
-      List<dynamic> items = jsonDecode(cartData);
-      if (mounted) setState(() => _cartCount = items.length);
-    } else {
-      if (mounted) setState(() => _cartCount = 0);
-    }
-  }
-
-  // ✅ التعديل الجوهري بناءً على المنطق الجديد:
-  Future<void> _checkDeliveryStatusAndDisplayIcons() async {
-    if (_currentUserId == null) return;
-    try {
-      // 1. فحص مجموعة الانتظار لحظياً
-      _db.collection('pendingSupermarkets').doc(_currentUserId).snapshots().listen((pendingDoc) {
-        // 2. فحص مجموعة المقبولين لحظياً
-        _db.collection('deliverySupermarkets').doc(_currentUserId).snapshots().listen((approvedDoc) {
-          if (mounted) {
-            setState(() {
-              // أيقونة الاشتراك تظهر فقط لو مش موجود في الاثنين
-              if (!pendingDoc.exists && !approvedDoc.exists) {
-                _deliverySettingsAvailable = true;
-              } else {
-                _deliverySettingsAvailable = false;
-              }
-
-              // أيقونات الإدارة تظهر فقط لو موجود في المقبولين
-              if (approvedDoc.exists) {
-                final data = approvedDoc.data() as Map<String, dynamic>;
-                _deliveryPricesAvailable = true;
-                _deliveryIsActive = data['isActive'] ?? false;
-              } else {
-                _deliveryPricesAvailable = false;
-                _deliveryIsActive = false;
-              }
-            });
-          }
-        });
-      });
-    } catch (e) {
-      debugPrint("Delivery Status Error: $e");
-    }
-  }
-
-  Future<void> _updateNewDealerOrdersCount() async {
-    if (_currentUserId == null) return;
-    final q = await _db.collection('consumerorders')
-        .where("supermarketId", isEqualTo: _currentUserId)
-        .where("status", isEqualTo: "new-order").get();
-    if (mounted) setState(() => _newOrdersCount = q.size);
-  }
-
-    void _onItemTapped(int index) {
-    if (index == _selectedIndex) return;
-    switch (index) {
-      case 0: 
-        // ❌ كان: Navigator.pushReplacementNamed(context, '/traders');
-        // ✅ الصح:
-        Navigator.pushNamed(context, '/traders'); 
-        break;
-      case 1: 
-        break; // نحن هنا بالفعل
-      case 2:
-        Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
-        break;
-      case 3: 
-        // ❌ كان: Navigator.pushReplacementNamed(context, '/wallet');
-        // ✅ الصح:
-        Navigator.pushNamed(context, '/wallet'); 
-        break;
-    }
-  }
-
-
-  void _handleLogout() async {
-    try {
-      await _auth.signOut();
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
-      if (mounted) Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-    } catch (e) {
-      debugPrint('Logout Error: $e');
-    }
+    // جلب البيانات فور فتح الصفحة
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final cashbackProvider = Provider.of<CashbackProvider>(context, listen: false);
+      cashbackProvider.fetchCashbackBalance();
+      cashbackProvider.fetchAvailableOffers();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        key: _scaffoldKey,
-        backgroundColor: const Color(0xFFf5f7fa),
-        endDrawer: BuyerHeaderWidget.buildSidebar(
-          context: context,
-          onLogout: _handleLogout,
-          newOrdersCount: _newOrdersCount,
-          deliverySettingsAvailable: _deliverySettingsAvailable,
-          deliveryPricesAvailable: _deliveryPricesAvailable,
-          deliveryIsActive: _deliveryIsActive,
-        ),
-        body: Column(
-          children: <Widget>[
-            BuyerHeaderWidget(
-              onMenuToggle: () => _scaffoldKey.currentState?.openEndDrawer(),
-              menuNotificationDotActive: _newOrdersCount > 0,
-              userName: _userName,
-              onLogout: _handleLogout,
+    return DefaultTabController(
+      length: 2,
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          Navigator.pushReplacementNamed(context, '/buyerHome');
+        },
+        child: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            backgroundColor: const Color(0xFFF8F9FA),
+            appBar: AppBar(
+              backgroundColor: AppTheme.primaryGreen,
+              elevation: 0,
+              toolbarHeight: 70,
+              title: Text(
+                'المحفظة والعروض',
+                style: GoogleFonts.cairo(
+                  fontSize: 20.sp,
+                  fontWeight: FontWeight.bold, 
+                  color: Colors.white
+                ),
+              ),
+              centerTitle: true,
+              bottom: TabBar(
+                indicatorColor: Colors.orangeAccent,
+                indicatorWeight: 4,
+                labelStyle: GoogleFonts.cairo(fontSize: 16.sp, fontWeight: FontWeight.bold),
+                tabs: const [
+                  Tab(text: "أهداف الكاش باك"),
+                  Tab(text: "هدايا المنطقة"),
+                ],
+              ),
             ),
-            const Expanded(child: HomeContent()),
+            body: SafeArea(
+              child: TabBarView(
+                children: [
+                  _buildCashbackTab(),
+                  const GiftsTab(),
+                ],
+              ),
+            ),
+            bottomNavigationBar: BuyerMobileNavWidget(
+              selectedIndex: 3,
+              onItemSelected: (index) {
+                if (index == 3) return;
+                if (index == 0) Navigator.pushReplacementNamed(context, '/traders');
+                if (index == 1) Navigator.pushReplacementNamed(context, '/buyerHome');
+                
+                // ✅ تعديل أيقونة الطلبات لتفتح مباشرة مثل الصفحة الرئيسية لضمان عمل زر الرجوع
+                if (index == 2) {
+                  Navigator.push(
+                    context, 
+                    MaterialPageRoute(builder: (context) => const MyOrdersScreen())
+                  );
+                }
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCashbackTab() {
+    // استخدام Consumer هنا هو السر! بمجرد أن ينادي البروفايدر notifyListeners، سيتحدث هذا الجزء فوراً
+    return Consumer2<BuyerDataProvider, CashbackProvider>(
+      builder: (context, buyerData, cashbackProvider, child) {
+        return Column(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(horizontal: 20.sp, vertical: 20.sp),
+              decoration: const BoxDecoration(
+                color: AppTheme.primaryGreen,
+                borderRadius: BorderRadius.only(bottomLeft: Radius.circular(30), bottomRight: Radius.circular(30)),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'أهلاً، ${buyerData.loggedInUser?.fullname ?? 'زائر'}',
+                    style: GoogleFonts.cairo(fontSize: 16.sp, color: Colors.white70),
+                  ),
+                  SizedBox(height: 12.sp),
+                  _buildBalanceCard(cashbackProvider),
+                ],
+              ),
+            ),
+            
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  await cashbackProvider.fetchCashbackBalance();
+                  await cashbackProvider.fetchAvailableOffers();
+                },
+                child: _buildCashbackGoalsList(cashbackProvider),
+              ),
+            ),
           ],
-        ),
-        bottomNavigationBar: BuyerMobileNavWidget(
-          selectedIndex: _selectedIndex,
-          onItemSelected: _onItemTapped,
-          cartCount: _cartCount,
-          ordersChanged: false,
-        ),
-        floatingActionButton: FloatingActionButton(
-          heroTag: "buyer_home_chat_btn",
-          onPressed: () {
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (context) => const ChatSupportWidget(),
-            );
-          },
-          backgroundColor: const Color(0xFF4CAF50),
-          child: const Icon(Icons.support_agent, color: Colors.white, size: 30),
+        );
+      },
+    );
+  }
+
+  Widget _buildBalanceCard(CashbackProvider provider) {
+    return Container(
+      padding: EdgeInsets.all(15.sp),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('رصيدك المتاح: ', style: GoogleFonts.cairo(fontSize: 18.sp, color: Colors.white)),
+          Text(
+            '${provider.availableBalance.toStringAsFixed(2)} ج',
+            style: GoogleFonts.cairo(
+              fontSize: 22.sp, 
+              fontWeight: FontWeight.w900, 
+              color: const Color(0xFFFFD700) 
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCashbackGoalsList(CashbackProvider provider) {
+    if (provider.isLoading) {
+      return const Center(child: CircularProgressIndicator(color: AppTheme.primaryGreen));
+    }
+
+    final goals = provider.offersList;
+
+    if (goals.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(height: 10.h),
+          Center(
+            child: Column(
+              children: [
+                Icon(Icons.receipt_long_outlined, size: 60.sp, color: Colors.grey[300]),
+                Text('لا توجد عروض حالياً', style: GoogleFonts.cairo(fontSize: 18.sp, color: Colors.grey)),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(15.sp, 15.sp, 15.sp, 30.sp),
+      itemCount: goals.length,
+      itemBuilder: (context, index) => _buildGoalCard(goals[index]),
+    );
+  }
+
+  Widget _buildGoalCard(Map<String, dynamic> goal) {
+    bool isCumulative = goal['targetType'] == 'cumulative_period';
+    double minAmount = (goal['minAmount'] ?? 0.0).toDouble();
+    double currentProgress = (goal['currentProgress'] ?? 0.0).toDouble();
+    double progressPercent = minAmount > 0 ? (currentProgress / minAmount).clamp(0.0, 1.0) : 0.0;
+    Color progressColor = progressPercent >= 1.0 ? Colors.green : Colors.orange;
+
+    return Card(
+      elevation: 4,
+      margin: EdgeInsets.only(bottom: 18.sp),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: EdgeInsets.all(16.sp),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    goal['description'] ?? 'عرض كاش باك',
+                    style: GoogleFonts.cairo(fontSize: 18.sp, fontWeight: FontWeight.bold, color: AppTheme.primaryGreen),
+                  ),
+                ),
+                Text(
+                  '${goal['value']}${goal['type'] == 'percentage' ? '%' : 'ج'}',
+                  style: GoogleFonts.cairo(fontSize: 20.sp, fontWeight: FontWeight.w900, color: Colors.orange[800]),
+                ),
+              ],
+            ),
+            SizedBox(height: 10.sp),
+            Text(
+              isCumulative 
+                ? "هدف تراكمي: اشترِ بمجموع ${goal['minAmount']} ج"
+                : "كاش باك فوري على كل طلب بـ ${goal['minAmount']} ج",
+              style: GoogleFonts.cairo(fontSize: 15.sp, color: Colors.black87, fontWeight: FontWeight.w600),
+            ),
+            if (isCumulative) ...[
+              SizedBox(height: 15.sp),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: LinearProgressIndicator(
+                  value: progressPercent,
+                  minHeight: 12,
+                  backgroundColor: Colors.grey[200],
+                  valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+                ),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('المحقَّق: ${currentProgress.toStringAsFixed(0)} ج', 
+                    style: GoogleFonts.cairo(fontSize: 14.sp, fontWeight: FontWeight.bold)),
+                  Text('%${(progressPercent * 100).toStringAsFixed(0)}', 
+                    style: GoogleFonts.cairo(fontSize: 16.sp, color: progressColor, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ],
+            const Divider(),
+            Row(
+              children: [
+                Icon(Icons.calendar_month, size: 16.sp, color: Colors.redAccent),
+                Text(" متبقي ${goal['daysRemaining']} يوم", 
+                  style: GoogleFonts.cairo(fontSize: 14.sp, color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                const Spacer(),
+                Text(goal['sellerName'] ?? 'كل التجار', 
+                  style: GoogleFonts.cairo(fontSize: 14.sp, color: Colors.blueGrey, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ],
         ),
       ),
     );
