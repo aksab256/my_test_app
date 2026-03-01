@@ -42,7 +42,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   late final MapController _mapController;
   final facebookAppEvents = FacebookAppEvents();
   
-  // 🛡️ استخدام إحداثيات افتراضية آمنة (القاهرة)
   LatLng _selectedPosition = const LatLng(30.0444, 31.2357); 
   bool _locationPicked = false;
   bool _isUploading = false;
@@ -64,7 +63,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     _mapController = MapController();
   }
 
-  // ✅ إفصاح الموقع (جوجل بلاي)
+  // ✅ إفصاح الموقع (جوجل بلاي) - موجود ولم يتم حذفه
   Future<bool> _showLocationDisclosure() async {
     return await showDialog<bool>(
       context: context,
@@ -109,7 +108,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         
         _openMapPicker();
 
-        // 🛡️ جلب الموقع الحالي بدقة مع معالجة الوقت المستغرق
         Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
           timeLimit: const Duration(seconds: 10)
@@ -139,7 +137,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         builder: (context, setModalState) {
           return Container(
             height: 90.h,
-            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(25)),
             child: SafeArea(
               bottom: true,
               child: Column(
@@ -156,7 +154,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
                         initialCenter: _selectedPosition,
                         initialZoom: 16.5,
                         onPositionChanged: (position, hasGesture) {
-                          // 🛡️ حماية ضد الـ Null في مركز الخريطة
                           final center = position.center;
                           if (center != null) {
                             setModalState(() => _selectedPosition = center);
@@ -240,7 +237,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   Future<void> _pickFile(String field) async {
     try {
       PermissionStatus status = await Permission.photos.status;
-
       if (status.isDenied) {
         bool proceed = await showDialog<bool>(
           context: context,
@@ -261,7 +257,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
             ),
           ),
         ) ?? false;
-
         if (!proceed) return;
         status = await Permission.photos.request();
       }
@@ -269,7 +264,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       if (status.isGranted || status.isLimited) {
         final ImagePicker picker = ImagePicker();
         final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
-        
         if (pickedFile != null) {
           final file = File(pickedFile.path);
           if (mounted) {
@@ -281,7 +275,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
             await _uploadFileToCloudinary(file, field);
           }
         }
-      } else if (status.isPermanentlyDenied || status.isDenied) {
+      } else {
         openAppSettings();
       }
     } catch (e) {
@@ -304,16 +298,15 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
               SizedBox(height: 3.h),
               _buildSectionHeader('المعلومات الأساسية', Icons.badge_rounded),
               
-              // تم تعديل التسمية هنا لتوجيه المستخدم لكتابة اسم المحل
+              // ✨ تعديل: الحقل الأول هو اسم المحل للتاجر، واسم المسؤول للمورد
               _buildInputField(
                 'fullname', 
                 widget.selectedUserType == 'seller' ? 'الاسم الكامل للمسؤول *' : 'اسم المحل / السوبر ماركت *', 
                 Icons.storefront_rounded
               ),
 
-              // حقل إضافي لاسم صاحب النشاط (يظهر لغير الموردين فقط)
-              if (widget.selectedUserType != 'seller')
-                _buildInputField('ownerName', 'اسم صاحب النشاط (اختياري)', Icons.person_outline_rounded),
+              // ✨ الحقل الجديد: اسم صاحب النشاط (يظهر للكل كتوثيق اختياري في اللوحة الأم)
+              _buildInputField('ownerName', 'اسم صاحب النشاط (اختياري)', Icons.person_outline_rounded),
 
               _buildInputField('phone', 'رقم الهاتف', Icons.phone_android_rounded, keyboardType: TextInputType.phone),
               
@@ -384,8 +377,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         onTap: onTap,
         validator: (value) {
           if (value == null || value.isEmpty) {
-            // الحقول الاختيارية لا تسبب خطأ (مثل ownerName)
-            if (key == 'ownerName') return null;
+            if (key == 'ownerName') return null; // اختياري
             return isReadOnly ? "يرجى التحديد من الخريطة" : "هذا الحقل مطلوب";
           }
           if (key == 'confirmPassword' && value != widget.controllers['password']?.text) {
@@ -412,7 +404,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       decoration: BoxDecoration(color: const Color(0xFFF0F7F3), borderRadius: BorderRadius.circular(20)),
       child: Column(
         children: [
-          // إضافة النجمة لتوضيح أنه إلزامي للموردين
           _buildInputField('merchantName', 'اسم النشاط التجاري *', Icons.storefront_rounded),
           _buildBusinessTypeDropdown(),
           _buildUploadItem('شعار النشاط / اللوجو (اختياري)', 'logo', _logoPreview),
@@ -472,11 +463,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       title: InkWell(
         onTap: () async {
           final url = Uri.parse('https://aksab.shop/');
-          try {
-            if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
-          } catch (e) {
-            debugPrint("URL Launch error: $e");
-          }
+          if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
         },
         child: RichText(
           text: TextSpan(
