@@ -1,4 +1,4 @@
-// lib/screens/buyer/wallet_screen.dart
+// المسار: lib/screens/buyer/wallet_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +9,9 @@ import '../../providers/buyer_data_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/buyer_mobile_nav_widget.dart';
 import 'gifts_tab.dart'; 
+
+// 🎯 استيراد الصفحة مباشرة لضمان عمل التوجيه المباشر وزر الرجوع
+import 'package:my_test_app/screens/buyer/my_orders_screen.dart';
 
 class WalletScreen extends StatefulWidget {
   static const String routeName = '/wallet';
@@ -78,11 +81,21 @@ class _WalletScreenState extends State<WalletScreen> {
             ),
             bottomNavigationBar: BuyerMobileNavWidget(
               selectedIndex: 3,
+              // ✅ إضافة القيم التي قد تسبب Null check operator error
+              cartCount: 0, 
+              ordersChanged: false,
               onItemSelected: (index) {
                 if (index == 3) return;
                 if (index == 0) Navigator.pushReplacementNamed(context, '/traders');
                 if (index == 1) Navigator.pushReplacementNamed(context, '/buyerHome');
-                if (index == 2) Navigator.pushReplacementNamed(context, '/myOrders');
+                
+                // ✅ تعديل أيقونة الطلبات لتفتح مباشرة لضمان عمل زر الرجوع
+                if (index == 2) {
+                  Navigator.push(
+                    context, 
+                    MaterialPageRoute(builder: (context) => const MyOrdersScreen())
+                  );
+                }
               },
             ),
           ),
@@ -92,7 +105,6 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   Widget _buildCashbackTab() {
-    // استخدام Consumer هنا هو السر! بمجرد أن ينادي البروفايدر notifyListeners، سيتحدث هذا الجزء فوراً
     return Consumer2<BuyerDataProvider, CashbackProvider>(
       builder: (context, buyerData, cashbackProvider, child) {
         return Column(
