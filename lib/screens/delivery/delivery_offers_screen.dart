@@ -1,4 +1,4 @@
-// lib/screens/delivery/delivery_offers_screen.dart
+// المسار: lib/screens/delivery/delivery_offers_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -26,6 +26,7 @@ class DeliveryOffersScreen extends StatefulWidget {
 class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
   String _searchTerm = '';
   String _welcomeMessage = 'مرحباً بك..';
+  LoggedInUser? _currentUser; // تأمين بيانات المستخدم محلياً
 
   @override
   void initState() {
@@ -34,32 +35,41 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
   }
 
   Future<void> _loadUserInfoAndFetchOffers() async {
-    final prefs = await SharedPreferences.getInstance();
-    final loggedUserString = prefs.getString('loggedUser');
-    
-    if (!mounted) return;
-    final provider = Provider.of<ProductOfferProvider>(context, listen: false);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final loggedUserString = prefs.getString('loggedUser');
+      
+      if (!mounted) return;
+      final provider = Provider.of<ProductOfferProvider>(context, listen: false);
 
-    if (loggedUserString != null) {
-      try {
-        final loggedUser = LoggedInUser.fromJson(jsonDecode(loggedUserString));
+      if (loggedUserString != null) {
+        final userData = jsonDecode(loggedUserString);
+        final loggedUser = LoggedInUser.fromJson(userData);
+        
+        setState(() {
+          _currentUser = loggedUser;
+          _welcomeMessage = 'أهلاً، ${loggedUser.fullname ?? 'تاجرنا'}';
+        });
+
         if (loggedUser.id != null) {
-          setState(() => _welcomeMessage = 'أهلاً، ${loggedUser.fullname ?? 'تاجرنا'}');
           await provider.initializeData(loggedUser.id!);
           await provider.fetchOffers(loggedUser.id!);
         }
-      } catch (e) {
-        _showSnackBar('خطأ في تحميل البيانات', Colors.red);
       }
+    } catch (e) {
+      debugPrint('❌ Error in _loadUserInfoAndFetchOffers: $e');
+      _showSnackBar('خطأ في تحميل بيانات الجلسة', Colors.red);
     }
   }
 
   void _showSnackBar(String msg, Color color) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg, style: const TextStyle(fontFamily: 'Cairo')),
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
@@ -75,10 +85,8 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
         backgroundColor: AppTheme.primaryGreen,
         centerTitle: true,
         elevation: 0,
-        // تأمين أيقونات الساعة في الأندرويد والآيفون لتظهر بيضاء فوق الأخضر
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      // 🛡️ تغليف البار السفلي بـ SafeArea لحمايته من شريط الإيماءات السفلي
       bottomNavigationBar: SafeArea(child: _buildBottomBar(context)),
       body: Consumer<ProductOfferProvider>(
         builder: (context, provider, child) {
@@ -106,7 +114,6 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
 
   Widget _buildHeader(int count) {
     return Container(
-      // تم تقليل الـ padding العلوي لأن الـ AppBar أخذ مساحة الـ SafeArea العلوية
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
       decoration: const BoxDecoration(
         color: AppTheme.primaryGreen,
@@ -193,11 +200,17 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
-                      offer.productDetails.imageUrls.isNotEmpty ? offer.productDetails.imageUrls.first : '',
-                      fit: BoxFit.cover,
-                      errorBuilder: (c, e, s) => const Icon(Icons.fastfood, color: Colors.grey),
-                    ),
+                    child: (offer.productDetails.imageUrls.isNotEmpty && offer.productDetails.imageUrls.first.startsWith('http'))
+                      ? Image.network(
+                          offer.productDetails.imageUrls.first,
+                          fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey),
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)));
+                          },
+                        )
+                      : const Icon(Icons.fastfood, color: Colors.grey),
                   ),
                 ),
                 title: Text(offer.productDetails.name, 
@@ -334,7 +347,7 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
                     await Provider.of<ProductOfferProvider>(context, listen: false).updateUnitPrice(
                       offerId: offer.id, unitIndex: index, newPrice: price,
                     );
-                    Navigator.pop(ctx);
+                    if (mounted) Navigator.pop(ctx);
                     _showSnackBar('تم تحديث السعر بنجاح', Colors.blue);
                   }
                 },
@@ -381,7 +394,14 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
 
   Widget _buildNavBtn(BuildContext context, IconData icon, String label, Color color, String route) {
     return InkWell(
-      onTap: () => Navigator.pushReplacementNamed(context, route),
+      // 🛡️ تأمين زرار التنقل: لا يسمح بالانتقال إلا إذا كانت بيانات المستخدم موجودة
+      onTap: () {
+        if (_currentUser != null && _currentUser!.id != null) {
+          Navigator.pushReplacementNamed(context, route);
+        } else {
+          _showSnackBar('يرجى الانتظار حتى تحميل البيانات', Colors.orange);
+        }
+      },
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
