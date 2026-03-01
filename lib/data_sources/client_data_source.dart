@@ -12,6 +12,7 @@ class ClientDataSource {
 
   Future<User?> registerClient({
     required String fullname,
+    String? ownerName, // ✨ الحقل الجديد لاستقبال اسم صاحب النشاط
     required String email,    
     required String phone,    
     required String password,
@@ -35,6 +36,7 @@ class ClientDataSource {
 
       final Map<String, dynamic> userData = {
         'fullname': fullname,
+        'ownerName': ownerName, // ✨ إدراج اسم صاحب النشاط ليظهر في اللوحة الأم
         'email': email,
         'phone': phone,       
         'address': address,
