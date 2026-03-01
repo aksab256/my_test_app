@@ -236,7 +236,7 @@ class CheckoutController {
                         'orderDate': FieldValue.serverTimestamp(),
                     } : {
                         'buyer': { 
-                          'id': safeLoggedUser['id'], 'name': customerFullname, 'address': address,
+                          'id': safeLoggedUser['id'], 'name': customerFullname, 'phone': customerPhone, 'address': address,
                           'lat': buyerProvider.effectiveLat, 'lng': buyerProvider.effectiveLng,
                         },
                         'sellerId': sellerId, 'items': allPaidItems,
