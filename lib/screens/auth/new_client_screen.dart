@@ -22,8 +22,10 @@ class _NewClientScreenState extends State<NewClientScreen> {
   String _selectedCountry = 'egypt';
   String _selectedUserType = '';
 
+  // ✨ إضافة ownerName هنا لضمان وجود متحكم له
   final Map<String, TextEditingController> _controllers = {
     'fullname': TextEditingController(),
+    'ownerName': TextEditingController(), // حقل اسم صاحب النشاط
     'phone': TextEditingController(),
     'password': TextEditingController(),
     'confirmPassword': TextEditingController(),
@@ -48,13 +50,11 @@ class _NewClientScreenState extends State<NewClientScreen> {
     super.dispose();
   }
 
-  // ✅ تم نقل رسالة الموقع لتكون داخل ملف التفاصيل عند الضغط على زر الموقع لتقليل الثقل
-
   void _goToStep(int step) {
     setState(() => _currentStep = step);
     _pageController.animateToPage(
       step - 1,
-      duration: const Duration(milliseconds: 500), // زيادة النعومة في الانتقال
+      duration: const Duration(milliseconds: 500),
       curve: Curves.easeInOutCubic,
     );
   }
@@ -124,8 +124,10 @@ class _NewClientScreenState extends State<NewClientScreen> {
 
     setState(() => _isSaving = true);
     try {
+      // ✨ تم تمرير ownerName هنا ليصل إلى الـ DataSource ومنه لفايربيز
       await _dataSource.registerClient(
         fullname: _controllers['fullname']!.text,
+        ownerName: _controllers['ownerName']!.text, 
         email: smartEmail,
         phone: phoneValue,
         password: pass,
@@ -158,11 +160,11 @@ class _NewClientScreenState extends State<NewClientScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFBFDFB), // لون خلفية مريح جداً
+      backgroundColor: const Color(0xFFFBFDFB),
       body: Directionality(
         textDirection: TextDirection.rtl,
         child: SafeArea(
-          child: Column( // تم التغيير لـ Column بدلاً من ScrollView هنا لتحسين أداء PageView
+          child: Column(
             children: [
               SizedBox(height: 2.h),
               const _LogoHeader(),
@@ -285,7 +287,6 @@ class _LogoHeader extends StatelessWidget {
     return Column(
       children: [
         const Icon(Icons.how_to_reg_rounded, size: 60, color: Color(0xFF2D9E68)),
-
         SizedBox(height: 1.h),
         Text('انضم إلينا الآن',
             style: TextStyle(
