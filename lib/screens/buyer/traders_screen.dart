@@ -10,6 +10,9 @@ import '../../widgets/traders_list_widget.dart';
 import '../../widgets/traders_filter_widget.dart';
 import '../../widgets/buyer_mobile_nav_widget.dart';
 
+// 🎯 استيراد صفحة الطلبات مباشرة لضمان عمل التوجيه المباشر
+import 'package:my_test_app/screens/buyer/my_orders_screen.dart';
+
 class Coordinates {
   final double lat;
   final double lng;
@@ -54,15 +57,19 @@ class _TradersScreenState extends State<TradersScreen> {
       case 0:
         break;
       
-          case 1:
-    // بدل ما نفتح الرئيسية من جديد ونمسح كله
-    // نكتفي بالرجوع للرئيسية اللي مستنية تحتنا في الـ Stack
-    Navigator.of(context).pop(); 
-    break;
+      case 1:
+        // الرجوع للرئيسية اللي مستنية تحتنا في الـ Stack
+        Navigator.of(context).pop(); 
+        break;
 
       case 2:
-        Navigator.pushReplacementNamed(context, '/myOrders');
+        // ✅ تعديل أيقونة الطلبات لتفتح مباشرة لضمان عمل زر الرجوع والحفاظ على الـ Stack
+        Navigator.push(
+          context, 
+          MaterialPageRoute(builder: (context) => const MyOrdersScreen())
+        );
         break;
+
       case 3:
         Navigator.pushReplacementNamed(context, '/wallet');
         break;
@@ -211,7 +218,7 @@ class _TradersScreenState extends State<TradersScreen> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: true, // 🎯 تم التعديل للسماح بالرجوع الطبيعي (Back Stack)
+      canPop: true, 
       child: Directionality(
         textDirection: TextDirection.rtl,
         child: Scaffold(
@@ -230,13 +237,12 @@ class _TradersScreenState extends State<TradersScreen> {
             title: const Text('التجار المعتمدون', 
               style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontFamily: 'Tajawal')),
             centerTitle: true,
-            // 🎯 إضافة زر رجوع يدوي يظهر للـ Consumer فقط لو لم يظهر تلقائياً
             leading: _userRole == 'consumer' ? IconButton(
               icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
               onPressed: () => Navigator.of(context).pop(),
             ) : null,
           ),
-          body: SafeArea( // 🎯 استخدام SafeArea للحفاظ على المحتوى في المساحة الآمنة
+          body: SafeArea( 
             child: _isLoading 
               ? const Center(child: CircularProgressIndicator(color: Color(0xFF4CAF50)))
               : Column(
@@ -263,7 +269,6 @@ class _TradersScreenState extends State<TradersScreen> {
                   ],
                 ),
           ),
-          // 🎯 التحقق من الرتبة قبل بناء الشريط السفلي
           bottomNavigationBar: _userRole == 'buyer' 
             ? BuyerMobileNavWidget(
                 selectedIndex: _selectedIndex,
@@ -271,7 +276,7 @@ class _TradersScreenState extends State<TradersScreen> {
                 cartCount: 0, 
                 ordersChanged: false,
               )
-            : null, // لا يتم بناء الشريط للـ Consumer نهائياً
+            : null, 
         ),
       ),
     );
