@@ -42,6 +42,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   late final MapController _mapController;
   final facebookAppEvents = FacebookAppEvents();
   
+  // 🛡️ استخدام إحداثيات افتراضية آمنة (القاهرة)
   LatLng _selectedPosition = const LatLng(30.0444, 31.2357); 
   bool _locationPicked = false;
   bool _isUploading = false;
@@ -91,31 +92,41 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   }
 
   Future<void> _handleMapOpeningSequence() async {
-    LocationPermission permission = await Geolocator.checkPermission();
-    
-    if (permission == LocationPermission.denied) {
-      bool userAgreed = await _showLocationDisclosure();
-      if (!userAgreed) return;
-      permission = await Geolocator.requestPermission();
-    }
-
-    if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-      Position? lastPos = await Geolocator.getLastKnownPosition();
-      if (lastPos != null) {
-        setState(() => _selectedPosition = LatLng(lastPos.latitude, lastPos.longitude));
-      }
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
       
-      _openMapPicker();
+      if (permission == LocationPermission.denied) {
+        bool userAgreed = await _showLocationDisclosure();
+        if (!userAgreed) return;
+        permission = await Geolocator.requestPermission();
+      }
 
-      Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high).then((pos) {
-        if (mounted) {
-          setState(() {
-            _selectedPosition = LatLng(pos.latitude, pos.longitude);
-            _mapController.move(_selectedPosition, 16.5);
-            _updateAddressText(_selectedPosition);
-          });
+      if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+        Position? lastPos = await Geolocator.getLastKnownPosition();
+        if (lastPos != null) {
+          if (mounted) setState(() => _selectedPosition = LatLng(lastPos.latitude, lastPos.longitude));
         }
-      });
+        
+        _openMapPicker();
+
+        // 🛡️ جلب الموقع الحالي بدقة مع معالجة الوقت المستغرق
+        Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 10)
+        ).then((pos) {
+          if (mounted) {
+            setState(() {
+              _selectedPosition = LatLng(pos.latitude, pos.longitude);
+              _mapController.move(_selectedPosition, 16.5);
+              _updateAddressText(_selectedPosition);
+            });
+          }
+        }).catchError((e) {
+          debugPrint("Location error or timeout: $e");
+        });
+      }
+    } catch (e) {
+      debugPrint("Map sequence fatal error: $e");
     }
   }
 
@@ -145,10 +156,12 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
                         initialCenter: _selectedPosition,
                         initialZoom: 16.5,
                         onPositionChanged: (position, hasGesture) {
-                          if (position.center != null) {
-                            setModalState(() => _selectedPosition = position.center!);
-                            setState(() => _selectedPosition = position.center!);
-                            _updateAddressText(position.center!);
+                          // 🛡️ حماية ضد الـ Null في مركز الخريطة
+                          final center = position.center;
+                          if (center != null) {
+                            setModalState(() => _selectedPosition = center);
+                            if (mounted) setState(() => _selectedPosition = center);
+                            _updateAddressText(center);
                           }
                         },
                       ),
@@ -164,9 +177,11 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68), padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
                       onPressed: () {
-                        setState(() => _locationPicked = true);
-                        widget.onLocationChanged(lat: _selectedPosition.latitude, lng: _selectedPosition.longitude);
-                        Navigator.pop(context);
+                        if (mounted) {
+                          setState(() => _locationPicked = true);
+                          widget.onLocationChanged(lat: _selectedPosition.latitude, lng: _selectedPosition.longitude);
+                          Navigator.pop(context);
+                        }
                       },
                       child: const Text("تأكيد هذا الموقع", style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
@@ -186,9 +201,11 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
         String formattedAddress = "${place.street ?? ''}, ${place.locality ?? ''}, ${place.subAdministrativeArea ?? ''}".replaceAll(", ,", ",");
-        setState(() {
-          widget.controllers['address']!.text = formattedAddress;
-        });
+        if (mounted && widget.controllers.containsKey('address')) {
+          setState(() {
+            widget.controllers['address']!.text = formattedAddress;
+          });
+        }
       }
     } catch (e) {
       debugPrint("Geocoding error: $e");
@@ -196,6 +213,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   }
 
   Future<void> _uploadFileToCloudinary(File file, String field) async {
+    if (!mounted) return;
     setState(() => _isUploading = true);
     try {
       var request = http.MultipartRequest('POST', Uri.parse('https://api.cloudinary.com/v1_1/dgmmx6jbu/image/upload'));
@@ -209,60 +227,63 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       }
     } catch (e) {
       debugPrint("Upload Error: $e");
+      _showSimpleSnackBar("فشل رفع الصورة، يرجى المحاولة لاحقاً");
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
   }
 
-  // 🔥 إصلاح خطأ الرفع من أول مرة (الربط المتسلسل للأذونات)
+  void _showSimpleSnackBar(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg, style: const TextStyle(fontFamily: 'Cairo'))));
+  }
+
   Future<void> _pickFile(String field) async {
-    // 1. التأكد من حالة الإذن الحالية أولاً
-    PermissionStatus status = await Permission.photos.status;
+    try {
+      PermissionStatus status = await Permission.photos.status;
 
-    if (status.isDenied || status.isLimited || status.isPermanentlyDenied) {
-      // إظهار رسالة الإفصاح فقط عند الحاجة
-      bool proceed = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => Directionality(
-          textDirection: TextDirection.rtl,
-          child: AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-            title: const Text("رفع صور النشاط", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-            content: const Text("يتطلب رفع الشعار أو المستندات الوصول إلى معرض الصور الخاص بك لتأكيد هوية نشاطك التجاري."),
-            actions: [
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68)),
-                onPressed: () => Navigator.pop(context, true), 
-                child: const Text("موافق", style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
-              ),
-            ],
+      if (status.isDenied || status.isLimited || status.isPermanentlyDenied) {
+        bool proceed = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => Directionality(
+            textDirection: TextDirection.rtl,
+            child: AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              title: const Text("رفع صور النشاط", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+              content: const Text("يتطلب رفع الشعار أو المستندات الوصول إلى معرض الصور الخاص بك لتأكيد هوية نشاطك التجاري."),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68)),
+                  onPressed: () => Navigator.pop(context, true), 
+                  child: const Text("موافق", style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
+                ),
+              ],
+            ),
           ),
-        ),
-      ) ?? false;
+        ) ?? false;
 
-      if (!proceed) return;
-      
-      // طلب الإذن رسمياً وانتظار النتيجة
-      status = await Permission.photos.request();
-    }
-
-    // 2. إذا أصبح الإذن ممنوحاً (سواء كان قديماً أو منح الآن)
-    if (status.isGranted || status.isLimited) {
-      final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
-      if (pickedFile != null) {
-        final file = File(pickedFile.path);
-        setState(() {
-          if (field == 'logo') _logoPreview = file;
-          if (field == 'cr') _crPreview = file;
-          if (field == 'tc') _tcPreview = file;
-        });
-        // الرفع المباشر بعد الاختيار
-        await _uploadFileToCloudinary(file, field);
+        if (!proceed) return;
+        status = await Permission.photos.request();
       }
-    } else if (status.isPermanentlyDenied) {
-      // توجيه المستخدم للإعدادات إذا رفض بشكل نهائي
-      openAppSettings();
+
+      if (status.isGranted || status.isLimited) {
+        final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
+        if (pickedFile != null) {
+          final file = File(pickedFile.path);
+          if (mounted) {
+            setState(() {
+              if (field == 'logo') _logoPreview = file;
+              if (field == 'cr') _crPreview = file;
+              if (field == 'tc') _tcPreview = file;
+            });
+            await _uploadFileToCloudinary(file, field);
+          }
+        }
+      } else if (status.isPermanentlyDenied) {
+        openAppSettings();
+      }
+    } catch (e) {
+      debugPrint("File picking error: $e");
     }
   }
 
@@ -348,7 +369,15 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         keyboardType: keyboardType,
         readOnly: isReadOnly,
         onTap: onTap,
-        validator: (value) => (value == null || value.isEmpty) ? "هذا الحقل مطلوب من الخريطة" : null,
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return isReadOnly ? "يرجى التحديد من الخريطة" : "هذا الحقل مطلوب";
+          }
+          if (key == 'confirmPassword' && value != widget.controllers['password']?.text) {
+            return "كلمتا المرور غير متطابقتين";
+          }
+          return null;
+        },
         decoration: InputDecoration(
           labelText: label,
           labelStyle: const TextStyle(fontFamily: 'Cairo'),
@@ -388,8 +417,10 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         decoration: const InputDecoration(border: InputBorder.none, hintText: "نوع النشاط التجاري *", hintStyle: TextStyle(fontFamily: 'Cairo')),
         items: _businessTypes.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontFamily: 'Cairo')))).toList(),
         onChanged: (val) {
-          setState(() => _selectedBusinessType = val);
-          widget.controllers['businessType']?.text = val ?? "";
+          if (mounted) {
+            setState(() => _selectedBusinessType = val);
+            widget.controllers['businessType']?.text = val ?? "";
+          }
         },
       ),
     );
@@ -420,12 +451,16 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   Widget _buildTermsCheckbox() {
     return CheckboxListTile(
       value: _termsAgreed,
-      onChanged: (v) => setState(() => _termsAgreed = v!),
+      onChanged: (v) => setState(() => _termsAgreed = v ?? false),
       activeColor: const Color(0xFF2D9E68),
       title: InkWell(
         onTap: () async {
           final url = Uri.parse('https://aksab.shop/');
-          if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
+          try {
+            if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
+          } catch (e) {
+            debugPrint("URL Launch error: $e");
+          }
         },
         child: RichText(
           text: TextSpan(
@@ -450,10 +485,10 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       child: ElevatedButton(
         onPressed: (widget.isSaving || !_termsAgreed || _isUploading) ? null : () async {
           if (!_locationPicked) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("يرجى تحديد موقعك أولاً من الخريطة", style: TextStyle(fontFamily: 'Cairo'))));
+            _showSimpleSnackBar("يرجى تحديد موقعك أولاً من الخريطة");
             return;
           }
-          if (_formKey.currentState!.validate()) {
+          if (_formKey.currentState?.validate() ?? false) {
             try {
               await facebookAppEvents.logCompletedRegistration(registrationMethod: widget.selectedUserType);
             } catch (e) {
