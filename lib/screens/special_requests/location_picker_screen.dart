@@ -63,7 +63,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   @override
   void initState() {
     super.initState();
-    // ضبط الافتراضي على الإسكندرية للإنتاج الفعلي
+    // الإسكندرية كمركز افتراضي
     _currentMapCenter = widget.initialLocation ?? const LatLng(31.2001, 29.9187); 
     _determinePosition();
   }
@@ -80,7 +80,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     return (1000 + rng.nextInt(9000)).toString();
   }
 
-  // دالة البحث الذكي - مُحسنة للإسكندرية
+  // دالة البحث الذكي - تم إضافة User-Agent لحل مشكلة البطء والتعليق
   Future<void> _searchPlaces(String query) async {
     if (query.length < 3) {
       setState(() => _searchResults = []);
@@ -88,16 +88,27 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     }
     setState(() => _isSearching = true);
     try {
-      // تم إضافة viewbox و bounded لترجيح نتائج الإسكندرية أولاً
-      final url = 'https://nominatim.openstreetmap.org/search?q=$query&format=json&addressdetails=1&limit=5&countrycodes=eg&viewbox=29.8,31.3,30.1,31.1&bounded=0';
-      final response = await http.get(Uri.parse(url), headers: {'Accept-Language': 'ar'});
+      // تم تعديل الرابط ليكون أكثر دقة للإسكندرية مع إضافة الـ Headers المطلوبة
+      final url = 'https://nominatim.openstreetmap.org/search?q=$query&format=json&addressdetails=1&limit=5&countrycodes=eg&viewbox=29.7,31.3,30.1,31.1&bounded=0';
+      
+      final response = await http.get(
+        Uri.parse(url), 
+        headers: {
+          'Accept-Language': 'ar',
+          'User-Agent': 'GeminiShipApp/1.0' // ضروري جداً لمنع الـ Block من السيرفر
+        }
+      ).timeout(const Duration(seconds: 10)); // مهلة زمنية عشان ميفضلش يعمل Load للأبد
+
       if (response.statusCode == 200) {
         setState(() {
           _searchResults = json.decode(response.body);
           _isSearching = false;
         });
+      } else {
+        setState(() => _isSearching = false);
       }
     } catch (e) {
+      debugPrint("Search Error: $e");
       setState(() => _isSearching = false);
     }
   }
@@ -275,10 +286,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               ),
             ),
 
-            // شريط البحث الذكي (فوق الخريطة)
             _buildSearchBar(),
 
-            // زر الرجوع المخصص
             Positioned(
               top: 50,
               right: 15,
