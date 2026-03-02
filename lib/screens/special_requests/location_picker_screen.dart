@@ -63,7 +63,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   @override
   void initState() {
     super.initState();
-    // الإسكندرية كمركز افتراضي
+    // ضبط الافتراضي على الإسكندرية (الإنتاج الفعلي)
     _currentMapCenter = widget.initialLocation ?? const LatLng(31.2001, 29.9187); 
     _determinePosition();
   }
@@ -80,7 +80,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     return (1000 + rng.nextInt(9000)).toString();
   }
 
-  // دالة البحث الذكي - تم إضافة User-Agent لحل مشكلة البطء والتعليق
+  // دالة البحث الذكي - مُحسنة وبسيرفرات سريعة
   Future<void> _searchPlaces(String query) async {
     if (query.length < 3) {
       setState(() => _searchResults = []);
@@ -88,24 +88,22 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     }
     setState(() => _isSearching = true);
     try {
-      // تم تعديل الرابط ليكون أكثر دقة للإسكندرية مع إضافة الـ Headers المطلوبة
+      // البحث موجه للإسكندرية بمصر مع User-Agent لضمان السرعة
       final url = 'https://nominatim.openstreetmap.org/search?q=$query&format=json&addressdetails=1&limit=5&countrycodes=eg&viewbox=29.7,31.3,30.1,31.1&bounded=0';
       
       final response = await http.get(
         Uri.parse(url), 
         headers: {
           'Accept-Language': 'ar',
-          'User-Agent': 'GeminiShipApp/1.0' // ضروري جداً لمنع الـ Block من السيرفر
+          'User-Agent': 'GeminiShipApp/1.0'
         }
-      ).timeout(const Duration(seconds: 10)); // مهلة زمنية عشان ميفضلش يعمل Load للأبد
+      ).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
         setState(() {
           _searchResults = json.decode(response.body);
           _isSearching = false;
         });
-      } else {
-        setState(() => _isSearching = false);
       }
     } catch (e) {
       debugPrint("Search Error: $e");
@@ -270,7 +268,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
+                  // تم تغيير الـ Style إلى satellite-streets ليعطي طابعاً فخماً وواقعياً
+                  urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
                   additionalOptions: {'accessToken': mapboxToken},
                 ),
               ],
@@ -281,7 +280,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 child: Icon(
                   Icons.location_on_sharp,
                   size: 50,
-                  color: _currentStep == PickerStep.pickup ? Colors.green[800] : Colors.red[800],
+                  color: _currentStep == PickerStep.pickup ? Colors.greenAccent : Colors.redAccent,
                 ),
               ),
             ),
@@ -319,7 +318,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(15),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)],
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10)],
             ),
             child: TextField(
               controller: _searchController,
@@ -327,7 +326,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
               decoration: InputDecoration(
                 hintText: _currentStep == PickerStep.pickup ? "ابحث عن مكان الاستلام..." : "ابحث عن وجهة التوصيل...",
-                prefixIcon: const Icon(Icons.search, color: Colors.blue),
+                prefixIcon: const Icon(Icons.search, color: Colors.blueAccent),
                 suffixIcon: _isSearching 
                   ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))) 
                   : (_searchController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.close), onPressed: () { _searchController.clear(); setState(() { _searchResults = []; }); }) : null),
@@ -339,11 +338,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
           if (_searchResults.isNotEmpty)
             Container(
               margin: const EdgeInsets.only(top: 5),
-              constraints: const BoxConstraints(maxHeight: 300),
+              constraints: const BoxConstraints(maxHeight: 250),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(15),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)],
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10)],
               ),
               child: ListView.separated(
                 shrinkWrap: true,
@@ -353,8 +352,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 itemBuilder: (context, index) {
                   final res = _searchResults[index];
                   return ListTile(
-                    leading: const Icon(Icons.place, color: Colors.redAccent, size: 20),
-                    title: Text(res['display_name'], maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontFamily: 'Cairo')),
+                    leading: const Icon(Icons.place, color: Colors.red, size: 20),
+                    title: Text(res['display_name'], maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
                     onTap: () => _onSearchResultTap(res),
                   );
                 },
@@ -375,20 +374,20 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(25),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 15, offset: const Offset(0, -5))],
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 15, offset: const Offset(0, -5))],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Row(
                 children: [
-                  Icon(Icons.location_searching, color: Colors.blue[800], size: 24),
+                  Icon(Icons.my_location, color: Colors.blue[900], size: 24),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(_tempAddress, 
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, fontFamily: 'Cairo')),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, fontFamily: 'Cairo')),
                   ),
                 ],
               ),
@@ -401,7 +400,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _currentStep == PickerStep.pickup ? Colors.green[800] : Colors.red[800],
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                    elevation: 0,
+                    elevation: 5,
                   ),
                   child: Text(
                     _currentStep == PickerStep.pickup ? "تأكيد مكان الاستلام" : "تأكيد وجهة التوصيل",
