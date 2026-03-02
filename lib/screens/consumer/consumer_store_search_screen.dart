@@ -22,6 +22,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
   final MapController _mapController = MapController();
   LatLng? _currentSearchLocation;
   bool _isLoading = false;
+  bool _searchFinished = false; // متغير جديد لمعرفة هل انتهى البحث الأول أم لا
   String _loadingMessage = 'جاري المسح الجغرافي...';
   List<Map<String, dynamic>> _nearbySupermarkets = [];
   List<Marker> _mapMarkers = [];
@@ -58,37 +59,18 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     ) ?? false;
   }
 
-  // دالة جلب العنوان مطابقة تماماً لـ LocationPickerScreen
   Future<void> _getAddress(Position position, BuyerDataProvider provider) async {
     try {
       setState(() { _isLoading = true; _loadingMessage = 'تحليل العنوان...'; });
-      
-      // استدعاء مطابق تماماً للنسخة التي أرسلتها (بدور باراميتر اللغة)
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        position.latitude, 
-        position.longitude
-      );
-      
+      List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
       String readableAddress = "موقعي الحالي (GPS)";
       if (placemarks.isNotEmpty) {
         Placemark p = placemarks[0];
-        // بناء نص العنوان بنفس التنسيق
         readableAddress = "${p.street ?? ''} ${p.subLocality ?? ''}, ${p.locality ?? ''}";
       }
-
-      // تخزين البيانات
-      provider.setSessionLocation(
-        lat: position.latitude,
-        lng: position.longitude,
-        address: readableAddress, 
-      );
+      provider.setSessionLocation(lat: position.latitude, lng: position.longitude, address: readableAddress);
     } catch (e) {
-      debugPrint("Geocoding Error: $e");
-      provider.setSessionLocation(
-        lat: position.latitude,
-        lng: position.longitude,
-        address: "موقع غير مسمى", 
-      );
+      provider.setSessionLocation(lat: position.latitude, lng: position.longitude, address: "موقع غير مسمى");
     } finally {
       if (mounted) setState(() { _isLoading = false; });
     }
@@ -109,10 +91,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
       final position = await _getCurrentLocation();
       if (position != null) {
         _currentSearchLocation = LatLng(position.latitude, position.longitude);
-        
-        // تنفيذ جلب العنوان بالنسخة الجديدة
         await _getAddress(position, buyerDataProvider);
-        
         _searchAndDisplayStores(_currentSearchLocation!);
       }
     } else if (selectedOption == 'registered' && hasValidRegisteredLocation) {
@@ -129,7 +108,6 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
       if (!userAgreed) return null;
       permission = await Geolocator.requestPermission();
     }
-
     setState(() { _isLoading = true; _loadingMessage = 'تحديد موقعك...'; });
     try {
       return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
@@ -138,7 +116,11 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
   }
 
   Future<void> _searchAndDisplayStores(LatLng location) async {
-    setState(() { _isLoading = true; _loadingMessage = 'جاري رصد المتاجر النشطة...'; });
+    setState(() { 
+      _isLoading = true; 
+      _loadingMessage = 'جاري رصد المتاجر النشطة...'; 
+      _searchFinished = false; 
+    });
     try {
       _mapController.move(location, 14.5);
       _mapMarkers.clear();
@@ -185,8 +167,59 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
           }
         }
       }
-      setState(() { _nearbySupermarkets = foundStores; _isLoading = false; });
-    } catch (e) { setState(() { _isLoading = false; }); }
+      setState(() { 
+        _nearbySupermarkets = foundStores; 
+        _isLoading = false; 
+        _searchFinished = true; // تم الانتهاء من البحث بنجاح
+      });
+    } catch (e) { 
+      setState(() { _isLoading = false; _searchFinished = true; }); 
+    }
+  }
+
+  // ويدجت الرسالة التحذيرية في حالة عدم وجود نتائج
+  Widget _buildNoResultsCard() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(25),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, 5))]
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.location_off_rounded, color: Colors.redAccent.shade100, size: 60),
+          const SizedBox(height: 15),
+          const Text(
+            "لا توجد خدمات متاحة لموقعك الآن",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            "نحن نتوسع باستمرار! جرب تغيير موقع البحث أو التأكد من تغطية الـ GPS في منطقتك.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 14, fontFamily: 'Cairo'),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _promptLocationSelection(),
+              icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+              label: const Text("تغيير الموقع", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: brandGreen,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))
+              ),
+            ),
+          )
+        ],
+      ),
+    );
   }
 
   Widget _buildLocationSelectionSheet(bool hasRegistered, BuyerDataProvider provider) {
@@ -346,7 +379,19 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
   }
 
   Widget _buildModernLoader() {
-    return Container(color: Colors.white.withOpacity(0.8), child: Center(child: CircularProgressIndicator(color: brandGreen)));
+    return Container(
+      color: Colors.white.withOpacity(0.8), 
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: brandGreen),
+            const SizedBox(height: 15),
+            Text(_loadingMessage, style: TextStyle(color: brandGreen, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+          ],
+        )
+      )
+    );
   }
 
   @override
@@ -374,7 +419,13 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
               ],
             ),
             Positioned(top: 115, left: 15, right: 15, child: _buildRadarStatusCard()),
-            Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomStoresCarousel()),
+            
+            // حالة عرض النتائج أو رسالة "لا توجد خدمة"
+            if (_searchFinished && _nearbySupermarkets.isEmpty)
+              Align(alignment: Alignment.center, child: _buildNoResultsCard())
+            else
+              Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomStoresCarousel()),
+
             if (_isLoading) _buildModernLoader(),
           ],
         ),
