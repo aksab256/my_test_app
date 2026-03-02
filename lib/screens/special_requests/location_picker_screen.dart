@@ -51,6 +51,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   String _tempAddress = "جاري تحديد موقعك الحالي...";
   bool _isLoading = false;
   bool _isSearching = false;
+  bool _isSatelliteMode = true; // متغير للتحكم في نوع الخريطة
   List _searchResults = [];
   String _selectedVehicle = "motorcycle";
 
@@ -63,7 +64,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   @override
   void initState() {
     super.initState();
-    // ضبط الافتراضي على الإسكندرية (الإنتاج الفعلي)
     _currentMapCenter = widget.initialLocation ?? const LatLng(31.2001, 29.9187); 
     _determinePosition();
   }
@@ -80,7 +80,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     return (1000 + rng.nextInt(9000)).toString();
   }
 
-  // دالة البحث الذكي - مُحسنة وبسيرفرات سريعة
   Future<void> _searchPlaces(String query) async {
     if (query.length < 3) {
       setState(() => _searchResults = []);
@@ -88,15 +87,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     }
     setState(() => _isSearching = true);
     try {
-      // البحث موجه للإسكندرية بمصر مع User-Agent لضمان السرعة
       final url = 'https://nominatim.openstreetmap.org/search?q=$query&format=json&addressdetails=1&limit=5&countrycodes=eg&viewbox=29.7,31.3,30.1,31.1&bounded=0';
-      
       final response = await http.get(
         Uri.parse(url), 
-        headers: {
-          'Accept-Language': 'ar',
-          'User-Agent': 'GeminiShipApp/1.0'
-        }
+        headers: {'Accept-Language': 'ar', 'User-Agent': 'GeminiShipApp/1.0'}
       ).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
@@ -106,7 +100,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         });
       }
     } catch (e) {
-      debugPrint("Search Error: $e");
       setState(() => _isSearching = false);
     }
   }
@@ -115,7 +108,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     double lat = double.parse(result['lat']);
     double lon = double.parse(result['lon']);
     LatLng target = LatLng(lat, lon);
-    
     _mapController.move(target, 16);
     setState(() {
       _currentMapCenter = target;
@@ -268,8 +260,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               ),
               children: [
                 TileLayer(
-                  // تم تغيير الـ Style إلى satellite-streets ليعطي طابعاً فخماً وواقعياً
-                  urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
+                  urlTemplate: _isSatelliteMode 
+                    ? 'https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken'
+                    : 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
                   additionalOptions: {'accessToken': mapboxToken},
                 ),
               ],
@@ -286,6 +279,20 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             ),
 
             _buildSearchBar(),
+
+            // زر تبديل وضع الخريطة (Satellite/Streets)
+            Positioned(
+              top: 165,
+              left: 20,
+              child: FloatingActionButton.small(
+                backgroundColor: Colors.white,
+                onPressed: () => setState(() => _isSatelliteMode = !_isSatelliteMode),
+                child: Icon(
+                  _isSatelliteMode ? Icons.map : Icons.satellite_alt,
+                  color: Colors.blue[900],
+                ),
+              ),
+            ),
 
             Positioned(
               top: 50,
