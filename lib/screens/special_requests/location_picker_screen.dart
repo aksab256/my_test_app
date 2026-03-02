@@ -7,6 +7,8 @@ import 'package:geocoding/geocoding.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../../services/bubble_service.dart';
 import '../../services/delivery_service.dart';
 import 'dart:math';
@@ -28,6 +30,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   final MapController _mapController = MapController();
   final DeliveryService _deliveryService = DeliveryService();
   final TextEditingController _detailsController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
 
   final String mapboxToken = "pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw";
 
@@ -47,6 +50,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   String _tempAddress = "جاري تحديد موقعك الحالي...";
   bool _isLoading = false;
+  bool _isSearching = false;
+  List _searchResults = [];
   String _selectedVehicle = "motorcycle";
 
   final List<Map<String, dynamic>> _vehicles = [
@@ -58,19 +63,58 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   @override
   void initState() {
     super.initState();
-    _currentMapCenter = widget.initialLocation ?? const LatLng(31.2001, 29.9187); // افتراضي الإسكندرية
+    // ضبط الافتراضي على الإسكندرية للإنتاج الفعلي
+    _currentMapCenter = widget.initialLocation ?? const LatLng(31.2001, 29.9187); 
     _determinePosition();
   }
 
   @override
   void dispose() {
     _detailsController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
   String _generateOTP() {
     var rng = Random();
     return (1000 + rng.nextInt(9000)).toString();
+  }
+
+  // دالة البحث الذكي - مُحسنة للإسكندرية
+  Future<void> _searchPlaces(String query) async {
+    if (query.length < 3) {
+      setState(() => _searchResults = []);
+      return;
+    }
+    setState(() => _isSearching = true);
+    try {
+      // تم إضافة viewbox و bounded لترجيح نتائج الإسكندرية أولاً
+      final url = 'https://nominatim.openstreetmap.org/search?q=$query&format=json&addressdetails=1&limit=5&countrycodes=eg&viewbox=29.8,31.3,30.1,31.1&bounded=0';
+      final response = await http.get(Uri.parse(url), headers: {'Accept-Language': 'ar'});
+      if (response.statusCode == 200) {
+        setState(() {
+          _searchResults = json.decode(response.body);
+          _isSearching = false;
+        });
+      }
+    } catch (e) {
+      setState(() => _isSearching = false);
+    }
+  }
+
+  void _onSearchResultTap(dynamic result) {
+    double lat = double.parse(result['lat']);
+    double lon = double.parse(result['lon']);
+    LatLng target = LatLng(lat, lon);
+    
+    _mapController.move(target, 16);
+    setState(() {
+      _currentMapCenter = target;
+      _tempAddress = result['display_name'];
+      _searchResults = [];
+      _searchController.clear();
+      FocusScope.of(context).unfocus();
+    });
   }
 
   Future<void> _determinePosition() async {
@@ -198,15 +242,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          elevation: 1,
-          title: Text(
-            _currentStep == PickerStep.pickup ? "1. مكان الاستلام" : "2. وجهة التوصيل",
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black, fontFamily: 'Cairo'),
-          ),
-          centerTitle: true,
-        ),
+        resizeToAvoidBottomInset: false,
         body: Stack(
           children: [
             FlutterMap(
@@ -238,10 +274,84 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ),
               ),
             ),
+
+            // شريط البحث الذكي (فوق الخريطة)
+            _buildSearchBar(),
+
+            // زر الرجوع المخصص
+            Positioned(
+              top: 50,
+              right: 15,
+              child: CircleAvatar(
+                backgroundColor: Colors.white,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_forward, color: Colors.black),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+            ),
+
             _buildActionCard(),
             if (_isLoading) Container(color: Colors.black26, child: const Center(child: CircularProgressIndicator())),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Positioned(
+      top: 100,
+      left: 15,
+      right: 15,
+      child: Column(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(15),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)],
+            ),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (val) => _searchPlaces(val),
+              style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
+              decoration: InputDecoration(
+                hintText: _currentStep == PickerStep.pickup ? "ابحث عن مكان الاستلام..." : "ابحث عن وجهة التوصيل...",
+                prefixIcon: const Icon(Icons.search, color: Colors.blue),
+                suffixIcon: _isSearching 
+                  ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))) 
+                  : (_searchController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.close), onPressed: () { _searchController.clear(); setState(() { _searchResults = []; }); }) : null),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 15),
+              ),
+            ),
+          ),
+          if (_searchResults.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(top: 5),
+              constraints: const BoxConstraints(maxHeight: 300),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)],
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                itemCount: _searchResults.length,
+                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final res = _searchResults[index];
+                  return ListTile(
+                    leading: const Icon(Icons.place, color: Colors.redAccent, size: 20),
+                    title: Text(res['display_name'], maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontFamily: 'Cairo')),
+                    onTap: () => _onSearchResultTap(res),
+                  );
+                },
+              ),
+            ),
+        ],
       ),
     );
   }
