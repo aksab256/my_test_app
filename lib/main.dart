@@ -1,216 +1,375 @@
+import 'package:firebase_crashlytics/firebase_crashlytics.dart'; // 🚀 إضافة مكتبة الكراشليتكس
+import 'package:flutter/foundation.dart'; // 🚀 ضرورية لالتقاط الأخطاء
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; 
+import 'package:flutter/services.dart'; // ✅ مستورد للتحكم في شريط الحالة
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import 'package:sizer/sizer.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'dart:ui'; 
-
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_background_service/flutter_background_service.dart'; 
-import 'package:firebase_messaging/firebase_messaging.dart'; // ✅ إضافة مكتبة المراسلة
+import 'package:latlong2/latlong.dart'; 
+import 'package:facebook_app_events/facebook_app_events.dart'; 
 
-import 'screens/login_screen.dart';
-import 'screens/register_screen.dart';
-import 'screens/free_driver_home_screen.dart';
-import 'screens/CompanyRepHomeScreen.dart';
-import 'screens/delivery_admin_dashboard.dart'; 
+import 'package:my_test_app/firebase_options.dart';
+import 'package:my_test_app/theme/app_theme.dart';
+import 'package:my_test_app/providers/theme_notifier.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:my_test_app/widgets/connectivity_wrapper.dart';
 
-// متغير عالمي لتتبع توقيت ضغطة زر الرجوع
-DateTime? _lastPressedAt;
 
-// ✅ إضافة معالج الرسائل في الخلفية لضمان عمل الإشعارات والتطبيق مغلق
-@pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-}
+import 'package:my_test_app/providers/buyer_data_provider.dart';
+import 'package:my_test_app/providers/manufacturers_provider.dart';
+import 'package:my_test_app/providers/cart_provider.dart';
+import 'package:my_test_app/providers/customer_orders_provider.dart';
+import 'package:my_test_app/providers/product_offer_provider.dart';
+import 'package:my_test_app/providers/cashback_provider.dart';
+import 'package:my_test_app/controllers/seller_dashboard_controller.dart';
+import 'package:my_test_app/models/logged_user.dart';
+import 'package:my_test_app/services/user_session.dart';
+import 'package:my_test_app/models/user_role.dart';
+
+// استيراد الشاشات
+import 'package:my_test_app/screens/login_screen.dart';
+import 'package:my_test_app/screens/seller_screen.dart';
+import 'package:my_test_app/screens/buyer/buyer_home_screen.dart';
+import 'package:my_test_app/screens/consumer/consumer_home_screen.dart';
+import 'package:my_test_app/screens/auth/new_client_screen.dart';
+import 'package:my_test_app/screens/buyer/cart_screen.dart';
+import 'package:my_test_app/screens/checkout/checkout_screen.dart';
+import 'package:my_test_app/screens/buyer/my_orders_screen.dart';
+import 'package:my_test_app/screens/buyer/traders_screen.dart';
+import 'package:my_test_app/screens/buyer/wallet_screen.dart';
+import 'package:my_test_app/screens/buyer/buyer_category_screen.dart';
+import 'package:my_test_app/screens/buyer/buyer_product_list_screen.dart';
+import 'package:my_test_app/screens/buyer/trader_offers_screen.dart';
+import 'package:my_test_app/screens/my_details_screen.dart';
+import 'package:my_test_app/screens/about_screen.dart';
+import 'package:my_test_app/screens/product_details_screen.dart';
+import 'package:my_test_app/screens/consumer/consumer_sub_category_screen.dart';
+import 'package:my_test_app/screens/consumer/ConsumerProductListScreen.dart';
+import 'package:my_test_app/screens/consumer/consumer_store_search_screen.dart';
+import 'package:my_test_app/screens/consumer/MarketplaceHomeScreen.dart';
+import 'package:my_test_app/screens/consumer/consumer_purchase_history_screen.dart';
+import 'package:my_test_app/screens/consumer/points_loyalty_screen.dart';
+import 'package:my_test_app/screens/delivery_merchant_dashboard_screen.dart';
+import 'package:my_test_app/screens/delivery_settings_screen.dart';
+import 'package:my_test_app/screens/update_delivery_settings_screen.dart';
+import 'package:my_test_app/screens/consumer_orders_screen.dart';
+import 'package:my_test_app/screens/delivery/product_offer_screen.dart';
+import 'package:my_test_app/screens/delivery/delivery_offers_screen.dart';
+import 'package:my_test_app/screens/seller/add_offer_screen.dart';
+import 'package:my_test_app/screens/seller/create_gift_promo_screen.dart';
+import 'package:my_test_app/screens/delivery_area_screen.dart';
+import 'package:my_test_app/screens/search/search_screen.dart';
+import 'package:my_test_app/screens/special_requests/abaatly_had_pro_screen.dart';
+import 'package:my_test_app/screens/customer_tracking_screen.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  await initializeDateFormatting('ar', null);
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    // 🛡️ إعدادات Firebase Crashlytics
+  // التقاط جميع الأخطاء التي لم يتم التعامل معها بواسطة إطار عمل فلاتر
+  FlutterError.onError = (errorDetails) {
+    FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+  };
 
-  // ✅ 1. إعدادات Crashlytics
-  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+  // التقاط الأخطاء التي تحدث في العمليات الخلفية أو غير المتزامنة (Async)
   PlatformDispatcher.instance.onError = (error, stack) {
     FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
     return true;
   };
 
-  // ✅ 2. إعدادات الإشعارات الموحدة (مطابقة للتطبيق الأساسي)
+
+  // 🚀 تفعيل تتبع فتح التطبيق في فيسبوك
+  final facebookAppEvents = FacebookAppEvents();
+  facebookAppEvents.logEvent(name: 'fb_mobile_activate_app');
+
+  // 🎨 ضبط شريط الحالة ليكون شفافاً مع أيقونات بيضاء لتناسب الهيدر الأخضر
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light, // أيقونات بيضاء (ساعة، بطارية)
+    statusBarBrightness: Brightness.dark,      // للـ iOS
+  ));
+
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-  
-  // تهيئة الإعدادات للأندرويد
-  const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
-  // تعريف القناة الموحدة بالاسم الجديد high_importance_channel
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'high_importance_channel', 
+    'high_importance_channel',
     'إشعارات هامة',
-    description: 'هذه القناة مخصصة لإشعارات الطلبات والعهدة الهامة.',
-    importance: Importance.max, // أقصى درجة لضمان الصوت والظهور المفاجئ (Heads-up)
+    description: 'هذه القناة مخصصة لإشعارات الطلبات الهامة.',
+    importance: Importance.max,
     playSound: true,
-    enableVibration: true,
   );
 
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(channel);
 
-  // ربط معالج الخلفية لـ Firebase
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-
-  // ✅ 3. أمر التنظيف الذكي: إيقاف أي خدمة قديمة معلقة عند بداية تشغيل التطبيق
-  try {
-    FlutterBackgroundService().invoke("stopService");
-  } catch (e) {
-    // تجاهل الخطأ إذا لم تكن الخدمة تعمل
-  }
-
-  runApp(AksabDriverApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeNotifier(ThemeMode.light)), 
+        ChangeNotifierProvider(create: (_) => BuyerDataProvider()),
+        ChangeNotifierProvider(create: (_) => ManufacturersProvider()),
+        ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(create: (_) => SellerDashboardController()),
+        ChangeNotifierProxyProvider<BuyerDataProvider, CustomerOrdersProvider>(
+          create: (context) => CustomerOrdersProvider(Provider.of<BuyerDataProvider>(context, listen: false)),
+          update: (_, buyerData, __) => CustomerOrdersProvider(buyerData),
+        ),
+        ChangeNotifierProxyProvider<BuyerDataProvider, ProductOfferProvider>(
+          create: (context) => ProductOfferProvider(Provider.of<BuyerDataProvider>(context, listen: false)),
+          update: (_, buyerData, __) => ProductOfferProvider(buyerData),
+        ),
+        ChangeNotifierProxyProvider<BuyerDataProvider, CashbackProvider>(
+          create: (context) => CashbackProvider(Provider.of<BuyerDataProvider>(context, listen: false)),
+          update: (_, buyerData, __) => CashbackProvider(buyerData),
+        ),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
-class AksabDriverApp extends StatelessWidget {
-  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-
-  AksabDriverApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Sizer(
       builder: (context, orientation, deviceType) {
         return MaterialApp(
-          navigatorKey: navigatorKey, 
-          title: 'أكسب كابتن',
+          navigatorKey: navigatorKey,
+          title: 'أسواق أكسب',
           debugShowCheckedModeBanner: false,
+          builder: (context, child) => ConnectivityWrapper(child: child!),
+          locale: const Locale('ar', 'EG'),
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
           supportedLocales: const [Locale('ar', 'EG')],
-          locale: const Locale('ar', 'EG'),
+          
+          themeMode: ThemeMode.light, 
+          
           theme: ThemeData(
-            primarySwatch: Colors.orange,
-            fontFamily: 'Tajawal',
+            brightness: Brightness.light,
+            primaryColor: AppTheme.primaryGreen,
             scaffoldBackgroundColor: Colors.white,
+            colorScheme: ColorScheme.light(
+              primary: AppTheme.primaryGreen,
+              surface: Colors.white,
+            ),
+            textTheme: GoogleFonts.cairoTextTheme(ThemeData.light().textTheme),
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              iconTheme: IconThemeData(color: Colors.black),
+              // لضمان استقرار شريط الحالة داخل الـ AppBar
+              systemOverlayStyle: SystemUiOverlayStyle.dark, 
+            ),
           ),
-          home: PopScope(
-            canPop: false, 
-            onPopInvokedWithResult: (didPop, result) async {
-              if (didPop) return;
-
-              final NavigatorState? navigator = navigatorKey.currentState;
-
-              if (navigator != null && navigator.canPop()) {
-                navigator.pop();
-                return;
-              }
-
-              final now = DateTime.now();
-              const backButtonInterval = Duration(seconds: 2);
-
-              if (_lastPressedAt == null || now.difference(_lastPressedAt!) > backButtonInterval) {
-                _lastPressedAt = now;
-                
-                ScaffoldMessenger.of(navigator!.context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'إضغط مرة أخرى للخروج من التطبيق',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontFamily: 'Tajawal'),
-                    ),
-                    backgroundColor: Colors.black87,
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-                return;
-              }
-
-              SystemNavigator.pop();
-            },
-            child: const AuthWrapper(),
-          ),
+          
+          initialRoute: '/',
           routes: {
-            '/login': (context) => LoginScreen(),
-            '/register': (context) => RegisterScreen(),
-            '/free_home': (context) => const FreeDriverHomeScreen(),
-            '/company_home': (context) => const CompanyRepHomeScreen(),
-            '/admin_dashboard': (context) => const DeliveryAdminDashboard(),
+            '/': (context) => const AuthWrapper(),
+            '/sellerhome': (context) => const SellerScreen(),
+            LoginScreen.routeName: (context) => const LoginScreen(),
+            SellerScreen.routeName: (context) => const SellerScreen(),
+            BuyerHomeScreen.routeName: (context) => const BuyerHomeScreen(),
+            ConsumerHomeScreen.routeName: (context) => const ConsumerHomeScreen(),
+            CartScreen.routeName: (context) => const CartScreen(),
+            CheckoutScreen.routeName: (context) => const CheckoutScreen(),
+            MyOrdersScreen.routeName: (context) => const MyOrdersScreen(),
+            SearchScreen.routeName: (context) => SearchScreen(
+              userRole: Provider.of<BuyerDataProvider>(context, listen: false).userRole == 'consumer' 
+                  ? UserRole.consumer 
+                  : UserRole.buyer
+            ),
+            '/register': (context) => const NewClientScreen(),
+            '/traders': (context) => const TradersScreen(),
+            '/wallet': (context) => const WalletScreen(),
+            '/myDetails': (context) => const MyDetailsScreen(),
+            '/about': (context) => const AboutScreen(),
+            '/post-reg': (context) => const PostRegistrationMessageScreen(),
+            ConsumerStoreSearchScreen.routeName: (context) => const ConsumerStoreSearchScreen(),
+            '/consumer-purchases': (context) => const ConsumerPurchaseHistoryScreen(),
+            PointsLoyaltyScreen.routeName: (context) => const PointsLoyaltyScreen(),
+            '/deliverySettings': (context) => const DeliverySettingsScreen(),
+            '/deliveryPrices': (context) => const DeliveryMerchantDashboardScreen(),
+            '/deliveryMerchantDashboard': (context) => const DeliveryMerchantDashboardScreen(),
+            '/product_management': (context) => const ProductOfferScreen(),
+            '/delivery-offers': (context) => const DeliveryOffersScreen(),
+            '/updatsupermarket': (context) => const UpdateDeliverySettingsScreen(),
+            '/con-orders': (context) => const ConsumerOrdersScreen(),
+            '/constore': (context) => const BuyerHomeScreen(),
+            '/add-offer': (context) => const AddOfferScreen(),
+            '/create-gift': (context) => const CreateGiftPromoScreen(currentSellerId: ''),
+            '/delivery-areas': (context) => const DeliveryAreaScreen(currentSellerId: ''),
+            '/abaatly-had': (context) {
+              final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+              return AbaatlyHadProScreen(
+                userCurrentLocation: args?['location'] ?? const LatLng(30.0444, 31.2357),
+                isStoreOwner: args?['isStoreOwner'] ?? false,
+              );
+            },
+            '/customerTracking': (context) {
+              final orderId = ModalRoute.of(context)?.settings.arguments as String? ?? '';
+              return CustomerTrackingScreen(orderId: orderId);
+            },
           },
+          onGenerateRoute: _onGenerateRoute,
         );
       },
     );
   }
+
+  Route? _onGenerateRoute(RouteSettings settings) {
+    if (settings.name == MarketplaceHomeScreen.routeName) {
+      final args = settings.arguments as Map<String, dynamic>?;
+      return MaterialPageRoute(builder: (context) => MarketplaceHomeScreen(currentStoreId: args?['storeId'] ?? '', currentStoreName: args?['storeName'] ?? 'المتجر'));
+    }
+    if (settings.name == '/subcategories') {
+      final args = settings.arguments as Map<String, dynamic>?;
+      return MaterialPageRoute(builder: (context) => ConsumerSubCategoryScreen(mainCategoryId: args?['mainId'] ?? '', ownerId: args?['ownerId'] ?? '', mainCategoryName: args?['mainCategoryName'] ?? ''));
+    }
+    if (settings.name == ConsumerProductListScreen.routeName) {
+      final args = settings.arguments as Map<String, dynamic>?;
+      return MaterialPageRoute(builder: (context) => ConsumerProductListScreen(ownerId: args?['ownerId'] ?? '', mainId: args?['mainId'] ?? '', subId: args?['subId'] ?? '', subCategoryName: args?['subCategoryName'] ?? 'المنتجات'));
+    }
+    if (settings.name == '/productDetails') {
+      final args = settings.arguments as Map<String, dynamic>?;
+      return MaterialPageRoute(builder: (context) => ProductDetailsScreen(productId: args?['productId'] ?? '', offerId: args?['offerId']));
+    }
+    if (settings.name == TraderOffersScreen.routeName) {
+      final sellerId = settings.arguments as String? ?? '';
+      return MaterialPageRoute(builder: (context) => TraderOffersScreen(sellerId: sellerId));
+    }
+    if (settings.name == '/category') {
+      final mainId = settings.arguments as String? ?? '';
+      return MaterialPageRoute(builder: (context) => BuyerCategoryScreen(mainCategoryId: mainId));
+    }
+    if (settings.name == '/products') {
+      final args = settings.arguments as Map<String, dynamic>? ?? {};
+      return MaterialPageRoute(builder: (context) => BuyerProductListScreen(mainCategoryId: args['mainId'] ?? '', subCategoryId: args['subId'] ?? ''));
+    }
+    return null;
+  }
 }
 
-class AuthWrapper extends StatelessWidget {
+class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  Future<LoggedInUser?>? _userFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _userFuture = _checkUserLoginStatus();
+  }
+    Future<LoggedInUser?> _checkUserLoginStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userJson = prefs.getString('loggedUser');
+    if (userJson != null) {
+      try {
+        final userMap = jsonDecode(userJson); // تحويل النص لـ Map أولاً
+        final String uid = userMap['id'];
+
+        // --- 🛡️ التعديل الشامل المضاف هنا لحماية الحذف ---
+        
+        // 1. فحص المستهلك أولاً في كولكشن consumers
+        var userDoc = await FirebaseFirestore.instance.collection('consumers').doc(uid).get();
+        
+        // 2. إذا لم يوجد، فحص المشتري (Buyer) في كولكشن users
+        if (!userDoc.exists) {
+          userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+        }
+        if (!userDoc.exists) {
+        userDoc = await FirebaseFirestore.instance.collection('sellers').doc(uid).get();
+        }
+
+        // 3. إذا وجد الحساب في أي منهما وكان قيد الحذف، اطرده
+        if (userDoc.exists && userDoc.data()?['status'] == 'delete_requested') {
+          await FirebaseAuth.instance.signOut();
+          await prefs.remove('loggedUser');
+          return null; 
+        }
+        // ----------------------------------------------
+
+        await UserSession.loadSession();
+        final user = LoggedInUser.fromJson(userMap);
+        final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
+        await buyerProvider.initializeData(user.id, user.id, user.fullname);
+        return user;
+      } catch (e) {
+        await prefs.remove('loggedUser');
+        return null;
+      }
+    }
+    return null;
+  }
+
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+    return FutureBuilder<LoggedInUser?>(
+      future: _userFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF43A047))));
         }
-
-        if (snapshot.hasData) {
-          final uid = snapshot.data!.uid;
-
-          return FutureBuilder<Map<String, dynamic>?>(
-            future: _getUserRoleAndData(uid),
-            builder: (context, roleSnapshot) {
-              if (roleSnapshot.connectionState == ConnectionState.waiting) {
-                return const Scaffold(body: Center(child: CircularProgressIndicator()));
-              }
-
-              final userData = roleSnapshot.data;
-              if (userData != null) {
-                final String type = userData['type'];
-                final String status = userData['status'] ?? '';
-
-                if (type == 'deliveryRep' && status == 'approved') {
-                  return const CompanyRepHomeScreen();
-                } 
-                else if (type == 'freeDriver' && status == 'approved') {
-                  return const FreeDriverHomeScreen();
-                } 
-                else if (type == 'manager') {
-                  String role = userData['role'] ?? '';
-                  if (role == 'delivery_manager' || role == 'delivery_supervisor') {
-                    return const DeliveryAdminDashboard();
-                  }
-                }
-              }
-              return const LoginScreen();
-            },
-          );
+        if (snapshot.hasData && snapshot.data != null) {
+          final user = snapshot.data!;
+          if (user.role == "seller") return const SellerScreen();
+          if (user.role == "consumer") return const ConsumerHomeScreen();
+          return const BuyerHomeScreen();
         }
         return const LoginScreen();
       },
     );
   }
+}
 
-  Future<Map<String, dynamic>?> _getUserRoleAndData(String uid) async {
-    var repDoc = await FirebaseFirestore.instance.collection('deliveryReps').doc(uid).get();
-    if (repDoc.exists) return {...repDoc.data()!, 'type': 'deliveryRep'};
-
-    var freeDoc = await FirebaseFirestore.instance.collection('freeDrivers').doc(uid).get();
-    if (freeDoc.exists) return {...freeDoc.data()!, 'type': 'freeDriver'};
-
-    var managerSnap = await FirebaseFirestore.instance
-        .collection('managers')
-        .where('uid', isEqualTo: uid)
-        .get();
-        
-    if (managerSnap.docs.isNotEmpty) {
-      return {...managerSnap.docs.first.data(), 'type': 'manager'};
-    }
-    return null;
+class PostRegistrationMessageScreen extends StatelessWidget {
+  const PostRegistrationMessageScreen({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final isSeller = args?['isSeller'] ?? false;
+    Future.delayed(const Duration(seconds: 3), () {
+      Navigator.of(context).pushReplacementNamed(LoginScreen.routeName);
+    });
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(isSeller ? Icons.pending_actions : Icons.check_circle, color: isSeller ? Colors.orange : Colors.green, size: 80),
+            const SizedBox(height: 20),
+            Text(isSeller ? 'حسابك قيد المراجعة' : 'تم التسجيل بنجاح', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 40),
+            const CircularProgressIndicator(),
+          ],
+        ),
+      ),
+    );
   }
 }
