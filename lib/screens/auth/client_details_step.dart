@@ -1,7 +1,8 @@
+// lib/screens/registration_steps/client_details_step.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:geocoding/geocoding.dart';
+import 'package:geocoding/geocoding.dart' as geo;
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
@@ -40,6 +41,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   final _formKey = GlobalKey<FormState>();
   late final MapController _mapController;
   final facebookAppEvents = FacebookAppEvents();
+  final TextEditingController _searchController = TextEditingController();
   
   LatLng _selectedPosition = const LatLng(30.0444, 31.2357); 
   bool _locationPicked = false;
@@ -60,6 +62,28 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   void initState() {
     super.initState();
     _mapController = MapController();
+  }
+
+  // ✅ دالة البحث الذكي عن العناوين
+  Future<void> _searchAddress(String query, StateSetter setModalState) async {
+    if (query.isEmpty) return;
+    final url = "https://api.mapbox.com/geocoding/v5/mapbox.places/${Uri.encodeComponent(query)}.json?access_token=$mapboxToken&country=EG&language=ar";
+    
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['features'].isNotEmpty) {
+          final coords = data['features'][0]['center'];
+          final newPos = LatLng(coords[1], coords[0]);
+          setModalState(() => _selectedPosition = newPos);
+          _mapController.move(newPos, 16.5);
+          _updateAddressText(newPos);
+        }
+      }
+    } catch (e) {
+      debugPrint("Search error: $e");
+    }
   }
 
   // ✅ إفصاح الموقع (لجوجل بلاي)
@@ -127,35 +151,67 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
           return Container(
-            height: 90.h,
-            decoration:  BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+            height: 92.h,
+            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
             child: SafeArea(
-              bottom: true,
               child: Column(
                 children: [
-                  Container(margin: const EdgeInsets.symmetric(vertical: 12), width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Text("حرك الخريطة لتحديد عنوان نشاطك", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Color(0xFF2D9E68))),
-                  ),
-                  Expanded(
-                    child: FlutterMap(
-                      mapController: _mapController,
-                      options: MapOptions(
-                        initialCenter: _selectedPosition,
-                        initialZoom: 16.5,
-                        onPositionChanged: (position, hasGesture) {
-                          final center = position.center;
-                          if (center != null) {
-                            setModalState(() => _selectedPosition = center);
-                            if (mounted) setState(() => _selectedPosition = center);
-                            _updateAddressText(center);
-                          }
-                        },
+                  Container(margin: const EdgeInsets.symmetric(vertical: 10), width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+                  
+                  // 🔍 شريط البحث الذكي
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.h),
+                    child: TextField(
+                      controller: _searchController,
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: (val) => _searchAddress(val, setModalState),
+                      decoration: InputDecoration(
+                        hintText: "ابحث عن منطقة، شارع، أو علامة مميزة...",
+                        hintStyle: TextStyle(fontFamily: 'Cairo', fontSize: 11.sp),
+                        prefixIcon: const Icon(Icons.search, color: Color(0xFF2D9E68)),
+                        suffixIcon: IconButton(icon: const Icon(Icons.gps_fixed, color: Colors.blue), onPressed: () => _handleMapOpeningSequence()),
+                        filled: true, fillColor: Colors.grey[100],
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
                       ),
+                    ),
+                  ),
+
+                  Expanded(
+                    child: Stack(
                       children: [
-                        TileLayer(urlTemplate: "https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/tiles/{z}/{x}/{y}?access_token=$mapboxToken"),
-                        MarkerLayer(markers: [Marker(point: _selectedPosition, width: 60, height: 60, child: const Icon(Icons.location_pin, size: 50, color: Colors.red))]),
+                        FlutterMap(
+                          mapController: _mapController,
+                          options: MapOptions(
+                            initialCenter: _selectedPosition,
+                            initialZoom: 16.5,
+                            onPositionChanged: (position, hasGesture) {
+                              if (hasGesture) {
+                                final center = position.center;
+                                setModalState(() => _selectedPosition = center);
+                                if (mounted) setState(() => _selectedPosition = center);
+                                _updateAddressText(center);
+                              }
+                            },
+                          ),
+                          children: [
+                            TileLayer(
+                              urlTemplate: "https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=$mapboxToken",
+                              additionalOptions: {"accessToken": mapboxToken},
+                            ),
+                            MarkerLayer(markers: [
+                              Marker(point: _selectedPosition, width: 60, height: 60, child: const Icon(Icons.location_pin, size: 45, color: Colors.red)),
+                            ]),
+                          ],
+                        ),
+                        // زر إعادة التمركز السريع
+                        Positioned(
+                          bottom: 20, right: 20,
+                          child: FloatingActionButton(
+                            mini: true, backgroundColor: Colors.white,
+                            onPressed: () => _mapController.move(_selectedPosition, 16.5),
+                            child: const Icon(Icons.my_location, color: Colors.black54),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -163,15 +219,13 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
                     padding: EdgeInsets.all(5.w),
                     width: double.infinity,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68), padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
                       onPressed: () {
-                        if (mounted) {
-                          setState(() => _locationPicked = true);
-                          widget.onLocationChanged(lat: _selectedPosition.latitude, lng: _selectedPosition.longitude);
-                          Navigator.pop(context);
-                        }
+                        setState(() => _locationPicked = true);
+                        widget.onLocationChanged(lat: _selectedPosition.latitude, lng: _selectedPosition.longitude);
+                        Navigator.pop(context);
                       },
-                      child: const Text("تأكيد هذا الموقع", style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: const Text("تأكيد هذا الموقع للنشاط", style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
@@ -185,7 +239,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
 
   Future<void> _updateAddressText(LatLng position) async {
     try {
-      final placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+      final placemarks = await geo.placemarkFromCoordinates(position.latitude, position.longitude);
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
         String formattedAddress = "${place.street ?? ''}, ${place.locality ?? ''}, ${place.subAdministrativeArea ?? ''}".replaceAll(", ,", ",");
@@ -255,7 +309,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         if (pickedFile != null) {
           final file = File(pickedFile.path);
           if (mounted) {
-            // ✅ تحديث العلامة الخضراء فوراً قبل الرفع
             setState(() {
               if (field == 'logo') _logoPreview = file;
               if (field == 'cr') _crPreview = file;
@@ -283,11 +336,10 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('إكمال بيانات الحساب', style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68), fontFamily: 'Cairo'), textAlign: TextAlign.center),
+              Text('إكمال بيانات الحساب', style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68), fontFamily: 'Cairo'), textAlign: TextAlign.center),
               SizedBox(height: 3.h),
               _buildSectionHeader('المعلومات الأساسية', Icons.badge_rounded),
               
-              // الحقل الأول: مسميات ثابتة حسب طلبك
               _buildInputField(
                 'fullname', 
                 widget.selectedUserType == 'seller' ? 'الاسم الكامل للمسؤول *' : 
@@ -295,7 +347,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
                 Icons.person_rounded
               ),
 
-              // ✨ حقل اسم صاحب النشاط: يظهر للمورد (seller) وللتاجر (buyer) فقط.. ومختفي للمستهلك (consumer)
               if (widget.selectedUserType != 'consumer')
                 _buildInputField('ownerName', 'اسم صاحب النشاط (اختياري)', Icons.person_outline_rounded),
 
