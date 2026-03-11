@@ -251,6 +251,9 @@ class CheckoutController {
                       'isFinancialSettled': false,
                         'isCommissionProcessed': false,
                         'deliveryHandled': false,
+                      'repCode': repCode,
+'repName': repName,
+
                     };
 
                     final docRef = await FirebaseFirestore.instance.collection(ordersCollectionName).add(removeNullValues(orderData));
