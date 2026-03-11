@@ -240,7 +240,9 @@ class CheckoutController {
                     } : {
                         'buyer': { 
                           'id': safeLoggedUser['id'], 'name': customerFullname, 'phone': customerPhone, 'address': address,
-                          'lat': buyerProvider.effectiveLat, 'lng': buyerProvider.effectiveLng,
+                          'lat': buyerProvider.effectiveLat, 'lng': buyerProvider.effectiveLng, 'repCode': repCode,
+'repName': repName,
+
                         },
                         'sellerId': sellerId, 'items': allPaidItems,
                         'total': subtotalPrice, 
@@ -251,8 +253,7 @@ class CheckoutController {
                       'isFinancialSettled': false,
                         'isCommissionProcessed': false,
                         'deliveryHandled': false,
-                      'repCode': repCode,
-'repName': repName,
+                      
 
                     };
 
