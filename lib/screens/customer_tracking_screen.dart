@@ -73,6 +73,14 @@ class CustomerTrackingScreen extends StatelessWidget {
                       'customerComment': commentController.text,
                       'status': 'delivered'
                     });
+                    // 2. تحديث ملف المندوب التراكمي (هذا ما ينقصك ليقرأه كارت التقييم المهني)
+  if (driverId != null && driverId.isNotEmpty) {
+    await FirebaseFirestore.instance.collection('freeDrivers').doc(driverId).update({
+      'totalStars': FieldValue.increment(selectedRating), // يضيف النجوم الجديدة للمجموع
+      'reviewsCount': FieldValue.increment(1),           // يزود عدد المقيمين واحد
+    });
+  }
+
                     if (context.mounted) Navigator.of(context).popUntil((route) => route.isFirst);
                   },
                   child: const Text("تأكيد التقييم", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
