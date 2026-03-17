@@ -1,7 +1,7 @@
-import 'package:firebase_crashlytics/firebase_crashlytics.dart'; // 🚀 إضافة مكتبة الكراشليتكس
-import 'package:flutter/foundation.dart'; // 🚀 ضرورية لالتقاط الأخطاء
+import 'package:firebase_crashlytics/firebase_crashlytics.dart'; 
+import 'package:flutter/foundation.dart'; 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // ✅ مستورد للتحكم في شريط الحالة
+import 'package:flutter/services.dart'; 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -74,7 +74,6 @@ void main() async {
   await initializeDateFormatting('ar', null);
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // 🛡️ إعدادات Firebase Crashlytics
   FlutterError.onError = (errorDetails) {
     FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
   };
@@ -87,7 +86,6 @@ void main() async {
   final facebookAppEvents = FacebookAppEvents();
   facebookAppEvents.logEvent(name: 'fb_mobile_activate_app');
 
-  // 🎨 ضبط شريط الحالة
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
@@ -98,7 +96,7 @@ void main() async {
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
   
-  // 💡 [التصحيح النهائي]: تمرير الإعدادات في مكانها الصحيح لتجاوز خطأ الـ Positional Arguments
+  // ✅ التعديل الجذري هنا لتخطي خطأ الـ Positional Arguments
   await flutterLocalNotificationsPlugin.initialize(
     initializationSettings,
     onDidReceiveNotificationResponse: (NotificationResponse details) {},
@@ -133,7 +131,8 @@ void main() async {
           update: (_, buyerData, __) => ProductOfferProvider(buyerData),
         ),
         ChangeNotifierProxyProvider<BuyerDataProvider, CashbackProvider>(
-          create: (context) => CashbackProvider(Provider.of<BuyerDataProvider>(context, listen: false)),            update: (_, buyerData, __) => CashbackProvider(buyerData),
+          create: (context) => CashbackProvider(Provider.of<BuyerDataProvider>(context, listen: false)),
+          update: (_, buyerData, __) => CashbackProvider(buyerData),
         ),
       ],
       child: const MyApp(),
