@@ -75,34 +75,34 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // 🛡️ إعدادات Firebase Crashlytics
-  // التقاط جميع الأخطاء التي لم يتم التعامل معها بواسطة إطار عمل فلاتر
   FlutterError.onError = (errorDetails) {
     FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
   };
 
-  // التقاط الأخطاء التي تحدث في العمليات الخلفية أو غير المتزامنة (Async)
   PlatformDispatcher.instance.onError = (error, stack) {
     FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
     return true;
   };
 
-  // 🚀 تفعيل تتبع فتح التطبيق في فيسبوك
   final facebookAppEvents = FacebookAppEvents();
   facebookAppEvents.logEvent(name: 'fb_mobile_activate_app');
 
-  // 🎨 ضبط شريط الحالة ليكون شفافاً مع أيقونات بيضاء لتناسب الهيدر الأخضر
+  // 🎨 ضبط شريط الحالة
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light, // أيقونات بيضاء (ساعة، بطارية)
-    statusBarBrightness: Brightness.dark, // للـ iOS
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
   ));
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
   
-  // 💡 [تعديل]: تمرير الإعدادات لـ initialize
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  // 💡 [التصحيح النهائي]: تمرير الإعدادات في مكانها الصحيح لتجاوز خطأ الـ Positional Arguments
+  await flutterLocalNotificationsPlugin.initialize(
+    initializationSettings,
+    onDidReceiveNotificationResponse: (NotificationResponse details) {},
+  );
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     'high_importance_channel',
@@ -133,8 +133,7 @@ void main() async {
           update: (_, buyerData, __) => ProductOfferProvider(buyerData),
         ),
         ChangeNotifierProxyProvider<BuyerDataProvider, CashbackProvider>(
-          create: (context) => CashbackProvider(Provider.of<BuyerDataProvider>(context, listen: false)),
-          update: (_, buyerData, __) => CashbackProvider(buyerData),
+          create: (context) => CashbackProvider(Provider.of<BuyerDataProvider>(context, listen: false)),            update: (_, buyerData, __) => CashbackProvider(buyerData),
         ),
       ],
       child: const MyApp(),
@@ -175,7 +174,6 @@ class MyApp extends StatelessWidget {
               backgroundColor: Colors.white,
               elevation: 0,
               iconTheme: IconThemeData(color: Colors.black),
-              // لضمان استقرار شريط الحالة داخل الـ AppBar
               systemOverlayStyle: SystemUiOverlayStyle.dark,
             ),
           ),
@@ -301,13 +299,10 @@ class _AuthWrapperState extends State<AuthWrapper> {
     final userJson = prefs.getString('loggedUser');
     if (userJson != null) {
       try {
-        final userMap = jsonDecode(userJson); // تحويل النص لـ Map أولاً
+        final userMap = jsonDecode(userJson);
         final String uid = userMap['id'];
 
-        // --- 🛡️ التعديل الشامل المضاف هنا لحماية الحذف ---
-        // 1. فحص المستهلك أولاً في كولكشن consumers
         var userDoc = await FirebaseFirestore.instance.collection('consumers').doc(uid).get();
-        // 2. إذا لم يوجد، فحص المشتري (Buyer) في كولكشن users
         if (!userDoc.exists) {
           userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
         }
@@ -315,13 +310,11 @@ class _AuthWrapperState extends State<AuthWrapper> {
           userDoc = await FirebaseFirestore.instance.collection('sellers').doc(uid).get();
         }
 
-        // 3. إذا وجد الحساب في أي منهما وكان قيد الحذف، اطرده
         if (userDoc.exists && userDoc.data()?['status'] == 'delete_requested') {
           await FirebaseAuth.instance.signOut();
           await prefs.remove('loggedUser');
           return null;
         }
-        // ----------------------------------------------
         await UserSession.loadSession();
         final user = LoggedInUser.fromJson(userMap);
         final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
