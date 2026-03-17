@@ -52,7 +52,7 @@ import 'package:my_test_app/screens/consumer/consumer_sub_category_screen.dart';
 import 'package:my_test_app/screens/consumer/ConsumerProductListScreen.dart';
 import 'package:my_test_app/screens/consumer/consumer_store_search_screen.dart';
 import 'package:my_test_app/screens/consumer/MarketplaceHomeScreen.dart';
-import 'package:my_test_app/screens/consumer/consumer_purchase_history_screen. Hussein.dart'; // لاحظت اسم الملف هكذا في مساراتك السابقة
+import 'package:my_test_app/screens/consumer/consumer_purchase_history_screen.dart';
 import 'package:my_test_app/screens/consumer/points_loyalty_screen.dart';
 import 'package:my_test_app/screens/delivery_merchant_dashboard_screen.dart';
 import 'package:my_test_app/screens/delivery_settings_screen.dart';
@@ -96,7 +96,7 @@ void main() async {
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
   
-  // 🛡️ التعديل الوحيد للتوافق مع نسخة 21.0.0 دون تغيير المنطق:
+  // 🛡️ التعديل التقني الوحيد: تسمية المعامل لتوافق نسخة 21.0.0
   await flutterLocalNotificationsPlugin.initialize(
     initializationSettings,
     onDidReceiveNotificationResponse: (NotificationResponse details) {},
