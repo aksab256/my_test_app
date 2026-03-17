@@ -96,7 +96,7 @@ void main() async {
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
   
-  // ✅ التعديل الجذري هنا لتخطي خطأ الـ Positional Arguments
+  // 🛡️ التعديل الحاسم: استخدام المعامل المسمى (Named Argument) حصراً
   await flutterLocalNotificationsPlugin.initialize(
     initializationSettings,
     onDidReceiveNotificationResponse: (NotificationResponse details) {},
