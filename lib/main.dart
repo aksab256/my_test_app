@@ -91,7 +91,7 @@ void main() async {
   facebookAppEvents.logEvent(name: 'fb_mobile_activate_app');
 
   // 🎨 ضبط شريط الحالة ليكون شفافاً مع أيقونات بيضاء لتناسب الهيدر الأخضر
-  SystemChrome.setSystemUIOverlayStyle(const SystemOverlayStyle(
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light, // أيقونات بيضاء (ساعة، بطارية)
     statusBarBrightness: Brightness.dark, // للـ iOS
@@ -101,7 +101,7 @@ void main() async {
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
   
-  // 💡 [التصحيح التقني]: استخدام Named Argument للإعدادات بدلاً من Positional للتوافق مع الإصدار الجديد
+  // 💡 [تعديل]: تمرير الإعدادات لـ initialize
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
@@ -176,7 +176,7 @@ class MyApp extends StatelessWidget {
               elevation: 0,
               iconTheme: IconThemeData(color: Colors.black),
               // لضمان استقرار شريط الحالة داخل الـ AppBar
-              systemOverlayStyle: SystemOverlayStyle.dark,
+              systemOverlayStyle: SystemUiOverlayStyle.dark,
             ),
           ),
           initialRoute: '/',
