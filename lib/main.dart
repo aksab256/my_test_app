@@ -93,14 +93,13 @@ void main() async {
   ));
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-  const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
-  const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
   
-  // ✅ هذا هو السطر الذي سيجعل المشروع يعمل مع النسخة 21.0.0
-  await flutterLocalNotificationsPlugin.initialize(
-    initializationSettings: initializationSettings, 
-    onDidReceiveNotificationResponse: (NotificationResponse details) {},
-  );
+  // 🛡️ تعريف الإعدادات بشكل مباشر جداً
+  const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('notif_icon');
+  const InitializationSettings initSettings = InitializationSettings(android: androidSettings);
+  
+  // 🚀 السطر اللي هيحل اللغز: نمرره كمتغير وحيد وبدون أي إضافات
+  await flutterLocalNotificationsPlugin.initialize(initSettings);
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     'high_importance_channel',
@@ -140,6 +139,7 @@ void main() async {
   );
 }
 
+// ... باقي الكود كما هو تماماً بدون أي تغيير ...
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
