@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sizer/sizer.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // مكتبة الكاش
 
 class ChatSupportWidget extends StatefulWidget {
   const ChatSupportWidget({super.key});
@@ -15,9 +16,35 @@ class ChatSupportWidget extends StatefulWidget {
 class _ChatSupportWidgetState extends State<ChatSupportWidget> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final List<Map<String, String>> _messages = [];
+  List<Map<String, String>> _messages = []; // أزلت final للسماح بالتحديث من الكاش
   bool _isTyping = false;
   final String apiGatewayUrl = "https://st6zcrb8k1.execute-api.us-east-1.amazonaws.com/dev/chat";
+
+  @override
+  void initState() {
+    super.initState();
+    _loadChatHistory(); // تحميل المحادثة عند الفتح
+  }
+
+  // 💾 دالة حفظ المحادثة في الكاش
+  Future<void> _saveChatHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setString('chat_cache', json.encode(_messages));
+  }
+
+  // 📥 دالة تحميل المحادثة من الكاش
+  Future<void> _loadChatHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedData = prefs.getString('chat_cache');
+    if (cachedData != null) {
+      setState(() {
+        _messages = List<Map<String, String>>.from(
+          json.decode(cachedData).map((item) => Map<String, String>.from(item))
+        );
+      });
+      _scrollToBottom();
+    }
+  }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -41,6 +68,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
     });
     _controller.clear();
     _scrollToBottom();
+    await _saveChatHistory(); // حفظ بعد رسالة العميل
 
     try {
       final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
@@ -58,6 +86,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
         setState(() {
           _messages.add({"role": "bot", "text": data['message'] ?? "لا يوجد رد حالياً."});
         });
+        await _saveChatHistory(); // حفظ بعد رد البوت
       }
     } catch (e) {
       setState(() {
@@ -105,7 +134,6 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
 
               if (_isTyping) _buildTypingIndicator(),
               
-              // 🛡️ استخدام SafeArea هنا هو السر لرفع المحتوى عن الأزرار السفلية
               SafeArea(
                 top: false,
                 child: _buildInputSection(),
@@ -137,14 +165,14 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
             children: [
               const CircleAvatar(
                 backgroundColor: Color(0xff28a745),
-                radius: 12,
-                child: Icon(Icons.bolt, color: Colors.white, size: 15),
+                radius: 14, // كبّرت الأيقونة قليلاً
+                child: Icon(Icons.bolt, color: Colors.white, size: 18),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Text(
                 "دعم أكسب الذكي",
                 style: TextStyle(
-                  fontSize: 16.sp, 
+                  fontSize: 18.sp, // تكبير الخط
                   fontWeight: FontWeight.w900, 
                   color: const Color(0xff1a4d2e),
                   fontFamily: 'Cairo'
@@ -161,25 +189,25 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        constraints: BoxConstraints(maxWidth: 80.w),
+        constraints: BoxConstraints(maxWidth: 82.w),
         margin: const EdgeInsets.symmetric(vertical: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16), // تكبير الحواف
         decoration: BoxDecoration(
           gradient: isUser 
             ? const LinearGradient(colors: [Color(0xff28a745), Color(0xff218838)])
             : null,
           color: isUser ? null : Colors.white,
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(22),
-            topRight: const Radius.circular(22),
-            bottomLeft: Radius.circular(isUser ? 22 : 5),
-            bottomRight: Radius.circular(isUser ? 5 : 22),
+            topLeft: const Radius.circular(25),
+            topRight: const Radius.circular(25),
+            bottomLeft: Radius.circular(isUser ? 25 : 5),
+            bottomRight: Radius.circular(isUser ? 5 : 25),
           ),
           boxShadow: [
             BoxShadow(
               color: isUser ? Colors.green.withOpacity(0.2) : Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 5)
+              blurRadius: 12,
+              offset: const Offset(0, 6)
             ),
           ],
           border: isUser ? null : Border.all(color: Colors.grey.shade100),
@@ -187,8 +215,8 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
         child: Text(
           text,
           style: TextStyle(
-            fontSize: 13.sp,
-            height: 1.5,
+            fontSize: 15.sp, // تكبير خط الرسالة بشكل ملحوظ
+            height: 1.4,
             fontWeight: FontWeight.w600,
             fontFamily: 'Cairo',
             color: isUser ? Colors.white : Colors.black87,
@@ -200,23 +228,22 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
 
   Widget _buildTypingIndicator() {
     return Padding(
-      padding: EdgeInsets.only(left: 6.w, bottom: 1.5.h),
+      padding: EdgeInsets.only(left: 6.w, bottom: 2.h),
       child: Row(
         children: [
           const SizedBox(
-            width: 12, height: 12,
-            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
+            width: 16, height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.green),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Text("يتم الآن معالجة طلبك...", 
-            style: TextStyle(fontSize: 10.sp, color: Colors.grey[600], fontFamily: 'Cairo', fontStyle: FontStyle.italic)),
+            style: TextStyle(fontSize: 12.sp, color: Colors.grey[700], fontFamily: 'Cairo', fontStyle: FontStyle.italic)),
         ],
       ),
     );
   }
 
   Widget _buildInputSection() {
-    // 🛠️ تم تعديل الـ padding والـ bottom ليتناسب مع الكيبورد ومع أزرار النظام
     return Container(
       padding: EdgeInsets.only(
         left: 5.w, 
@@ -224,41 +251,36 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
         top: 2.h,
         bottom: MediaQuery.of(context).viewInsets.bottom > 0 
             ? MediaQuery.of(context).viewInsets.bottom + 1.h 
-            : 1.5.h, // مسافة أمان بسيطة لو الكيبورد مقفولة والـ SafeArea شغالة
+            : 2.h, 
       ),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, -5))]
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 20, offset: const Offset(0, -5))]
       ),
       child: Row(
         children: [
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 5, spreadRadius: 1)]
-              ),
-              child: TextField(
-                controller: _controller,
-                style: TextStyle(fontSize: 13.sp, fontFamily: 'Cairo'),
-                decoration: InputDecoration(
-                  hintText: "اكتب استفسارك هنا...",
-                  hintStyle: TextStyle(fontSize: 12.sp, color: Colors.grey[400], fontFamily: 'Cairo'),
-                  filled: true,
-                  fillColor: Colors.grey[50],
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 25, vertical: 15),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(30),
-                    borderSide: BorderSide(color: Colors.grey.shade200),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(30),
-                    borderSide: BorderSide(color: Colors.grey.shade200),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(30),
-                    borderSide: const BorderSide(color: Color(0xff28a745), width: 1.5),
-                  ),
+            child: TextField(
+              controller: _controller,
+              style: TextStyle(fontSize: 15.sp, fontFamily: 'Cairo'), // تكبير خط الكتابة
+              decoration: InputDecoration(
+                hintText: "اكتب استفسارك هنا...",
+                hintStyle: TextStyle(fontSize: 13.sp, color: Colors.grey[400], fontFamily: 'Cairo'),
+                filled: true,
+                fillColor: Colors.grey[50],
+                contentPadding: const EdgeInsets.symmetric(horizontal: 25, vertical: 18),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                  borderSide: const BorderSide(color: Color(0xff28a745), width: 2),
                 ),
               ),
             ),
@@ -266,14 +288,14 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
           SizedBox(width: 3.w),
           InkWell(
             onTap: _sendMessage,
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(35),
             child: Container(
-              height: 55, width: 55,
+              height: 60, width: 60, // تكبير زر الإرسال قليلاً
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(colors: [Color(0xff28a745), Color(0xff1a4d2e)]),
               ),
-              child: const Icon(Icons.send_rounded, color: Colors.white, size: 28),
+              child: const Icon(Icons.send_rounded, color: Colors.white, size: 30),
             ),
           ),
         ],
