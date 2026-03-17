@@ -3,8 +3,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // أضفنا الفايرستور لجلب بيانات العميل
 import 'package:sizer/sizer.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // مكتبة الكاش
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ChatSupportWidget extends StatefulWidget {
   const ChatSupportWidget({super.key});
@@ -16,23 +17,21 @@ class ChatSupportWidget extends StatefulWidget {
 class _ChatSupportWidgetState extends State<ChatSupportWidget> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  List<Map<String, String>> _messages = []; // أزلت final للسماح بالتحديث من الكاش
+  List<Map<String, String>> _messages = [];
   bool _isTyping = false;
   final String apiGatewayUrl = "https://st6zcrb8k1.execute-api.us-east-1.amazonaws.com/dev/chat";
 
   @override
   void initState() {
     super.initState();
-    _loadChatHistory(); // تحميل المحادثة عند الفتح
+    _loadChatHistory();
   }
 
-  // 💾 دالة حفظ المحادثة في الكاش
   Future<void> _saveChatHistory() async {
     final prefs = await SharedPreferences.getInstance();
     prefs.setString('chat_cache', json.encode(_messages));
   }
 
-  // 📥 دالة تحميل المحادثة من الكاش
   Future<void> _loadChatHistory() async {
     final prefs = await SharedPreferences.getInstance();
     final cachedData = prefs.getString('chat_cache');
@@ -58,9 +57,31 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
     });
   }
 
+  // 🚀 دالة ذكية لجلب بيانات العميل الحالية من الفايرستور قبل الإرسال
+  Future<Map<String, String>> _getUserDetails(String uid) async {
+    // جرد سريع على الـ 3 كولكشنات المتاحة
+    List<String> collections = ['consumers', 'sellers', 'users'];
+    
+    for (var col in collections) {
+      var doc = await FirebaseFirestore.instance.collection(col).doc(uid).get();
+      if (doc.exists) {
+        var data = doc.data()!;
+        return {
+          "userName": data['fullname'] ?? data['merchantName'] ?? "يا غالي",
+          "role": data['role'] ?? col,
+          "userPhone": data['phone'] ?? "N/A"
+        };
+      }
+    }
+    return {"userName": "عميل أكسب", "role": "guest", "userPhone": "N/A"};
+  }
+
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
     setState(() {
       _messages.add({"role": "user", "text": text});
@@ -68,17 +89,26 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
     });
     _controller.clear();
     _scrollToBottom();
-    await _saveChatHistory(); // حفظ بعد رسالة العميل
+    await _saveChatHistory();
 
     try {
-      final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+      // جلب البيانات من الفايرستور بناءً على الهياكل اللي بعتها
+      final userDetails = await _getUserDetails(user.uid);
+      final idToken = await user.getIdToken();
+
       final response = await http.post(
         Uri.parse(apiGatewayUrl),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $idToken',
         },
-        body: json.encode({"message": text}),
+        body: json.encode({
+          "message": text,
+          "userId": user.uid,
+          "userName": userDetails['userName'],
+          "role": userDetails['role'],
+          "userPhone": userDetails['userPhone'],
+        }),
       );
 
       if (response.statusCode == 200) {
@@ -86,7 +116,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
         setState(() {
           _messages.add({"role": "bot", "text": data['message'] ?? "لا يوجد رد حالياً."});
         });
-        await _saveChatHistory(); // حفظ بعد رد البوت
+        await _saveChatHistory();
       }
     } catch (e) {
       setState(() {
@@ -165,7 +195,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
             children: [
               const CircleAvatar(
                 backgroundColor: Color(0xff28a745),
-                radius: 14, // كبّرت الأيقونة قليلاً
+                radius: 14,
                 child: Icon(Icons.bolt, color: Colors.white, size: 18),
               ),
               const SizedBox(width: 12),
@@ -191,7 +221,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
       child: Container(
         constraints: BoxConstraints(maxWidth: 82.w),
         margin: const EdgeInsets.symmetric(vertical: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16), // تكبير الحواف
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
         decoration: BoxDecoration(
           gradient: isUser 
             ? const LinearGradient(colors: [Color(0xff28a745), Color(0xff218838)])
@@ -215,7 +245,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
         child: Text(
           text,
           style: TextStyle(
-            fontSize: 15.sp, // تكبير خط الرسالة بشكل ملحوظ
+            fontSize: 15.sp, // خط كبير وواضح
             height: 1.4,
             fontWeight: FontWeight.w600,
             fontFamily: 'Cairo',
@@ -263,7 +293,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
           Expanded(
             child: TextField(
               controller: _controller,
-              style: TextStyle(fontSize: 15.sp, fontFamily: 'Cairo'), // تكبير خط الكتابة
+              style: TextStyle(fontSize: 15.sp, fontFamily: 'Cairo'),
               decoration: InputDecoration(
                 hintText: "اكتب استفسارك هنا...",
                 hintStyle: TextStyle(fontSize: 13.sp, color: Colors.grey[400], fontFamily: 'Cairo'),
@@ -290,7 +320,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
             onTap: _sendMessage,
             borderRadius: BorderRadius.circular(35),
             child: Container(
-              height: 60, width: 60, // تكبير زر الإرسال قليلاً
+              height: 60, width: 60,
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(colors: [Color(0xff28a745), Color(0xff1a4d2e)]),
