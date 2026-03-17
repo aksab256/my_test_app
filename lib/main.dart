@@ -31,7 +31,7 @@ import 'package:my_test_app/controllers/seller_dashboard_controller.dart';
 import 'package:my_test_app/models/logged_user.dart';
 import 'package:my_test_app/services/user_session.dart';
 import 'package:my_test_app/models/user_role.dart';
-
+// استيراد الشاشات
 import 'package:my_test_app/screens/login_screen.dart';
 import 'package:my_test_app/screens/seller_screen.dart';
 import 'package:my_test_app/screens/buyer/buyer_home_screen.dart';
@@ -52,7 +52,7 @@ import 'package:my_test_app/screens/consumer/consumer_sub_category_screen.dart';
 import 'package:my_test_app/screens/consumer/ConsumerProductListScreen.dart';
 import 'package:my_test_app/screens/consumer/consumer_store_search_screen.dart';
 import 'package:my_test_app/screens/consumer/MarketplaceHomeScreen.dart';
-import 'package:my_test_app/screens/consumer/consumer_purchase_history_screen.dart';
+import 'package:my_test_app/screens/consumer/consumer_purchase_history_screen. Hussein.dart'; // لاحظت اسم الملف هكذا في مساراتك السابقة
 import 'package:my_test_app/screens/consumer/points_loyalty_screen.dart';
 import 'package:my_test_app/screens/delivery_merchant_dashboard_screen.dart';
 import 'package:my_test_app/screens/delivery_settings_screen.dart';
@@ -93,16 +93,13 @@ void main() async {
   ));
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-  
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
-  const InitializationSettings initializationSettings = InitializationSettings(
-    android: initializationSettingsAndroid,
-  );
+  const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
   
-  // 🚀 المحاولة النهائية: تمرير الإعدادات كـ Named Argument صريح
+  // 🛡️ التعديل الوحيد للتوافق مع نسخة 21.0.0 دون تغيير المنطق:
   await flutterLocalNotificationsPlugin.initialize(
     initializationSettings,
-    onDidReceiveNotificationResponse: (details) {},
+    onDidReceiveNotificationResponse: (NotificationResponse details) {},
   );
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
