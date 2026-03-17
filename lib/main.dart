@@ -93,29 +93,35 @@ void main() async {
   ));
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-  
-  // 🛡️ تعريف الإعدادات بشكل مباشر جداً
-  const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('notif_icon');
-  const InitializationSettings initSettings = InitializationSettings(android: androidSettings);
-  
-  
 
+// 🛡️ إعدادات أندرويد
+const AndroidInitializationSettings androidSettings =
+    AndroidInitializationSettings('notif_icon');
+
+// 🛡️ إعدادات عامة
+const InitializationSettings initSettings =
+    InitializationSettings(android: androidSettings);
+
+// 🚀 التهيئة الصحيحة حسب النسخة الحديثة
 await flutterLocalNotificationsPlugin.initialize(
-  initializationSettings: initSettings,
+  settings: initSettings,
+  onDidReceiveNotificationResponse: (NotificationResponse details) {
+    // تعامل مع الضغط على الإشعار هنا
+  },
 );
 
-  const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'high_importance_channel',
-    'إشعارات هامة',
-    description: 'هذه القناة مخصصة لإشعارات الطلبات الهامة.',
-    importance: Importance.max,
-    playSound: true,
-  );
+// إنشاء قناة الإشعارات
+const AndroidNotificationChannel channel = AndroidNotificationChannel(
+  'high_importance_channel',
+  'إشعارات هامة',
+  description: 'هذه القناة مخصصة لإشعارات الطلبات الهامة.',
+  importance: Importance.max,
+  playSound: true,
+);
 
-  await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(channel);
-
+await flutterLocalNotificationsPlugin
+    .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+    ?.createNotificationChannel(channel);
   runApp(
     MultiProvider(
       providers: [
