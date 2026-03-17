@@ -98,8 +98,11 @@ void main() async {
   const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initSettings = InitializationSettings(android: androidSettings);
   
-  // 🚀 السطر اللي هيحل اللغز: نمرره كمتغير وحيد وبدون أي إضافات
-  await flutterLocalNotificationsPlugin.initialize(initSettings);
+  
+
+await flutterLocalNotificationsPlugin.initialize(
+  initializationSettings: initSettings,
+);
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     'high_importance_channel',
