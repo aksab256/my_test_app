@@ -40,8 +40,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   String _pickupAddress = "جاري جلب العنوان...";
   LatLng? _dropoffLocation;
   String _dropoffAddress = "";
-  
   double _estimatedPrice = 0.0;
+
   Map<String, double> _pricingDetails = {
     'totalPrice': 0.0,
     'commissionAmount': 0.0,
@@ -51,7 +51,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   String _tempAddress = "جاري تحديد موقعك الحالي...";
   bool _isLoading = false;
   bool _isSearching = false;
-  bool _isSatelliteMode = true; // متغير للتحكم في نوع الخريطة
+  bool _isSatelliteMode = true; 
   List _searchResults = [];
   String _selectedVehicle = "motorcycle";
 
@@ -64,7 +64,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   @override
   void initState() {
     super.initState();
-    _currentMapCenter = widget.initialLocation ?? const LatLng(31.2001, 29.9187); 
+    _currentMapCenter = widget.initialLocation ?? const LatLng(30.0444, 31.2357); // القاهرة كافتراضي أدق
     _determinePosition();
   }
 
@@ -72,6 +72,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   void dispose() {
     _detailsController.dispose();
     _searchController.dispose();
+    // إغلاق الكنترولر للحفاظ على الذاكرة في النسخة الجديدة
+    _mapController.dispose();
     super.dispose();
   }
 
@@ -80,6 +82,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     return (1000 + rng.nextInt(9000)).toString();
   }
 
+  // 🧠 تحديث: بحث أذكى وأسرع
   Future<void> _searchPlaces(String query) async {
     if (query.length < 3) {
       setState(() => _searchResults = []);
@@ -87,20 +90,24 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     }
     setState(() => _isSearching = true);
     try {
-      final url = 'https://nominatim.openstreetmap.org/search?q=$query&format=json&addressdetails=1&limit=5&countrycodes=eg&viewbox=29.7,31.3,30.1,31.1&bounded=0';
+      // تم تخصيص البحث لمصر وباللغة العربية مع زيادة الـ Limit لتحسين الاختيارات
+      final url = 'https://nominatim.openstreetmap.org/search?q=$query&format=json&addressdetails=1&limit=8&countrycodes=eg&accept-language=ar';
+      
       final response = await http.get(
-        Uri.parse(url), 
-        headers: {'Accept-Language': 'ar', 'User-Agent': 'GeminiShipApp/1.0'}
-      ).timeout(const Duration(seconds: 8));
+        Uri.parse(url),
+        headers: {'Accept-Language': 'ar', 'User-Agent': 'AksabApp/1.0'}
+      ).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
-        setState(() {
-          _searchResults = json.decode(response.body);
-          _isSearching = false;
-        });
+        if (mounted) {
+          setState(() {
+            _searchResults = json.decode(response.body);
+            _isSearching = false;
+          });
+        }
       }
     } catch (e) {
-      setState(() => _isSearching = false);
+      if (mounted) setState(() => _isSearching = false);
     }
   }
 
@@ -108,7 +115,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     double lat = double.parse(result['lat']);
     double lon = double.parse(result['lon']);
     LatLng target = LatLng(lat, lon);
-    _mapController.move(target, 16);
+    
+    _mapController.move(target, 16.5); // زووم أدق عند الاختيار
+    
     setState(() {
       _currentMapCenter = target;
       _tempAddress = result['display_name'];
@@ -150,12 +159,14 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         Placemark place = placemarks[0];
         if (mounted) {
           setState(() {
-            _tempAddress = "${place.street ?? ''} ${place.subLocality ?? ''}, ${place.locality ?? ''}";
+            // تنسيق العنوان ليكون أكثر وضوحاً
+            _tempAddress = "${place.street ?? ''} ${place.subLocality ?? ''} ${place.locality ?? ''}".trim();
+            if (_tempAddress.isEmpty) _tempAddress = "موقع مخصص";
           });
         }
       }
     } catch (e) {
-      if (mounted) setState(() { _tempAddress = "موقع غير مسمى"; });
+      if (mounted) setState(() { _tempAddress = "نقطة على الخريطة"; });
     }
   }
 
@@ -163,12 +174,12 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     if (_pickupLocation == null || _dropoffLocation == null) return;
     try {
       double distance = _deliveryService.calculateDistance(
-          _pickupLocation!.latitude, _pickupLocation!.longitude,
-          _dropoffLocation!.latitude, _dropoffLocation!.longitude
+        _pickupLocation!.latitude, _pickupLocation!.longitude,
+        _dropoffLocation!.latitude, _dropoffLocation!.longitude
       );
       final results = await _deliveryService.calculateDetailedTripCost(
-          distanceInKm: distance,
-          vehicleType: vehicleType
+        distanceInKm: distance,
+        vehicleType: vehicleType
       );
       setState(() {
         _pricingDetails = results;
@@ -202,9 +213,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     setState(() => _isLoading = true);
     try {
       final user = FirebaseAuth.instance.currentUser;
-      String rawEmail = user?.email ?? ""; 
+      String rawEmail = user?.email ?? "";
       String derivedPhone = rawEmail.contains('@') ? rawEmail.split('@')[0] : (user?.phoneNumber ?? "0000000000");
-      final String securityCode = _generateOTP();
+      final String securityCode = _generateOTP();    
 
       final docRef = await FirebaseFirestore.instance.collection('specialRequests').add({
         'userId': user?.uid ?? 'anonymous',
@@ -228,8 +239,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       BubbleService.show(docRef.id);
 
       if (!mounted) return;
-      Navigator.pop(context); 
-      Navigator.pop(context); 
+      Navigator.pop(context);
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.green, content: Text("🚀 طلبك وصل للمناديب!")));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
@@ -246,6 +257,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         resizeToAvoidBottomInset: false,
         body: Stack(
           children: [
+            // 🚀 تحسين سرعة البناء: استخدام 'const' للـ TileLayer وتحديد أقصى أداء
             FlutterMap(
               mapController: _mapController,
               options: MapOptions(
@@ -253,17 +265,18 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 initialZoom: 15.0,
                 onPositionChanged: (pos, hasGesture) {
                   if (hasGesture) {
-                    _currentMapCenter = pos.center!;
+                    _currentMapCenter = pos.center;
                     _getAddress(_currentMapCenter);
                   }
                 },
               ),
               children: [
                 TileLayer(
-                  urlTemplate: _isSatelliteMode 
-                    ? 'https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken'
-                    : 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
+                  urlTemplate: _isSatelliteMode
+                      ? 'https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken'
+                      : 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
                   additionalOptions: {'accessToken': mapboxToken},
+                  tileProvider: NetworkTileProvider(), // أسرع في تحميل الصور المتتالية
                 ),
               ],
             ),
@@ -277,10 +290,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ),
               ),
             ),
-
             _buildSearchBar(),
-
-            // زر تبديل وضع الخريطة (Satellite/Streets)
+            // زر تبديل وضع الخريطة
             Positioned(
               top: 165,
               left: 20,
@@ -293,7 +304,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ),
               ),
             ),
-
             Positioned(
               top: 50,
               right: 15,
@@ -305,7 +315,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ),
               ),
             ),
-
             _buildActionCard(),
             if (_isLoading) Container(color: Colors.black26, child: const Center(child: CircularProgressIndicator())),
           ],
@@ -334,9 +343,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               decoration: InputDecoration(
                 hintText: _currentStep == PickerStep.pickup ? "ابحث عن مكان الاستلام..." : "ابحث عن وجهة التوصيل...",
                 prefixIcon: const Icon(Icons.search, color: Colors.blueAccent),
-                suffixIcon: _isSearching 
-                  ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))) 
-                  : (_searchController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.close), onPressed: () { _searchController.clear(); setState(() { _searchResults = []; }); }) : null),
+                suffixIcon: _isSearching
+                    ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                    : (_searchController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.close), onPressed: () { _searchController.clear(); setState(() { _searchResults = []; }); }) : null),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(vertical: 15),
               ),
@@ -358,9 +367,19 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 separatorBuilder: (context, index) => const Divider(height: 1),
                 itemBuilder: (context, index) {
                   final res = _searchResults[index];
+                  // تحسين شكل عرض النتائج الذكي
                   return ListTile(
                     leading: const Icon(Icons.place, color: Colors.red, size: 20),
-                    title: Text(res['display_name'], maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                    title: Text(
+                      res['display_name'],
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      "اضغط للانتقال لهذا الموقع",
+                      style: TextStyle(fontSize: 10, color: Colors.grey[600], fontFamily: 'Cairo'),
+                    ),
                     onTap: () => _onSearchResultTap(res),
                   );
                 },
@@ -391,10 +410,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   Icon(Icons.my_location, color: Colors.blue[900], size: 24),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(_tempAddress, 
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, fontFamily: 'Cairo')),
+                    child: Text(_tempAddress,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, fontFamily: 'Cairo')),
                   ),
                 ],
               ),
@@ -454,7 +473,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                               onTap: () async {
                                 setModalState(() => _selectedVehicle = v['id']);
                                 await _updatePricing(v['id']);
-                                setModalState(() {}); 
+                                setModalState(() {});
                               },
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 200),
@@ -533,3 +552,4 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     );
   }
 }
+
