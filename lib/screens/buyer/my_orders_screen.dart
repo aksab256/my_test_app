@@ -1,11 +1,9 @@
 // lib/screens/buyer/my_orders_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-
 // 🎯 استيراد الشريط الموحد الخاص بالـ Buyer والـ Header إذا لزم الأمر
 import 'package:my_test_app/widgets/buyer_mobile_nav_widget.dart';
 
@@ -18,21 +16,20 @@ class MyOrdersScreen extends StatefulWidget {
 }
 
 class _MyOrdersScreenState extends State<MyOrdersScreen> {
-  
   // 🎯 نفس منطق التنقل الموحد اللي موجود في صفحة الأقسام
   void _onItemTapped(int index) {
     switch (index) {
-      case 0: 
-        Navigator.pushReplacementNamed(context, '/traders'); 
+      case 0:
+        Navigator.pushReplacementNamed(context, '/traders');
         break;
-      case 1: 
+      case 1:
         Navigator.of(context).pushNamedAndRemoveUntil('/buyerHome', (route) => false);
         break;
       case 2:
         // نحن بالفعل في صفحة الطلبات، لا نفعل شيء أو نعيد البناء
         break;
-      case 3: 
-        Navigator.pushReplacementNamed(context, '/wallet'); 
+      case 3:
+        Navigator.pushReplacementNamed(context, '/wallet');
         break;
     }
   }
@@ -40,7 +37,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7F6),
       appBar: AppBar(
@@ -52,7 +48,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
           ),
         ),
       ),
-      
       // 🎯 استبدال الشريط القديم بالشريط الموحد الخاص بالـ Buyer
       // وتغليفه بـ SafeArea لضمان المسافات الآمنة تحت أزرار النظام
       bottomNavigationBar: Container(
@@ -67,7 +62,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
           ),
         ),
       ),
-      
       body: SafeArea(
         child: StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
@@ -84,18 +78,18 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
             }
 
             return ListView.builder(
-              padding: const EdgeInsets.fromLTRB(15, 15, 15, 100), 
+              padding: const EdgeInsets.fromLTRB(15, 15, 15, 100),
               itemCount: snapshot.data!.docs.length,
               itemBuilder: (context, index) {
                 var doc = snapshot.data!.docs[index];
                 var data = doc.data() as Map<String, dynamic>;
-                
+
                 return _OrderCard(
                   status: data['status'] ?? 'new-order',
                   total: (data['total'] as num?)?.toDouble() ?? 0.0,
                   orderId: doc.id,
-                  orderDate: (data['orderDate'] is Timestamp) 
-                      ? (data['orderDate'] as Timestamp).toDate() 
+                  orderDate: (data['orderDate'] is Timestamp)
+                      ? (data['orderDate'] as Timestamp).toDate()
                       : DateTime.now(),
                   items: data['items'] as List? ?? [],
                   sellerId: data['sellerId'] ?? '',
@@ -109,7 +103,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
   }
 }
 
-// كلاس الـ _OrderCard يظل كما هو بدون تغيير
+// كلاس الـ _OrderCard يظل كما هو مع تصحيح الأيقونة
 class _OrderCard extends StatelessWidget {
   final String status;
   final double total;
@@ -153,17 +147,17 @@ class _OrderCard extends StatelessWidget {
       ),
       child: ExpansionTile(
         tilePadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-        leading: Icon(
-          status == 'cancelled' ? Icons.cancel : FontAwesomeIcons.fileInvoice,
-          color: status == 'cancelled' ? Colors.red : (isActive ? Colors.green : Colors.grey),
-        ),
-        title: Text("طلب #${orderId.substring(0, 8)}", 
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        // 💡 [التصحيح التقني]: التعامل مع تعارض أنواع الأيقونات بين Icon و FaIcon
+        leading: status == 'cancelled' 
+            ? const Icon(Icons.cancel, color: Colors.red) 
+            : FaIcon(FontAwesomeIcons.fileInvoice, color: isActive ? Colors.green : Colors.grey),
+        title: Text("طلب #${orderId.substring(0, 8)}",
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("التاريخ: ${DateFormat('yyyy-MM-dd').format(orderDate)}", 
-              style: const TextStyle(fontSize: 12)),
+            Text("التاريخ: ${DateFormat('yyyy-MM-dd').format(orderDate)}",
+                style: const TextStyle(fontSize: 12)),
             FutureBuilder<String>(
               future: _getMerchantName(sellerId),
               builder: (context, snapshot) {
@@ -178,11 +172,11 @@ class _OrderCard extends StatelessWidget {
         children: [
           const Divider(),
           ...items.map((item) => ListTile(
-            dense: true,
-            title: Text(item['name'] ?? 'منتج', style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text("الكمية: ${item['quantity']} | ${item['unit'] ?? ''}"),
-            trailing: Text("${item['price']} ج", style: const TextStyle(color: Colors.blueGrey)),
-          )),
+                dense: true,
+                title: Text(item['name'] ?? 'منتج', style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text("الكمية: ${item['quantity']} | ${item['unit'] ?? ''}"),
+                trailing: Text("${item['price']} ج", style: const TextStyle(color: Colors.blueGrey)),
+              )),
           const Divider(),
           Padding(
             padding: const EdgeInsets.all(15),
@@ -190,8 +184,8 @@ class _OrderCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text("إجمالي الفاتورة:", style: TextStyle(fontWeight: FontWeight.bold)),
-                Text("$total جنيه", 
-                  style: const TextStyle(color: Color(0xFF2E7D32), fontWeight: FontWeight.bold, fontSize: 18)),
+                Text("$total جنيه",
+                    style: const TextStyle(color: Color(0xFF2E7D32), fontWeight: FontWeight.bold, fontSize: 18)),
               ],
             ),
           )
@@ -200,3 +194,4 @@ class _OrderCard extends StatelessWidget {
     );
   }
 }
+

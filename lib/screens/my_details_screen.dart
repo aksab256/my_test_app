@@ -1,5 +1,4 @@
 // lib/screens/my_details_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -46,9 +45,10 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
     if (user == null) return;
 
     try {
-      DocumentSnapshot docSnap = await FirebaseFirestore.instance.collection('consumers').doc(user.uid).get();
+      DocumentSnapshot docSnap =
+          await FirebaseFirestore.instance.collection('consumers').doc(user.uid).get();
       String col = 'consumers';
-      
+
       if (!docSnap.exists) {
         col = 'users';
         docSnap = await FirebaseFirestore.instance.collection(col).doc(user.uid).get();
@@ -71,7 +71,7 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
 
   Future<void> _updateProfile() async {
     if (_nameController.text.isEmpty) return;
-    
+
     setState(() => _isUpdating = true);
     final user = FirebaseAuth.instance.currentUser;
     final col = _userData?['activeCollection'];
@@ -80,7 +80,7 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
       Map<String, dynamic> updates = {
         'address': _addressController.text.trim(),
       };
-      
+
       if (col == 'consumers') {
         updates['fullname'] = _nameController.text.trim();
       } else {
@@ -107,7 +107,8 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
       child: Scaffold(
         backgroundColor: Colors.grey[50],
         appBar: AppBar(
-          title: const Text('الملف الشخصي', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          title: const Text('الملف الشخصي',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           backgroundColor: _primaryColor,
           foregroundColor: Colors.white,
           centerTitle: true,
@@ -148,14 +149,16 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
       decoration: BoxDecoration(
         gradient: LinearGradient(colors: [_primaryColor, _primaryColor.withOpacity(0.8)]),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: _primaryColor.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))],
+        boxShadow: [
+          BoxShadow(
+              color: _primaryColor.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))
+        ],
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(4),
-            // ✅ تم التصحيح هنا: BoxShape بدلاً من BoxType وإزالة const
-            decoration: BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
+            decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
             child: const CircleAvatar(
               radius: 30,
               backgroundColor: Colors.white,
@@ -167,15 +170,19 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_nameController.text, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(_nameController.text,
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                 if (isConsumer)
                   Padding(
                     padding: const EdgeInsets.only(top: 5),
                     child: Row(
                       children: [
-                        const Icon(FontAwesomeIcons.coins, color: Colors.amber, size: 14),
+                        // 💡 [التصحيح التقني]: استخدام FaIcon بدلاً من Icon لتوافق FontAwesome 11
+                        const FaIcon(FontAwesomeIcons.coins, color: Colors.amber, size: 14),
                         const SizedBox(width: 6),
-                        Text('رصيد النقاط: ${_userData?['loyaltyPoints'] ?? 0}', style: const TextStyle(color: Colors.white, fontSize: 13)),
+                        Text('رصيد النقاط: ${_userData?['loyaltyPoints'] ?? 0}',
+                            style: const TextStyle(color: Colors.white, fontSize: 13)),
                       ],
                     ),
                   ),
@@ -205,9 +212,13 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               elevation: 0,
             ),
-            child: _isUpdating 
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-                : const Text('حفظ التعديلات', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: _isUpdating
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Text('حفظ التعديلات',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ),
       ],
@@ -220,8 +231,14 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
       icon: Icons.security,
       children: [
         _buildReadOnlyField('رقم الهاتف', _userData?['phone'] ?? 'غير متوفر', Icons.phone_android),
-        _buildReadOnlyField('البريد الإلكتروني', _userData?['email'] ?? 'غير متوفر', Icons.alternate_email),
-        _buildReadOnlyField('عضو منذ', _userData?['createdAt'] != null ? (_userData!['createdAt'] as Timestamp).toDate().toString().split(' ')[0] : 'غير متوفر', Icons.event_available),
+        _buildReadOnlyField(
+            'البريد الإلكتروني', _userData?['email'] ?? 'غير متوفر', Icons.alternate_email),
+        _buildReadOnlyField(
+            'عضو منذ',
+            _userData?['createdAt'] != null
+                ? (_userData!['createdAt'] as Timestamp).toDate().toString().split(' ')[0]
+                : 'غير متوفر',
+            Icons.event_available),
       ],
     );
   }
@@ -240,12 +257,14 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
           ),
         ),
         const SizedBox(height: 15),
-        const Text('منصة أسواق أكسب - v2.0.2', style: TextStyle(color: Colors.grey, fontSize: 11)),
+        const Text('منصة أسواق أكسب - v2.0.2',
+            style: TextStyle(color: Colors.grey, fontSize: 11)),
       ],
     );
   }
 
-  Widget _buildSectionContainer({required String title, required IconData icon, required List<Widget> children}) {
+  Widget _buildSectionContainer(
+      {required String title, required IconData icon, required List<Widget> children}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -253,7 +272,9 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
           children: [
             Icon(icon, size: 18, color: _accentColor),
             const SizedBox(width: 8),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: _primaryColor, fontSize: 15)),
+            Text(title,
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, color: _primaryColor, fontSize: 15)),
           ],
         ),
         const SizedBox(height: 10),
@@ -296,7 +317,8 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
+            decoration:
+                BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
             child: Icon(icon, size: 18, color: _primaryColor),
           ),
           const SizedBox(width: 15),
@@ -304,7 +326,9 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-              Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: _primaryColor)),
+              Text(value,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.bold, color: _primaryColor)),
             ],
           ),
         ],
@@ -313,61 +337,62 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
   }
 
   void _showDeleteDialog() {
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      title: const Text('طلب حذف الحساب', style: TextStyle(fontWeight: FontWeight.bold, color: _deleteColor)),
-      content: const Text(
-        'سيتم البدء في إجراءات حذف حسابك وكافة بياناتك نهائياً. سيتم تسجيل خروجك الآن ومعالجة الطلب خلال 48 ساعة. هل أنت متأكد؟',
-        style: TextStyle(fontSize: 14),
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Text('طلب حذف الحساب',
+            style: TextStyle(fontWeight: FontWeight.bold, color: _deleteColor)),
+        content: const Text(
+          'سيتم البدء في إجراءات حذف حسابك وكافة بياناتك نهائياً. سيتم تسجيل خروجك الآن ومعالجة الطلب خلال 48 ساعة. هل أنت متأكد؟',
+          style: TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('تراجع', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context); // إغلاق الديالوج
+              await _handleDeleteAccount(); // تنفيذ الحذف الفعلي
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: _deleteColor, elevation: 0),
+            child: const Text('تأكيد الحذف', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('تراجع', style: TextStyle(color: Colors.grey)),
-        ),
-        ElevatedButton(
-          onPressed: () async {
-            Navigator.pop(context); // إغلاق الديالوج
-            await _handleDeleteAccount(); // تنفيذ الحذف الفعلي
-          },
-          style: ElevatedButton.styleFrom(backgroundColor: _deleteColor, elevation: 0),
-          child: const Text('تأكيد الحذف', style: TextStyle(color: Colors.white)),
-        ),
-      ],
-    ),
-  );
-}
+    );
+  }
 
-// الدالة المسؤولة عن التنفيذ الفعلي المتوافق مع جوجل
-Future<void> _handleDeleteAccount() async {
-  final user = FirebaseAuth.instance.currentUser;
-  final col = _userData?['activeCollection'];
+  Future<void> _handleDeleteAccount() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final col = _userData?['activeCollection'];
 
-  if (user == null || col == null) return;
+    if (user == null || col == null) return;
+    try {
+      // 1. تحديث حالة الحساب في Firestore ليعرف النظام أنه "قيد الحذف"
+      await FirebaseFirestore.instance.collection(col).doc(user.uid).update({
+        'status': 'delete_requested',
+        'deletionDate': FieldValue.serverTimestamp(),
+      });
 
-  try {
-    // 1. تحديث حالة الحساب في Firestore ليعرف النظام أنه "قيد الحذف"
-    await FirebaseFirestore.instance.collection(col).doc(user.uid).update({
-      'status': 'delete_requested',
-      'deletionDate': FieldValue.serverTimestamp(),
-    });
+      // 2. تسجيل الخروج فوراً (شرط أساسي لجوجل ليشعر المستخدم ببدء الإجراء)
+      await FirebaseAuth.instance.signOut();
 
-    // 2. تسجيل الخروج فوراً (شرط أساسي لجوجل ليشعر المستخدم ببدء الإجراء)
-    await FirebaseAuth.instance.signOut();
-
-    // 3. التوجيه لشاشة تسجيل الدخول
-    if (mounted) {
-      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم استلام طلبك وسيتم حذف البيانات نهائياً')),
-      );
-    }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حدث خطأ، حاول مرة أخرى')));
+      // 3. التوجيه لشاشة تسجيل الدخول
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم استلام طلبك وسيتم حذف البيانات نهائياً')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('حدث خطأ، حاول مرة أخرى')));
+      }
     }
   }
 }
-}
+

@@ -1,6 +1,5 @@
 import 'package:firebase_crashlytics/firebase_crashlytics.dart'; // 🚀 إضافة مكتبة الكراشليتكس
 import 'package:flutter/foundation.dart'; // 🚀 ضرورية لالتقاط الأخطاء
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // ✅ مستورد للتحكم في شريط الحالة
 import 'package:firebase_core/firebase_core.dart';
@@ -13,16 +12,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:latlong2/latlong.dart'; 
-import 'package:facebook_app_events/facebook_app_events.dart'; 
-
+import 'package:latlong2/latlong.dart';
+import 'package:facebook_app_events/facebook_app_events.dart';
 import 'package:my_test_app/firebase_options.dart';
 import 'package:my_test_app/theme/app_theme.dart';
 import 'package:my_test_app/providers/theme_notifier.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:my_test_app/widgets/connectivity_wrapper.dart';
-
 
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/providers/manufacturers_provider.dart';
@@ -34,7 +31,6 @@ import 'package:my_test_app/controllers/seller_dashboard_controller.dart';
 import 'package:my_test_app/models/logged_user.dart';
 import 'package:my_test_app/services/user_session.dart';
 import 'package:my_test_app/models/user_role.dart';
-
 // استيراد الشاشات
 import 'package:my_test_app/screens/login_screen.dart';
 import 'package:my_test_app/screens/seller_screen.dart';
@@ -77,7 +73,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ar', null);
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-    // 🛡️ إعدادات Firebase Crashlytics
+
+  // 🛡️ إعدادات Firebase Crashlytics
   // التقاط جميع الأخطاء التي لم يتم التعامل معها بواسطة إطار عمل فلاتر
   FlutterError.onError = (errorDetails) {
     FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
@@ -89,21 +86,22 @@ void main() async {
     return true;
   };
 
-
   // 🚀 تفعيل تتبع فتح التطبيق في فيسبوك
   final facebookAppEvents = FacebookAppEvents();
   facebookAppEvents.logEvent(name: 'fb_mobile_activate_app');
 
   // 🎨 ضبط شريط الحالة ليكون شفافاً مع أيقونات بيضاء لتناسب الهيدر الأخضر
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+  SystemChrome.setSystemUIOverlayStyle(const SystemOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light, // أيقونات بيضاء (ساعة، بطارية)
-    statusBarBrightness: Brightness.dark,      // للـ iOS
+    statusBarBrightness: Brightness.dark, // للـ iOS
   ));
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
+  
+  // 💡 [التصحيح التقني]: استخدام Named Argument للإعدادات بدلاً من Positional للتوافق مع الإصدار الجديد
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
@@ -121,7 +119,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => ThemeNotifier(ThemeMode.light)), 
+        ChangeNotifierProvider(create: (_) => ThemeNotifier(ThemeMode.light)),
         ChangeNotifierProvider(create: (_) => BuyerDataProvider()),
         ChangeNotifierProvider(create: (_) => ManufacturersProvider()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
@@ -163,9 +161,7 @@ class MyApp extends StatelessWidget {
             GlobalCupertinoLocalizations.delegate,
           ],
           supportedLocales: const [Locale('ar', 'EG')],
-          
-          themeMode: ThemeMode.light, 
-          
+          themeMode: ThemeMode.light,
           theme: ThemeData(
             brightness: Brightness.light,
             primaryColor: AppTheme.primaryGreen,
@@ -180,10 +176,9 @@ class MyApp extends StatelessWidget {
               elevation: 0,
               iconTheme: IconThemeData(color: Colors.black),
               // لضمان استقرار شريط الحالة داخل الـ AppBar
-              systemOverlayStyle: SystemUiOverlayStyle.dark, 
+              systemOverlayStyle: SystemOverlayStyle.dark,
             ),
           ),
-          
           initialRoute: '/',
           routes: {
             '/': (context) => const AuthWrapper(),
@@ -196,10 +191,9 @@ class MyApp extends StatelessWidget {
             CheckoutScreen.routeName: (context) => const CheckoutScreen(),
             MyOrdersScreen.routeName: (context) => const MyOrdersScreen(),
             SearchScreen.routeName: (context) => SearchScreen(
-              userRole: Provider.of<BuyerDataProvider>(context, listen: false).userRole == 'consumer' 
-                  ? UserRole.consumer 
-                  : UserRole.buyer
-            ),
+                userRole: Provider.of<BuyerDataProvider>(context, listen: false).userRole == 'consumer'
+                    ? UserRole.consumer
+                    : UserRole.buyer),
             '/register': (context) => const NewClientScreen(),
             '/traders': (context) => const TradersScreen(),
             '/wallet': (context) => const WalletScreen(),
@@ -241,19 +235,33 @@ class MyApp extends StatelessWidget {
   Route? _onGenerateRoute(RouteSettings settings) {
     if (settings.name == MarketplaceHomeScreen.routeName) {
       final args = settings.arguments as Map<String, dynamic>?;
-      return MaterialPageRoute(builder: (context) => MarketplaceHomeScreen(currentStoreId: args?['storeId'] ?? '', currentStoreName: args?['storeName'] ?? 'المتجر'));
+      return MaterialPageRoute(
+          builder: (context) => MarketplaceHomeScreen(
+              currentStoreId: args?['storeId'] ?? '',
+              currentStoreName: args?['storeName'] ?? 'المتجر'));
     }
     if (settings.name == '/subcategories') {
       final args = settings.arguments as Map<String, dynamic>?;
-      return MaterialPageRoute(builder: (context) => ConsumerSubCategoryScreen(mainCategoryId: args?['mainId'] ?? '', ownerId: args?['ownerId'] ?? '', mainCategoryName: args?['mainCategoryName'] ?? ''));
+      return MaterialPageRoute(
+          builder: (context) => ConsumerSubCategoryScreen(
+              mainCategoryId: args?['mainId'] ?? '',
+              ownerId: args?['ownerId'] ?? '',
+              mainCategoryName: args?['mainCategoryName'] ?? ''));
     }
     if (settings.name == ConsumerProductListScreen.routeName) {
       final args = settings.arguments as Map<String, dynamic>?;
-      return MaterialPageRoute(builder: (context) => ConsumerProductListScreen(ownerId: args?['ownerId'] ?? '', mainId: args?['mainId'] ?? '', subId: args?['subId'] ?? '', subCategoryName: args?['subCategoryName'] ?? 'المنتجات'));
+      return MaterialPageRoute(
+          builder: (context) => ConsumerProductListScreen(
+              ownerId: args?['ownerId'] ?? '',
+              mainId: args?['mainId'] ?? '',
+              subId: args?['subId'] ?? '',
+              subCategoryName: args?['subCategoryName'] ?? 'المنتجات'));
     }
     if (settings.name == '/productDetails') {
       final args = settings.arguments as Map<String, dynamic>?;
-      return MaterialPageRoute(builder: (context) => ProductDetailsScreen(productId: args?['productId'] ?? '', offerId: args?['offerId']));
+      return MaterialPageRoute(
+          builder: (context) => ProductDetailsScreen(
+              productId: args?['productId'] ?? '', offerId: args?['offerId']));
     }
     if (settings.name == TraderOffersScreen.routeName) {
       final sellerId = settings.arguments as String? ?? '';
@@ -265,7 +273,9 @@ class MyApp extends StatelessWidget {
     }
     if (settings.name == '/products') {
       final args = settings.arguments as Map<String, dynamic>? ?? {};
-      return MaterialPageRoute(builder: (context) => BuyerProductListScreen(mainCategoryId: args['mainId'] ?? '', subCategoryId: args['subId'] ?? ''));
+      return MaterialPageRoute(
+          builder: (context) => BuyerProductListScreen(
+              mainCategoryId: args['mainId'] ?? '', subCategoryId: args['subId'] ?? ''));
     }
     return null;
   }
@@ -285,7 +295,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
     super.initState();
     _userFuture = _checkUserLoginStatus();
   }
-    Future<LoggedInUser?> _checkUserLoginStatus() async {
+
+  Future<LoggedInUser?> _checkUserLoginStatus() async {
     final prefs = await SharedPreferences.getInstance();
     final userJson = prefs.getString('loggedUser');
     if (userJson != null) {
@@ -294,26 +305,23 @@ class _AuthWrapperState extends State<AuthWrapper> {
         final String uid = userMap['id'];
 
         // --- 🛡️ التعديل الشامل المضاف هنا لحماية الحذف ---
-        
         // 1. فحص المستهلك أولاً في كولكشن consumers
         var userDoc = await FirebaseFirestore.instance.collection('consumers').doc(uid).get();
-        
         // 2. إذا لم يوجد، فحص المشتري (Buyer) في كولكشن users
         if (!userDoc.exists) {
           userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
         }
         if (!userDoc.exists) {
-        userDoc = await FirebaseFirestore.instance.collection('sellers').doc(uid).get();
+          userDoc = await FirebaseFirestore.instance.collection('sellers').doc(uid).get();
         }
 
         // 3. إذا وجد الحساب في أي منهما وكان قيد الحذف، اطرده
         if (userDoc.exists && userDoc.data()?['status'] == 'delete_requested') {
           await FirebaseAuth.instance.signOut();
           await prefs.remove('loggedUser');
-          return null; 
+          return null;
         }
         // ----------------------------------------------
-
         await UserSession.loadSession();
         final user = LoggedInUser.fromJson(userMap);
         final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
@@ -327,14 +335,14 @@ class _AuthWrapperState extends State<AuthWrapper> {
     return null;
   }
 
-
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<LoggedInUser?>(
       future: _userFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF43A047))));
+          return const Scaffold(
+              body: Center(child: CircularProgressIndicator(color: Color(0xFF43A047))));
         }
         if (snapshot.hasData && snapshot.data != null) {
           final user = snapshot.data!;
@@ -362,9 +370,11 @@ class PostRegistrationMessageScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(isSeller ? Icons.pending_actions : Icons.check_circle, color: isSeller ? Colors.orange : Colors.green, size: 80),
+            Icon(isSeller ? Icons.pending_actions : Icons.check_circle,
+                color: isSeller ? Colors.orange : Colors.green, size: 80),
             const SizedBox(height: 20),
-            Text(isSeller ? 'حسابك قيد المراجعة' : 'تم التسجيل بنجاح', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(isSeller ? 'حسابك قيد المراجعة' : 'تم التسجيل بنجاح',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 40),
             const CircularProgressIndicator(),
           ],
@@ -373,3 +383,4 @@ class PostRegistrationMessageScreen extends StatelessWidget {
     );
   }
 }
+
