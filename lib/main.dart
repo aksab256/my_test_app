@@ -31,7 +31,7 @@ import 'package:my_test_app/controllers/seller_dashboard_controller.dart';
 import 'package:my_test_app/models/logged_user.dart';
 import 'package:my_test_app/services/user_session.dart';
 import 'package:my_test_app/models/user_role.dart';
-// استيراد الشاشات
+
 import 'package:my_test_app/screens/login_screen.dart';
 import 'package:my_test_app/screens/seller_screen.dart';
 import 'package:my_test_app/screens/buyer/buyer_home_screen.dart';
@@ -93,13 +93,16 @@ void main() async {
   ));
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-  const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
-  const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
   
-  // 🎯 تعديلك هو الصحيح يا هندسة لتجاوز قيود الإصدار 3.41.4
+  const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
+  const InitializationSettings initializationSettings = InitializationSettings(
+    android: initializationSettingsAndroid,
+  );
+  
+  // 🚀 المحاولة النهائية: تمرير الإعدادات كـ Named Argument صريح
   await flutterLocalNotificationsPlugin.initialize(
     initializationSettings,
-    onDidReceiveNotificationResponse: (NotificationResponse details) {},
+    onDidReceiveNotificationResponse: (details) {},
   );
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
