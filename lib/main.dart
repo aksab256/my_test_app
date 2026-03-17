@@ -96,9 +96,9 @@ void main() async {
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
   
-  // 🛡️ التعديل التقني الوحيد: تسمية المعامل لتوافق نسخة 21.0.0
+  // ✅ هذا هو السطر الذي سيجعل المشروع يعمل مع النسخة 21.0.0
   await flutterLocalNotificationsPlugin.initialize(
-    initializationSettings,
+    initializationSettings: initializationSettings, 
     onDidReceiveNotificationResponse: (NotificationResponse details) {},
   );
 
