@@ -78,8 +78,8 @@ class _PlatformBalanceScreenState extends State<PlatformBalanceScreen> {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: const Color(0xFF007bff),
-        title: Text('الحساب المالي للمنصة', 
-          style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+        title: Text('الحساب المالي للمنصة',
+            style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
         centerTitle: true,
         actions: [
           IconButton(
@@ -99,7 +99,7 @@ class _PlatformBalanceScreenState extends State<PlatformBalanceScreen> {
                   _buildBalanceCard("عمولات مستحقة للمنصة", realizedAmount, "رسوم الطلبات المسلمة فعلياً", const Color(0xFF28a745), FontAwesomeIcons.calculator),
                   _buildBalanceCard("عمولات قيد المعالجة", unrealizedAmount, "طلبات لم يكتمل تسليمها بعد", const Color(0xFFffc107), FontAwesomeIcons.hourglassHalf),
                   const Divider(height: 30, thickness: 1),
-                  _buildBalanceCard("مديونية كاش باك (عليكم)", cashbackDebtAmount, "فرق كاش باك لمورد آخر", const Color(0xFFdc3545), FontAwesomeIcons.arrowDown),
+                  _buildBalanceCard("مديونية كاش باك (عليكم)", cashbackDebtAmount, "فرق كاش باك لم مورد آخر", const Color(0xFFdc3545), FontAwesomeIcons.arrowDown),
                   _buildBalanceCard("ائتمان كاش باك (لكم)", cashbackCreditAmount, "تعويض كاش باك من المنصة", const Color(0xFF007bff), FontAwesomeIcons.arrowUp),
                 ],
               ),
@@ -123,7 +123,7 @@ class _PlatformBalanceScreenState extends State<PlatformBalanceScreen> {
           SizedBox(width: 3.w),
           Expanded(
             child: Text("توجد فاتورة شهرية مستحقة الدفع حالياً.",
-              style: TextStyle(color: Colors.red.shade900, fontWeight: FontWeight.bold, fontSize: 13.sp, fontFamily: 'Cairo')),
+                style: TextStyle(color: Colors.red.shade900, fontWeight: FontWeight.bold, fontSize: 13.sp, fontFamily: 'Cairo')),
           ),
           TextButton(onPressed: _navigateToInvoices, child: const Text("عرض")),
         ],
@@ -131,7 +131,8 @@ class _PlatformBalanceScreenState extends State<PlatformBalanceScreen> {
     );
   }
 
-  Widget _buildBalanceCard(String title, double amount, String desc, Color color, IconData icon) {
+  // 💡 [التصحيح التقني]: تغيير نوع البارامتر icon ليكون dynamic ليقبل FaIconData الخاص بـ FontAwesome 11
+  Widget _buildBalanceCard(String title, double amount, String desc, Color color, dynamic icon) {
     return Container(
       margin: EdgeInsets.only(bottom: 2.h),
       padding: EdgeInsets.all(5.w),
@@ -142,6 +143,7 @@ class _PlatformBalanceScreenState extends State<PlatformBalanceScreen> {
       ),
       child: Row(
         children: [
+          // 💡 [التصحيح]: استخدام FaIcon بدلاً من Icon لعرض أيقونات FontAwesome بشكل صحيح
           FaIcon(icon, color: color, size: 24),
           SizedBox(width: 4.w),
           Expanded(
@@ -153,8 +155,8 @@ class _PlatformBalanceScreenState extends State<PlatformBalanceScreen> {
               ],
             ),
           ),
-          Text("${amount.toStringAsFixed(2)}", 
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15.sp, color: color, fontFamily: 'Cairo')),
+          Text("${amount.toStringAsFixed(2)}",
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15.sp, color: color, fontFamily: 'Cairo')),
         ],
       ),
     );

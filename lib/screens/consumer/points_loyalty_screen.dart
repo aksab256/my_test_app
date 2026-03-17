@@ -104,7 +104,6 @@ class _PointsLoyaltyScreenState extends State<PointsLoyaltyScreen> {
                   const SizedBox(height: 30),
                   _buildSectionHeader(Icons.auto_awesome, "كيف تكسب المزيد؟"),
                   _buildEarningRules(),
-                  
                   // ✨ نص إخلاء المسؤولية المعتمد لجوجل بلاي
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 30, horizontal: 10),
@@ -124,7 +123,8 @@ class _PointsLoyaltyScreenState extends State<PointsLoyaltyScreen> {
     );
   }
 
-  Widget _buildSummaryCard({required String title, required String value, required String unit, required IconData icon, required List<Color> gradient}) {
+  // 💡 [التعديل التقني]: تغيير نوع الـ icon لـ dynamic ليتوافق مع FaIconData في FontAwesome 11
+  Widget _buildSummaryCard({required String title, required String value, required String unit, required dynamic icon, required List<Color> gradient}) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -135,7 +135,15 @@ class _PointsLoyaltyScreenState extends State<PointsLoyaltyScreen> {
       ),
       child: Column(
         children: [
-          Text(title, style: const TextStyle(color: Colors.white, fontSize: 16)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // 💡 [التعديل التقني]: استخدام FaIcon بدلاً من Icon
+              FaIcon(icon, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Text(title, style: const TextStyle(color: Colors.white, fontSize: 16)),
+            ],
+          ),
           const SizedBox(height: 8),
           Text(value, style: const TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.bold)),
           Text(unit, style: const TextStyle(color: Colors.white70, fontSize: 15)),
@@ -167,6 +175,8 @@ class _PointsLoyaltyScreenState extends State<PointsLoyaltyScreen> {
         final int reqPoints = rate['pointsRequired'] ?? 1000;
         final double cashVal = (rate['cashEquivalent'] ?? 10).toDouble();
         final int minPoints = rate['minPointsForRedemption'] ?? 500;
+        
+        // 💡 [تعديل المنطق]: الزر يصبح غير مفعل برمجياً إذا لم تتحقق الشروط
         bool canRedeem = currentPoints >= minPoints;
 
         return Container(
@@ -180,9 +190,19 @@ class _PointsLoyaltyScreenState extends State<PointsLoyaltyScreen> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
+                  // 💡 [التحسين]: التحقق هنا يمنع استدعاء الدالة تماماً ويغير شكل الزر لـ Disabled
                   onPressed: (_isRedeeming || !canRedeem) ? null : () => _redeemPoints(),
-                  style: ElevatedButton.styleFrom(backgroundColor: primaryBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  child: _isRedeeming ? const CircularProgressIndicator(color: Colors.white) : Text(canRedeem ? "استبدل الآن" : "النقاط غير كافية للاستبدال"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryBlue,
+                    disabledBackgroundColor: Colors.grey.shade300, // لون الزر وهو مقفول
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                  ),
+                  child: _isRedeeming 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                    : Text(
+                        canRedeem ? "استبدل الآن" : "النقاط غير كافية (المطلوب $minPoints)", 
+                        style: TextStyle(color: canRedeem ? Colors.white : Colors.black54, fontWeight: FontWeight.bold)
+                      ),
                 ),
               ),
             ],
@@ -229,3 +249,4 @@ class _PointsLoyaltyScreenState extends State<PointsLoyaltyScreen> {
     );
   }
 }
+

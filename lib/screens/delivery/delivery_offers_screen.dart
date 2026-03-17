@@ -1,5 +1,4 @@
 // المسار: lib/screens/delivery/delivery_offers_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -11,7 +10,6 @@ import 'package:my_test_app/providers/product_offer_provider.dart';
 import 'package:my_test_app/models/logged_user.dart';
 import 'package:my_test_app/models/product_offer.dart';
 import '../../theme/app_theme.dart';
-
 import 'package:my_test_app/screens/buyer/buyer_home_screen.dart';
 import 'package:my_test_app/screens/delivery_merchant_dashboard_screen.dart';
 
@@ -38,14 +36,14 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final loggedUserString = prefs.getString('loggedUser');
-      
+
       if (!mounted) return;
       final provider = Provider.of<ProductOfferProvider>(context, listen: false);
 
       if (loggedUserString != null) {
         final userData = jsonDecode(loggedUserString);
         final loggedUser = LoggedInUser.fromJson(userData);
-        
+
         setState(() {
           _currentUser = loggedUser;
           _welcomeMessage = 'أهلاً، ${loggedUser.fullname ?? 'تاجرنا'}';
@@ -80,8 +78,8 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text('إدارة قائمة الأسعار', 
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.white)),
+        title: const Text('إدارة قائمة الأسعار',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.white)),
         backgroundColor: AppTheme.primaryGreen,
         centerTitle: true,
         elevation: 0,
@@ -99,11 +97,11 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
               _buildHeader(offers.length),
               _buildSearchBar(),
               Expanded(
-                child: provider.isLoading 
-                  ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryGreen))
-                  : offers.isEmpty 
-                    ? _buildEmptyState()
-                    : _buildOffersList(offers),
+                child: provider.isLoading
+                    ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryGreen))
+                    : offers.isEmpty
+                        ? _buildEmptyState()
+                        : _buildOffersList(offers),
               ),
             ],
           );
@@ -116,31 +114,22 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
       decoration: const BoxDecoration(
-        color: AppTheme.primaryGreen,
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(30), 
-          bottomRight: Radius.circular(30)
-        ),
-      ),
+          color: AppTheme.primaryGreen,
+          borderRadius: BorderRadius.only(bottomLeft: Radius.circular(30), bottomRight: Radius.circular(30))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(_welcomeMessage, 
-            style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14)),
+          Text(_welcomeMessage, style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14)),
           const SizedBox(height: 5),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('عروضك المتاحة', 
-                style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+              const Text('عروضك المتاحة',
+                  style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2), 
-                  borderRadius: BorderRadius.circular(15)
-                ),
-                child: Text('$count منتج', 
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(15)),
+                child: Text('$count منتج', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -200,23 +189,25 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: (offer.productDetails.imageUrls.isNotEmpty && offer.productDetails.imageUrls.first.startsWith('http'))
-                      ? Image.network(
-                          offer.productDetails.imageUrls.first,
-                          fit: BoxFit.cover,
-                          errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey),
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)));
-                          },
-                        )
-                      : const Icon(Icons.fastfood, color: Colors.grey),
+                    child: (offer.productDetails.imageUrls.isNotEmpty &&
+                            offer.productDetails.imageUrls.first.startsWith('http'))
+                        ? Image.network(
+                            offer.productDetails.imageUrls.first,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey),
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return const Center(
+                                  child: SizedBox(
+                                      width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)));
+                            },
+                          )
+                        : const Icon(Icons.fastfood, color: Colors.grey),
                   ),
                 ),
-                title: Text(offer.productDetails.name, 
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                title: Text(offer.productDetails.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
                 subtitle: Text('تحديث: ${DateFormat('dd/MM/yyyy').format(offer.createdAt)}',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12)),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete_sweep, color: Colors.redAccent, size: 28),
                   onPressed: () => _confirmDelete(offer.id),
@@ -227,10 +218,7 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color: Colors.grey[50],
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(20), 
-                    bottomRight: Radius.circular(20)
-                  ),
+                  borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(20), bottomRight: Radius.circular(20)),
                 ),
                 child: Column(
                   children: offer.units.asMap().entries.map((entry) {
@@ -244,16 +232,16 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
                           const SizedBox(width: 8),
                           Text(unit.unitName, style: const TextStyle(fontWeight: FontWeight.w600)),
                           const Spacer(),
-                          Text('${unit.price} ج.م', 
-                            style: const TextStyle(color: AppTheme.primaryGreen, fontWeight: FontWeight.bold, fontSize: 16)),
+                          Text('${unit.price} ج.م',
+                              style: const TextStyle(
+                                  color: AppTheme.primaryGreen, fontWeight: FontWeight.bold, fontSize: 16)),
                           const SizedBox(width: 15),
                           TextButton(
                             style: TextButton.styleFrom(
-                              backgroundColor: Colors.blue.withOpacity(0.1),
-                              minimumSize: const Size(60, 30),
-                              padding: const EdgeInsets.symmetric(horizontal: 10),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
-                            ),
+                                backgroundColor: Colors.blue.withOpacity(0.1),
+                                minimumSize: const Size(60, 30),
+                                padding: const EdgeInsets.symmetric(horizontal: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                             onPressed: () => _showEditPriceModal(offer, unitIndex),
                             child: const Text('تعديل', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           ),
@@ -276,7 +264,8 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         title: const Text('حذف المنتج', textAlign: TextAlign.right),
-        content: const Text('هل تريد إزالة هذا المنتج من قائمة أسعارك؟ سيختفي من متجر العملاء أيضاً.', textAlign: TextAlign.right),
+        content: const Text('هل تريد إزالة هذا المنتج من قائمة أسعارك؟ سيختفي من متجر العملاء أيضاً.',
+            textAlign: TextAlign.right),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
           ElevatedButton(
@@ -304,17 +293,17 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
         ),
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20, 
-          left: 25, right: 25, top: 20
-        ),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom + 20, left: 25, right: 25, top: 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+            Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
             const SizedBox(height: 20),
-            Text('تعديل سعر ${offer.units[index].unitName}', 
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.primaryGreen)),
+            Text('تعديل سعر ${offer.units[index].unitName}',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.primaryGreen)),
             const SizedBox(height: 10),
             Text(offer.productDetails.name, style: TextStyle(color: Colors.grey[600])),
             const SizedBox(height: 25),
@@ -337,22 +326,23 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
               height: 55,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryGreen,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                  elevation: 0
-                ),
+                    backgroundColor: AppTheme.primaryGreen,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    elevation: 0),
                 onPressed: () async {
                   final price = double.tryParse(controller.text);
                   if (price != null) {
                     await Provider.of<ProductOfferProvider>(context, listen: false).updateUnitPrice(
-                      offerId: offer.id, unitIndex: index, newPrice: price,
+                      offerId: offer.id,
+                      unitIndex: index,
+                      newPrice: price,
                     );
                     if (mounted) Navigator.pop(ctx);
                     _showSnackBar('تم تحديث السعر بنجاح', Colors.blue);
                   }
                 },
-                child: const Text('حفظ السعر الجديد', 
-                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                child: const Text('حفظ السعر الجديد',
+                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -368,8 +358,8 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
         children: [
           Icon(Icons.search_off_rounded, size: 100, color: Colors.grey[300]),
           const SizedBox(height: 20),
-          const Text('لم نجد هذا المنتج في قائمتك', 
-            style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.bold)),
+          const Text('لم نجد هذا المنتج في قائمتك',
+              style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -380,19 +370,23 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
       height: 75,
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))],
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))
+        ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildNavBtn(context, FontAwesomeIcons.chartPie, 'الإحصائيات', Colors.blueGrey, DeliveryMerchantDashboardScreen.routeName),
+          _buildNavBtn(context, FontAwesomeIcons.chartPie, 'الإحصائيات', Colors.blueGrey,
+              DeliveryMerchantDashboardScreen.routeName),
           _buildNavBtn(context, FontAwesomeIcons.shop, 'عرض المتجر', Colors.blue, BuyerHomeScreen.routeName),
         ],
       ),
     );
   }
 
-  Widget _buildNavBtn(BuildContext context, IconData icon, String label, Color color, String route) {
+  // 💡 [التصحيح التقني]: تغيير نوع البارامتر icon ليقبل أي نوع (dynamic) لأن FontAwesomeIcons الآن تعيد FaIconData
+  Widget _buildNavBtn(BuildContext context, dynamic icon, String label, Color color, String route) {
     return InkWell(
       // 🛡️ تأمين زرار التنقل: لا يسمح بالانتقال إلا إذا كانت بيانات المستخدم موجودة
       onTap: () {
@@ -405,6 +399,7 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          // 💡 [التصحيح]: استخدام FaIcon بدلاً من Icon ليتوافق مع FontAwesome 11
           FaIcon(icon, color: color, size: 20),
           const SizedBox(height: 6),
           Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
@@ -413,3 +408,4 @@ class _DeliveryOffersScreenState extends State<DeliveryOffersScreen> {
     );
   }
 }
+

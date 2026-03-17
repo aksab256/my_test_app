@@ -13,7 +13,6 @@ import 'package:my_test_app/screens/consumer/consumer_product_details_screen.dar
 
 class ConsumerProductListScreen extends StatefulWidget {
   static const routeName = '/consumerProducts'; // المسار الجديد
-
   final String ownerId;
   final String mainId;
   final String subId;
@@ -51,16 +50,13 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
   }
 
   // 2. دالة الإضافة إلى السلة
-  void _addToCart(
-      BuildContext context, ProductModel product, ProductOfferModel offer) async {
+  void _addToCart(BuildContext context, ProductModel product, ProductOfferModel offer) async {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
-
     // استخدام الوحدة الأولى فقط كما في JS
     if (offer.units.isEmpty) return;
     final firstUnit = offer.units.first;
     // 💡 الحصول على الاسم المُمرَّر الأصلي (للتشخيص)
     final passedName = offer.sellerName!;
-
     try {
       // 🎯 [التصحيح]: مطابقة الوسائط المسماة الجديدة وحل مشاكل String?
       await cartProvider.addItemToCart(
@@ -78,12 +74,10 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
         // 🟢 تحديث اسم الحقل من imageUrl إلى imageUrls
         imageUrl: product.imageUrls.isNotEmpty ? product.imageUrls.first : '',
       );
-
       // 🟢 رسالة النجاح (تم التعديل لتكون أوضح)
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('تم إضافة المنتج بنجاح إلى السلة.',
-              textDirection: TextDirection.rtl),
+          content: Text('تم إضافة المنتج بنجاح إلى السلة.', textDirection: TextDirection.rtl),
           duration: Duration(seconds: 3),
           backgroundColor: Color(0xFF4CAF50), // أخضر
         ),
@@ -92,8 +86,7 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
       // 🛑 رسالة الخطأ التشخيصية (هذا المسار سيُنفذ إذا فشل جلب الاسم الموثوق من deliverySupermarkets)
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('فشل الإضافة. الرسالة التشخيصية: $e',
-              textDirection: TextDirection.rtl),
+          content: Text('فشل الإضافة. الرسالة التشخيصية: $e', textDirection: TextDirection.rtl),
           duration: const Duration(seconds: 6),
           backgroundColor: Theme.of(context).colorScheme.error, // أحمر
         ),
@@ -102,22 +95,17 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
   }
 
   // 3. بناء واجهة كارت المنتج (Product Card)
-  Widget _buildProductCard(
-      BuildContext context, Map<String, dynamic> productOfferMap) {
+  Widget _buildProductCard(BuildContext context, Map<String, dynamic> productOfferMap) {
     final product = productOfferMap['product'] as ProductModel;
     final offer = productOfferMap['offer'] as ProductOfferModel;
-
     // التأكد من وجود وحدة وسعر
     if (offer.units.isEmpty || offer.units.first.price <= 0) {
       return const SizedBox.shrink();
     }
     final firstUnit = offer.units.first;
     final price = firstUnit.price;
-
-    final themeNotifier =
-        Provider.of<ThemeNotifier>(context, listen: false);
-    final shadowColor =
-        themeNotifier.isDarkMode ? Colors.black45 : Colors.black12;
+    final themeNotifier = Provider.of<ThemeNotifier>(context, listen: false);
+    final shadowColor = themeNotifier.isDarkMode ? Colors.black45 : Colors.black12;
 
     return Container(
       decoration: BoxDecoration(
@@ -149,20 +137,14 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
           children: [
             // الصورة
             ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(10)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
               child: Image.network(
                 // 🎯 [تصحيح]: استخدام product.imageUrls.first
-                product.imageUrls.isNotEmpty
-                    ? product.imageUrls.first
-                    : 'https://via.placeholder.com/150',
+                product.imageUrls.isNotEmpty ? product.imageUrls.first : 'https://via.placeholder.com/150',
                 height: 120,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) => const SizedBox(
-                    height: 120,
-                    child: Center(
-                        child: Icon(Icons.broken_image,
-                            size: 40, color: Colors.grey))),
+                    height: 120, child: Center(child: Icon(Icons.broken_image, size: 40, color: Colors.grey))),
               ),
             ),
             // المعلومات
@@ -174,8 +156,7 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
                   // اسم المنتج (يحتل سطرين كحد أقصى)
                   Text(
                     product.name,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -195,13 +176,11 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: () => _addToCart(context, product, offer),
-                      icon: const Icon(FontAwesomeIcons.cartPlus,
-                          size: 16, color: Colors.white),
-                      label: const Text('أضف إلى السلة',
-                          style: TextStyle(color: Colors.white)),
+                      // 💡 [تصحيح النسخة 11]: استخدام FaIcon بدلاً من Icon للأيقونة
+                      icon: const FaIcon(FontAwesomeIcons.cartPlus, size: 16, color: Colors.white),
+                      label: const Text('أضف إلى السلة', style: TextStyle(color: Colors.white)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            const Color(0xFF4CAF50), // لون الزر الأخضر
+                        backgroundColor: const Color(0xFF4CAF50), // لون الزر الأخضر
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(5),
@@ -228,15 +207,11 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
       child: Scaffold(
         // Top Header
         appBar: AppBar(
-          backgroundColor:
-              const Color(0xFF4a6491), // لون الخلفية مطابق لـ CSS
+          backgroundColor: const Color(0xFF4a6491), // لون الخلفية مطابق لـ CSS
           foregroundColor: Colors.white,
           title: Text(
             widget.subCategoryName,
-            style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.white),
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
           ),
           centerTitle: true,
         ),
@@ -251,8 +226,7 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
                   children: [
                     CircularProgressIndicator(),
                     SizedBox(height: 15),
-                    Text('جاري تحميل المنتجات...',
-                        style: TextStyle(fontSize: 18)),
+                    Text('جاري تحميل المنتجات...', style: TextStyle(fontSize: 18)),
                   ],
                 ),
               );
@@ -289,8 +263,7 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
             // عرض المنتجات في Grid
             return GridView.builder(
               padding: const EdgeInsets.all(15),
-              gridDelegate:
-                  const SliverGridDelegateWithFixedCrossAxisCount(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2, // عمودين
                 crossAxisSpacing: 15,
                 mainAxisSpacing: 15,
@@ -316,10 +289,6 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
   // دالة بناء شريط التنقل السفلي
   Widget _buildMobileNav(BuildContext context, int cartCount) {
     // تقليد لـ .bottom-nav
-    final inactiveColor =
-        Theme.of(context).colorScheme.onSurface.withOpacity(0.7);
-    final activeColor = Theme.of(context).colorScheme.primary; // استخدام Primary Color للنشط
-
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
@@ -335,16 +304,13 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           // الرئيسية
-          _buildNavItem(context, FontAwesomeIcons.home, 'الرئيسية',
-              '/marketplaceHome',
+          _buildNavItem(context, FontAwesomeIcons.house, 'الرئيسية', '/marketplaceHome',
               isActive: false, targetRoute: '/marketplaceHome'),
           // السلة
-          _buildNavItem(context, FontAwesomeIcons.shoppingCart, 'السلة',
-              '/cart',
+          _buildNavItem(context, FontAwesomeIcons.cartShopping, 'السلة', '/cart',
               isActive: false, count: cartCount, targetRoute: '/cart'),
           // التجار
-          _buildNavItem(context, FontAwesomeIcons.store, 'التجار',
-              '/consumerStoreSearch',
+          _buildNavItem(context, FontAwesomeIcons.store, 'التجار', '/consumerStoreSearch',
               isActive: false, targetRoute: '/consumerStoreSearch'),
         ],
       ),
@@ -352,11 +318,10 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
   }
 
   // دالة بناء عنصر في شريط التنقل السفلي
-  Widget _buildNavItem(BuildContext context, IconData icon, String label,
-      String route,
+  // 💡 [تصحيح النسخة 11]: تغيير نوع البارامتر icon ليقبل أي نوع أيقونة (dynamic) للتعامل مع FaIconData
+  Widget _buildNavItem(BuildContext context, dynamic icon, String label, String route,
       {required bool isActive, int count = 0, String? targetRoute}) {
-    final inactiveColor =
-        Theme.of(context).colorScheme.onSurface.withOpacity(0.7);
+    final inactiveColor = Theme.of(context).colorScheme.onSurface.withOpacity(0.7);
     final activeColor = Theme.of(context).colorScheme.primary;
 
     return InkWell(
@@ -372,7 +337,8 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
           Stack(
             clipBehavior: Clip.none,
             children: [
-              Icon(
+              // 💡 [تصحيح]: استخدام FaIcon بدلاً من Icon ليتوافق مع FontAwesome النسخة 11
+              FaIcon(
                 icon,
                 size: 22,
                 color: isActive ? activeColor : inactiveColor,
@@ -417,3 +383,4 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
     );
   }
 }
+
