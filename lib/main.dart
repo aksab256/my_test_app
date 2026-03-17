@@ -96,7 +96,7 @@ void main() async {
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
   
-  // 🛡️ التعديل الحاسم: استخدام المعامل المسمى (Named Argument) حصراً
+  // 🎯 تعديلك هو الصحيح يا هندسة لتجاوز قيود الإصدار 3.41.4
   await flutterLocalNotificationsPlugin.initialize(
     initializationSettings,
     onDidReceiveNotificationResponse: (NotificationResponse details) {},
