@@ -1,13 +1,19 @@
+// lib/screens/about_screen.dart
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-const Color _primaryColor = Color(0xFF2c3e50); 
-const Color _accentColor = Color(0xFF4CAF50);  
-
 class AboutScreen extends StatelessWidget {
-  const AboutScreen({super.key});
   static const routeName = '/about';
+
+  const AboutScreen({super.key});
+
+  Future<void> _launchExternalUrl(String url) async {
+    final Uri uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      debugPrint('Could not launch $url');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,197 +21,183 @@ class AboutScreen extends StatelessWidget {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('عن أسواق أكسب', style: TextStyle(fontWeight: FontWeight.bold)),
-          backgroundColor: _primaryColor,
-          foregroundColor: Colors.white,
+          title: const Text('عن تطبيق أسواق أكسب',
+              style: TextStyle(fontWeight: FontWeight.bold)),
           centerTitle: true,
-          elevation: 0,
+          backgroundColor: const Color(0xFF4a6491),
+          foregroundColor: Colors.white,
         ),
-        body: SafeArea(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  color: _primaryColor,
-                  padding: const EdgeInsets.only(bottom: 30, top: 10),
-                  child: _buildHeaderSection(context),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 30),
-                      _buildMainMessage(),
-                      const SizedBox(height: 30),
-                      _buildFeaturesSection(context),
-                      const SizedBox(height: 30),
-                      _buildContactSection(context),
-                      const SizedBox(height: 30),
-                      _buildBackButton(context), 
-                      const SizedBox(height: 30),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeaderSection(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(15),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4))],
-          ),
-          child: Icon(FontAwesomeIcons.store, size: 40, color: _accentColor),
-        ),
-        const SizedBox(height: 15),
-        const Text('أسواق أكسب', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white)),
-        const Text('مستقبلك في التجارة الذكية', style: TextStyle(fontSize: 14, color: Colors.white70)),
-      ],
-    );
-  }
-
-  Widget _buildMainMessage() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('من نحن', FontAwesomeIcons.circleInfo),
-        const SizedBox(height: 10),
-        Card(
-          elevation: 0,
-          color: _accentColor.withOpacity(0.05),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15), side: BorderSide(color: _accentColor.withOpacity(0.1))),
-          child: Padding(
-            padding: const EdgeInsets.all(15.0),
-            child: Column(
-              children: [
-                const Text(
-                  'منصة أسواق أكسب هي الركيزة الرقمية للتجارة الذكية. نحن لسنا مجرد تطبيق؛ نحن منظومة متكاملة صُممت لتمكين السوق المحلي من خلال ربط المصنعين والموردين مباشرةً بتجار التجزئة، وفي الوقت نفسه ربط تجار التجزئة بالمستهلكين النهائيين بكفاءة عالية.',
-                  style: TextStyle(fontSize: 15, height: 1.8, color: _primaryColor),
-                  textAlign: TextAlign.justify,
-                ),
-                const SizedBox(height: 12),
-                RichText(
-                  textAlign: TextAlign.justify,
-                  text: TextSpan(
-                    style: const TextStyle(fontSize: 15, height: 1.8, color: _primaryColor),
-                    children: [
-                      const TextSpan(text: 'مدعومة بأحدث أدوات '),
-                      TextSpan(text: 'الذكاء الاصطناعي', style: TextStyle(fontWeight: FontWeight.bold, color: _accentColor)),
-                      const TextSpan(text: '، توفر "أسواق أكسب" تحليلات متقدمة وإدارة طلبات سلسة.'),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFeaturesSection(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildSectionTitle('رؤيتنا وقيمنا', FontAwesomeIcons.handshake),
-        const SizedBox(height: 15),
-        GridView.count(
-          crossAxisCount: MediaQuery.of(context).size.width > 600 ? 2 : 1,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 2.2,
-          children: [
-            _buildFeatureCard(FontAwesomeIcons.circleCheck, 'الجودة والموثوقية', 'نلتزم بتقديم أفضل المنتجات لضمان رضاك.'),
-            _buildFeatureCard(FontAwesomeIcons.truckFast, 'السرعة والراحة', 'تجربة تسوق سلسة وتوصيل موثوق لباب منزلك.'),
-            _buildFeatureCard(FontAwesomeIcons.usersGear, 'دعم المجتمع', 'تمكين التجار المحليين لنمو اقتصادنا المجتمعي.'),
-            _buildFeatureCard(FontAwesomeIcons.circleCheck, 'سهولة الاستخدام', 'واجهة بسيطة تجعل التسوق متعة للجميع.'),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildContactSection(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: _primaryColor.withOpacity(0.03),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _primaryColor.withOpacity(0.05)),
-      ),
-      child: Column(
-        children: [
-          _buildSectionTitle('تواصل معنا', FontAwesomeIcons.solidComments),
-          const Text('فريق دعم "أسواق أكسب" مستعد دائماً للاستماع إليك.', style: TextStyle(fontSize: 14, color: Colors.black54), textAlign: TextAlign.center),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildSocialButton(onTap: () => _launchExternalUrl('https://wa.me/201021070462'), icon: FontAwesomeIcons.whatsapp, color: const Color(0xFF25D366), label: 'واتساب'),
-              _buildSocialButton(onTap: () => _launchExternalUrl('https://www.facebook.com/share/199za9SBSE/'), icon: FontAwesomeIcons.facebook, color: const Color(0xFF1877F2), label: 'فيسبوك'),
+              // Logo or Image Placeholder
+              Center(
+                child: Container(
+                  height: 120,
+                  width: 120,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4a6491).withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Center(
+                    child: FaIcon(
+                      FontAwesomeIcons.shop,
+                      size: 60,
+                      color: Color(0xFF4a6491),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 30),
+              
+              const Text(
+                'من نحن؟',
+                style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF4a6491)),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'تطبيق أسواق أكسب هو منصة تجارة إلكترونية مبتكرة تهدف إلى ربط الموردين، تجار التجزئة، والمستهلكين في منظومة واحدة سهلة وسريعة. نحن نسعى لتوفير تجربة تسوق فريدة تدعم الاقتصاد المحلي وتسهل عملية البيع والشراء.',
+                style: TextStyle(fontSize: 16, height: 1.6),
+              ),
+              
+              const SizedBox(height: 30),
+              // 💡 [التصحيح]: تم تغيير دالة _buildSectionTitle لتقبل dynamic icon
+              _buildSectionTitle('رؤيتنا وقيمنا', FontAwesomeIcons.handshake),
+              const SizedBox(height: 15),
+              
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                mainAxisSpacing: 15,
+                crossAxisSpacing: 15,
+                childAspectRatio: 0.85,
+                children: [
+                  _buildFeatureCard(FontAwesomeIcons.circleCheck, 'الجودة والموثوقية', 'نلتزم بتقديم أفضل المنتجات لضمان رضاك.'),
+                  _buildFeatureCard(FontAwesomeIcons.truckFast, 'السرعة والراحة', 'تجربة تسوق سلسة وتوصيل موثوق لباب منزلك.'),
+                  _buildFeatureCard(FontAwesomeIcons.usersGear, 'دعم المجتمع', 'تمكين التجار المحليين لنمو اقتصادنا المجتمعي.'),
+                  _buildFeatureCard(FontAwesomeIcons.circleCheck, 'سهولة الاستخدام', 'واجهة بسيطة تجعل التسوق متعة للجميع.'),
+                ],
+              ),
+              
+              const SizedBox(height: 40),
+              _buildSectionTitle('تواصل معنا', FontAwesomeIcons.solidComments),
+              const SizedBox(height: 20),
+              
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildSocialButton(
+                      onTap: () => _launchExternalUrl('https://wa.me/201021070462'),
+                      icon: FontAwesomeIcons.whatsapp,
+                      color: const Color(0xFF25D366),
+                      label: 'واتساب'),
+                  _buildSocialButton(
+                      onTap: () => _launchExternalUrl('https://www.facebook.com/share/199za9SBSE/'),
+                      icon: FontAwesomeIcons.facebook,
+                      color: const Color(0xFF1877F2),
+                      label: 'فيسبوك'),
+                ],
+              ),
+              
+              const SizedBox(height: 50),
+              const Center(
+                child: Text(
+                  'إصدار التطبيق 1.0.0',
+                  style: TextStyle(color: Colors.grey, fontSize: 14),
+                ),
+              ),
             ],
           ),
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: () => Navigator.of(context).pushNamed('/marketplaceHome'),
+          backgroundColor: const Color(0xFF4CAF50),
+          label: const Text('ابدأ التسوق الآن', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          // 💡 [التصحيح التقني]: استخدام FaIcon بدلاً من Icon
+          icon: const FaIcon(FontAwesomeIcons.bagShopping, size: 18, color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  // 💡 [تعديل]: تغيير نوع icon إلى dynamic ليتناسب مع FaIconData
+  Widget _buildSectionTitle(String title, dynamic icon) {
+    return Row(
+      children: [
+        FaIcon(icon, color: const Color(0xFF4a6491), size: 24),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF4a6491)),
+        ),
+      ],
+    );
+  }
+
+  // 💡 [تعديل]: تغيير نوع icon إلى dynamic واستخدام FaIcon
+  Widget _buildFeatureCard(dynamic icon, String title, String description) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          FaIcon(icon, color: const Color(0xFF4CAF50), size: 30),
+          const SizedBox(height: 10),
+          Text(title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const SizedBox(height: 5),
+          Text(description,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 11, color: Colors.grey)),
         ],
       ),
     );
   }
 
-  Widget _buildBackButton(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false),
-        icon: const Icon(FontAwesomeIcons.bagShopping, size: 18, color: Colors.white),
-        label: const Text('ابدأ التسوق الآن', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _accentColor, 
-          padding: const EdgeInsets.symmetric(vertical: 16), 
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-        ),
+  // 💡 [تعديل]: تغيير نوع icon إلى dynamic واستخدام FaIcon
+  Widget _buildSocialButton(
+      {required VoidCallback onTap,
+      required dynamic icon,
+      required Color color,
+      required String label}) {
+    return InkWell(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: FaIcon(icon, color: color, size: 30),
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+        ],
       ),
     );
-  }
-
-  Widget _buildSectionTitle(String title, IconData icon) {
-    return Row(children: [Icon(icon, size: 20, color: _accentColor), const SizedBox(width: 10), Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _primaryColor))]);
-  }
-
-  Widget _buildFeatureCard(IconData icon, String title, String desc) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Row(
-          children: [
-            Icon(icon, size: 28, color: _accentColor),
-            const SizedBox(width: 12),
-            Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _primaryColor)), const SizedBox(height: 2), Text(desc, style: const TextStyle(fontSize: 11, color: Colors.black54), maxLines: 2)])),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSocialButton({required VoidCallback onTap, required IconData icon, required Color color, required String label}) {
-    return InkWell(onTap: onTap, child: Column(children: [CircleAvatar(backgroundColor: color, radius: 25, child: Icon(icon, color: Colors.white, size: 25)), const SizedBox(height: 5), Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))]));
-  }
-
-  void _launchExternalUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) throw 'Could not launch $url';
   }
 }
+
