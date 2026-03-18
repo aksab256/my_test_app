@@ -22,11 +22,10 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
 
   @override
   void dispose() {
-    _mapController.dispose(); // الحفاظ على موارد الجهاز
+    _mapController.dispose();
     super.dispose();
   }
 
-  // دالة إظهار نافذة التقييم (كما هي بدون أي تغيير في المنطق)
   void _showRatingDialog(BuildContext context, String driverId) {
     double selectedRating = 5;
     TextEditingController commentController = TextEditingController();
@@ -105,7 +104,6 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
     );
   }
 
-  // دالة الإلغاء الذكي (كما هي بدون تغيير)
   Future<void> _handleSmartCancel(BuildContext context, String currentStatus) async {
     bool isAccepted = currentStatus != 'pending';
     String targetStatus = isAccepted
@@ -200,10 +198,11 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
               if (driverData != null && driverData.containsKey('location')) {
                 GeoPoint dLoc = driverData['location'];
                 driverLatLng = LatLng(dLoc.latitude, dLoc.longitude);
-                // تحديث موقع الكاميرا بسلاسة لتتبع المندوب
-                if (_mapController.ready) {
-                  _mapController.move(driverLatLng, _mapController.camera.zoom);
-                }
+                
+                // ✅ الإصلاح هنا: محاولة التحريك المباشر مع تجاوز الخطأ إذا لم تكتمل التهيئة
+                try {
+                   _mapController.move(driverLatLng, 14.5);
+                } catch (_) {}
               }
             }
 
@@ -229,7 +228,7 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                       children: [
                         TileLayer(
                           urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
-                          tileProvider: NetworkTileProvider(), // أسرع تحميل ومعالجة للـ Tiles
+                          tileProvider: NetworkTileProvider(), // ✅ الحفاظ على سرعة التحميل
                         ),
                         MarkerLayer(
                           markers: [
