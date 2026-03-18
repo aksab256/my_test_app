@@ -6,22 +6,34 @@ import 'package:latlong2/latlong.dart';
 import 'package:sizer/sizer.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class CustomerTrackingScreen extends StatelessWidget {
+class CustomerTrackingScreen extends StatefulWidget {
   static const routeName = '/customerTracking';
   final String orderId;
 
   const CustomerTrackingScreen({super.key, required this.orderId});
 
-  final String mapboxToken = "pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw";
+  @override
+  State<CustomerTrackingScreen> createState() => _CustomerTrackingScreenState();
+}
 
-  // دالة إظهار نافذة التقييم (كما هي بدون تغيير)
+class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
+  final String mapboxToken = "pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw";
+  final MapController _mapController = MapController();
+
+  @override
+  void dispose() {
+    _mapController.dispose(); // الحفاظ على موارد الجهاز
+    super.dispose();
+  }
+
+  // دالة إظهار نافذة التقييم (كما هي بدون أي تغيير في المنطق)
   void _showRatingDialog(BuildContext context, String driverId) {
     double selectedRating = 5;
     TextEditingController commentController = TextEditingController();
 
     showDialog(
       context: context,
-      barrierDismissible: false, 
+      barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setState) => Directionality(
           textDirection: TextDirection.rtl,
@@ -68,18 +80,18 @@ class CustomerTrackingScreen extends StatelessWidget {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))
                   ),
                   onPressed: () async {
-                    await FirebaseFirestore.instance.collection('specialRequests').doc(orderId).update({
+                    await FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).update({
                       'rating': selectedRating,
                       'customerComment': commentController.text,
                       'status': 'delivered'
                     });
-                    // 2. تحديث ملف المندوب التراكمي (هذا ما ينقصك ليقرأه كارت التقييم المهني)
-  if (driverId != null && driverId.isNotEmpty) {
-    await FirebaseFirestore.instance.collection('freeDrivers').doc(driverId).update({
-      'totalStars': FieldValue.increment(selectedRating), // يضيف النجوم الجديدة للمجموع
-      'reviewsCount': FieldValue.increment(1),           // يزود عدد المقيمين واحد
-    });
-  }
+                    
+                    if (driverId != null && driverId.isNotEmpty) {
+                      await FirebaseFirestore.instance.collection('freeDrivers').doc(driverId).update({
+                        'totalStars': FieldValue.increment(selectedRating),
+                        'reviewsCount': FieldValue.increment(1),
+                      });
+                    }
 
                     if (context.mounted) Navigator.of(context).popUntil((route) => route.isFirst);
                   },
@@ -96,8 +108,8 @@ class CustomerTrackingScreen extends StatelessWidget {
   // دالة الإلغاء الذكي (كما هي بدون تغيير)
   Future<void> _handleSmartCancel(BuildContext context, String currentStatus) async {
     bool isAccepted = currentStatus != 'pending';
-    String targetStatus = isAccepted 
-        ? 'cancelled_by_user_after_accept' 
+    String targetStatus = isAccepted
+        ? 'cancelled_by_user_after_accept'
         : 'cancelled_by_user_before_accept';
 
     if (isAccepted) {
@@ -112,7 +124,7 @@ class CustomerTrackingScreen extends StatelessWidget {
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("تراجع")),
               TextButton(
-                onPressed: () => Navigator.pop(ctx, true), 
+                onPressed: () => Navigator.pop(ctx, true),
                 child: const Text("تأكيد وإلغاء", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
               ),
             ],
@@ -123,7 +135,7 @@ class CustomerTrackingScreen extends StatelessWidget {
     }
 
     try {
-      await FirebaseFirestore.instance.collection('specialRequests').doc(orderId).update({
+      await FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).update({
         'status': targetStatus,
         'cancelledAt': FieldValue.serverTimestamp(),
         'cancelledBy': 'customer'
@@ -136,10 +148,10 @@ class CustomerTrackingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (orderId.isEmpty) return const Scaffold(body: Center(child: Text("طلب غير موجود")));
+    if (widget.orderId.isEmpty) return const Scaffold(body: Center(child: Text("طلب غير موجود")));
 
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('specialRequests').doc(orderId).snapshots(),
+      stream: FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).snapshots(),
       builder: (context, orderSnapshot) {
         if (!orderSnapshot.hasData || !orderSnapshot.data!.exists) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -149,18 +161,12 @@ class CustomerTrackingScreen extends StatelessWidget {
         String status = orderData['status'] ?? "pending";
         bool isRated = orderData.containsKey('rating');
 
-        if (status.contains('cancelled') || 
-            status == 'no_drivers_available' || 
-            (status == 'delivered' && isRated)) {
-           
-           WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (status.contains('cancelled') || status == 'no_drivers_available' || (status == 'delivered' && isRated)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
             if (context.mounted) {
               if (status == 'no_drivers_available') {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("عذراً، لم نجد مناديب متاحة حالياً لطلبك. يرجى المحاولة مرة أخرى."),
-                    backgroundColor: Colors.redAccent,
-                  ),
+                  const SnackBar(content: Text("عذراً، لم نجد مناديب متاحة حالياً لطلبك. يرجى المحاولة مرة أخرى."), backgroundColor: Colors.redAccent),
                 );
               }
               Navigator.of(context).popUntil((route) => route.isFirst);
@@ -194,6 +200,10 @@ class CustomerTrackingScreen extends StatelessWidget {
               if (driverData != null && driverData.containsKey('location')) {
                 GeoPoint dLoc = driverData['location'];
                 driverLatLng = LatLng(dLoc.latitude, dLoc.longitude);
+                // تحديث موقع الكاميرا بسلاسة لتتبع المندوب
+                if (_mapController.ready) {
+                  _mapController.move(driverLatLng, _mapController.camera.zoom);
+                }
               }
             }
 
@@ -211,9 +221,16 @@ class CustomerTrackingScreen extends StatelessWidget {
                 body: Stack(
                   children: [
                     FlutterMap(
-                      options: MapOptions(initialCenter: driverLatLng ?? pickupLatLng, initialZoom: 14.5),
+                      mapController: _mapController,
+                      options: MapOptions(
+                        initialCenter: driverLatLng ?? pickupLatLng,
+                        initialZoom: 14.5,
+                      ),
                       children: [
-                        TileLayer(urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken'),
+                        TileLayer(
+                          urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
+                          tileProvider: NetworkTileProvider(), // أسرع تحميل ومعالجة للـ Tiles
+                        ),
                         MarkerLayer(
                           markers: [
                             Marker(point: pickupLatLng, width: 45, height: 45, child: const Icon(Icons.location_on, color: Colors.green, size: 40)),
@@ -224,7 +241,6 @@ class CustomerTrackingScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    // ✅ استخدام Align مع SafeArea لتأمين الكارت السفلي
                     Align(
                       alignment: Alignment.bottomCenter,
                       child: SafeArea(
@@ -252,12 +268,11 @@ class CustomerTrackingScreen extends StatelessWidget {
     else if (status == 'no_drivers_available') { progress = 1.0; statusDesc = "عذراً، لم نجد مناديب حالياً"; mainColor = Colors.red; }
 
     return Container(
-      // ✅ تم تحويله لـ Container بـ Margin ليعمل بشكل مثالي مع Align
       margin: const EdgeInsets.fromLTRB(10, 0, 10, 15),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white, 
-        borderRadius: BorderRadius.circular(25), 
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(25),
         boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 15)]
       ),
       child: Column(
@@ -273,7 +288,6 @@ class CustomerTrackingScreen extends StatelessWidget {
           const SizedBox(height: 12),
           Text(statusDesc, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.sp, color: mainColor)),
           const Divider(height: 25),
-
           if (status == 'accepted' || status == 'at_pickup' || status == 'picked_up')
             Container(
               margin: const EdgeInsets.only(bottom: 15),
@@ -289,7 +303,6 @@ class CustomerTrackingScreen extends StatelessWidget {
                 ],
               ),
             ),
-
           Row(
             children: [
               CircleAvatar(radius: 25, backgroundColor: Colors.blue[50], child: const Icon(Icons.person, color: Colors.blue)),
@@ -310,7 +323,6 @@ class CustomerTrackingScreen extends StatelessWidget {
                 ),
             ],
           ),
-          
           if (status == 'pending' || status == 'accepted' || status == 'at_pickup')
             Padding(
               padding: const EdgeInsets.only(top: 10),
@@ -325,9 +337,14 @@ class CustomerTrackingScreen extends StatelessWidget {
   }
 
   Widget _buildDriverMarker(String vehicleType) {
+    IconData vehicleIcon = Icons.delivery_dining;
+    if (vehicleType == 'motorcycle') vehicleIcon = Icons.directions_bike;
+    if (vehicleType == 'pickup') vehicleIcon = Icons.local_shipping;
+
     return Container(
-      decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: Colors.blue, width: 2)),
-      child: const Icon(Icons.delivery_dining, color: Colors.blue, size: 30),
+      decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: Colors.blue, width: 2), boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 5)]),
+      child: Icon(vehicleIcon, color: Colors.blue, size: 30),
     );
   }
 }
+
