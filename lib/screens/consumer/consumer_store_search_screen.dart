@@ -2,8 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart'; 
+import 'package:geocoding/geocoding.dart';
 import 'package:flutter_map/flutter_map.dart';
+// نستخدم NetworkTileProvider الافتراضي من المكتبة لسرعة الاستجابة
 import 'package:latlong2/latlong.dart' show LatLng, Distance;
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
@@ -22,7 +23,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
   final MapController _mapController = MapController();
   LatLng? _currentSearchLocation;
   bool _isLoading = false;
-  bool _searchFinished = false; // متغير جديد لمعرفة هل انتهى البحث الأول أم لا
+  bool _searchFinished = false; 
   String _loadingMessage = 'جاري المسح الجغرافي...';
   List<Map<String, dynamic>> _nearbySupermarkets = [];
   List<Marker> _mapMarkers = [];
@@ -39,6 +40,12 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted) _promptLocationSelection();
     });
+  }
+
+  @override
+  void dispose() {
+    _mapController.dispose(); // ✅ تفريغ الذاكرة بشكل صحيح
+    super.dispose();
   }
 
   Future<bool> _showLocationExplanation() async {
@@ -61,7 +68,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
 
   Future<void> _getAddress(Position position, BuyerDataProvider provider) async {
     try {
-      setState(() { _isLoading = true; _loadingMessage = 'تحليل العنوان...'; });
+      if (mounted) setState(() { _isLoading = true; _loadingMessage = 'تحليل العنوان...'; });
       List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
       String readableAddress = "موقعي الحالي (GPS)";
       if (placemarks.isNotEmpty) {
@@ -108,21 +115,28 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
       if (!userAgreed) return null;
       permission = await Geolocator.requestPermission();
     }
-    setState(() { _isLoading = true; _loadingMessage = 'تحديد موقعك...'; });
+    if (mounted) setState(() { _isLoading = true; _loadingMessage = 'تحديد موقعك...'; });
     try {
       return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
     } catch (e) { return null; }
-    finally { setState(() { _isLoading = false; }); }
+    finally { if (mounted) setState(() { _isLoading = false; }); }
   }
 
   Future<void> _searchAndDisplayStores(LatLng location) async {
-    setState(() { 
-      _isLoading = true; 
-      _loadingMessage = 'جاري رصد المتاجر النشطة...'; 
-      _searchFinished = false; 
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _loadingMessage = 'جاري رصد المتاجر النشطة...';
+        _searchFinished = false;
+      });
+    }
+
     try {
-      _mapController.move(location, 14.5);
+      // ✅ تحريك الكاميرا بأمان للموقع المختار
+      Future.delayed(const Duration(milliseconds: 100), () {
+        try { _mapController.move(location, 14.5); } catch (_) {}
+      });
+
       _mapMarkers.clear();
       _mapMarkers.add(Marker(point: location, width: 80, height: 80, child: _buildUserLocationMarker()));
 
@@ -138,6 +152,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
       for (var doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         if (data['trialExpiryDate'] == null) continue;
+
         final DateTime expiry = (data['trialExpiryDate'] as Timestamp).toDate();
         if (expiry.isBefore(now)) continue;
 
@@ -156,28 +171,32 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
               ...data,
               'location': storeLoc,
               'distance': distInKm.toStringAsFixed(2),
-              'storeType': data['storeType'] ?? 'supermarket' 
+              'storeType': data['storeType'] ?? 'supermarket'
             };
             foundStores.add(storeData);
             _mapMarkers.add(Marker(
               point: storeLoc,
               width: 60, height: 60,
-              child: _buildStoreMarker(storeData),
+              child: GestureDetector(
+                onTap: () => _showStoreDetailSheet(storeData),
+                child: _buildStoreMarker(storeData),
+              ),
             ));
           }
         }
       }
-      setState(() { 
-        _nearbySupermarkets = foundStores; 
-        _isLoading = false; 
-        _searchFinished = true; // تم الانتهاء من البحث بنجاح
-      });
-    } catch (e) { 
-      setState(() { _isLoading = false; _searchFinished = true; }); 
+      if (mounted) {
+        setState(() {
+          _nearbySupermarkets = foundStores;
+          _isLoading = false;
+          _searchFinished = true;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() { _isLoading = false; _searchFinished = true; });
     }
   }
 
-  // ويدجت الرسالة التحذيرية في حالة عدم وجود نتائج
   Widget _buildNoResultsCard() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -192,11 +211,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
         children: [
           Icon(Icons.location_off_rounded, color: Colors.redAccent.shade100, size: 60),
           const SizedBox(height: 15),
-          const Text(
-            "لا توجد خدمات متاحة لموقعك الآن",
-            textAlign: TextAlign.center,
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
-          ),
+          const Text("لا توجد خدمات متاحة لموقعك الآن", textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
           const SizedBox(height: 10),
           Text(
             "نحن نتوسع باستمرار! جرب تغيير موقع البحث أو التأكد من تغطية الـ GPS في منطقتك.",
@@ -311,7 +326,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     return SafeArea(
       top: false,
       child: Container(
-        height: 170, 
+        height: 170,
         margin: const EdgeInsets.only(bottom: 10),
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
@@ -380,7 +395,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
 
   Widget _buildModernLoader() {
     return Container(
-      color: Colors.white.withOpacity(0.8), 
+      color: Colors.white.withOpacity(0.8),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -412,20 +427,23 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
           children: [
             FlutterMap(
               mapController: _mapController,
-              options: MapOptions(initialCenter: _currentSearchLocation ?? const LatLng(31.2001, 29.9187), initialZoom: 13.0),
+              options: MapOptions(
+                initialCenter: _currentSearchLocation ?? const LatLng(31.2001, 29.9187), 
+                initialZoom: 13.0,
+              ),
               children: [
-                TileLayer(urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token={accessToken}', additionalOptions: {'accessToken': mapboxToken}),
+                TileLayer(
+                  urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
+                  tileProvider: NetworkTileProvider(), // ✅ تحسين سرعة التحميل ويدعم الكاش
+                ),
                 MarkerLayer(markers: _mapMarkers),
               ],
             ),
             Positioned(top: 115, left: 15, right: 15, child: _buildRadarStatusCard()),
-            
-            // حالة عرض النتائج أو رسالة "لا توجد خدمة"
             if (_searchFinished && _nearbySupermarkets.isEmpty)
               Align(alignment: Alignment.center, child: _buildNoResultsCard())
             else
               Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomStoresCarousel()),
-
             if (_isLoading) _buildModernLoader(),
           ],
         ),
@@ -433,3 +451,4 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     );
   }
 }
+
