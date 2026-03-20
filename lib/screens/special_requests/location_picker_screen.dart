@@ -158,7 +158,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
           _mapController.move(myLocation, 15);
         });
         
-        // ننتظر جلب العنوان الفعلي قبل إغلاق التحميل لضمان عدم ظهور شاشة رصاصي
         await _getAddress(myLocation);
         
         setState(() {
@@ -299,8 +298,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                       : 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
                   additionalOptions: {'accessToken': mapboxToken},
                   tileProvider: NetworkTileProvider(),
-                  // تحسين تجربة ضعف الإنترنت: عرض لون خلفية هادئ بدل الرصاصي
-                  placeholderColor: Colors.grey[200]!,
+                  // تم حذف placeholderColor لحل خطأ الـ Build في الإصدار الجديد من flutter_map
                 ),
               ],
             ),
@@ -344,7 +342,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             
             _buildActionCard(),
             
-            // شاشة التأمين الباهتة - تظهر حتى اكتمال الـ GPS والعنوان
             if (_isMapLoading)
               Positioned.fill(
                 child: Container(
