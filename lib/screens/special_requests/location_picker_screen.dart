@@ -9,10 +9,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:ui'; // مهم جداً للتأثير الباهت (Blur)
 import '../../services/bubble_service.dart';
 import '../../services/delivery_service.dart';
 import 'dart:math';
+import 'package:sizer/sizer.dart'; // ✅ إضافة المكتبة المفقودة لحل مشكلة الـ .sp
 
 enum PickerStep { pickup, dropoff, confirm }
 
@@ -51,7 +51,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   String _tempAddress = "جاري تحديد موقعك الحالي...";
   bool _isLoading = false;
-  bool _isMapLoading = true; // 🎯 متغير جديد للتحكم في شاشة تحميل الخريطة
   bool _isSearching = false;
   bool _isSatelliteMode = true; 
   List _searchResults = [];
@@ -66,7 +65,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   @override
   void initState() {
     super.initState();
-    _currentMapCenter = widget.initialLocation ?? const LatLng(30.0444, 31.2357); 
+    _currentMapCenter = widget.initialLocation ?? const LatLng(30.0444, 31.2357); // القاهرة كافتراضي أدق
     _determinePosition();
   }
 
@@ -115,7 +114,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     double lon = double.parse(result['lon']);
     LatLng target = LatLng(lat, lon);
     
-    _mapController.move(target, 16.5); 
+    _mapController.move(target, 16.5);
     
     setState(() {
       _currentMapCenter = target;
@@ -260,12 +259,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               options: MapOptions(
                 initialCenter: _currentMapCenter,
                 initialZoom: 15.0,
-                // 🎯 تعديل: إخفاء شاشة التحميل بمجرد أن تصبح الخريطة جاهزة
-                onMapReady: () {
-                  Future.delayed(const Duration(milliseconds: 800), () {
-                    if (mounted) setState(() => _isMapLoading = false);
-                  });
-                },
                 onPositionChanged: (pos, hasGesture) {
                   if (hasGesture) {
                     _currentMapCenter = pos.center;
@@ -279,7 +272,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                       ? 'https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken'
                       : 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
                   additionalOptions: {'accessToken': mapboxToken},
-                  tileProvider: NetworkTileProvider(),
+                  tileProvider: NetworkTileProvider(), 
                 ),
               ],
             ),
@@ -318,36 +311,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               ),
             ),
             _buildActionCard(),
-
-            // 🎯 التعديل الجديد: شاشة باهتة (Blur Overlay) تظهر أثناء تهيئة الخريطة
-            if (_isMapLoading)
-              Positioned.fill(
-                child: Container(
-                  color: Colors.white.withOpacity(0.4),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const CircularProgressIndicator(color: Color(0xFF1A4D2E)),
-                          const SizedBox(height: 15),
-                          Text(
-                            "جارٍ تهيئة الخريطة...",
-                            style: TextStyle(
-                              fontFamily: 'Cairo',
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14.sp,
-                              color: const Color(0xFF1A4D2E)
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
             if (_isLoading) Container(color: Colors.black26, child: const Center(child: CircularProgressIndicator())),
           ],
         ),
@@ -355,7 +318,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     );
   }
 
-  // بقية الـ Widgets (SearchBar, ActionCard, FinalConfirmation, SummaryItem) تبقى كما هي بدون تغيير
   Widget _buildSearchBar() {
     return Positioned(
       top: 100,
