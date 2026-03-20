@@ -1,4 +1,3 @@
-// lib/screens/location_picker_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -50,6 +49,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   };
 
   String _tempAddress = "جاري تحديد موقعك الحالي...";
+  String _loadingStatus = "جاري بدء المنظومة الجغرافية..."; // 🔥 رسالة التحميل الديناميكية
   bool _isLoading = false; // لتحميل الطلب للسيرفر
   bool _isMapLoading = true; // 🔥 تأمين تحميل الخرائط
   bool _isSearching = false;
@@ -131,16 +131,21 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       _getAddress(widget.initialLocation!);
       return;
     }
+
+    setState(() => _loadingStatus = "جاري طلب الإذن للوصول للموقع...");
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) return;
     }
+
+    setState(() => _loadingStatus = "جاري البحث عن أقمار صناعية (GPS)...");
     try {
       Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
       LatLng myLocation = LatLng(position.latitude, position.longitude);
       if (mounted) {
         setState(() {
+          _loadingStatus = "تم تحديد موقعك، جاري جلب تفاصيل المنطقة...";
           _currentMapCenter = myLocation;
           _mapController.move(myLocation, 15);
           _getAddress(myLocation);
@@ -280,30 +285,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ),
               ],
             ),
-            
-            // 🔥 شاشة التأمين الباهتة (تظهر فقط أثناء تحميل الخريطة)
-            if (_isMapLoading)
-              Container(
-                color: Colors.white.withOpacity(0.9),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const CircularProgressIndicator(color: Color(0xFFB21F2D)),
-                      const SizedBox(height: 15),
-                      Text(
-                        "جاري مزامنة الموقع وتحميل الخرائط...",
-                        style: TextStyle(
-                          fontFamily: 'Cairo',
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14.sp,
-                          color: const Color(0xFF1A2C3D),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
 
             Center(
               child: Padding(
@@ -315,7 +296,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ),
               ),
             ),
+            
             _buildSearchBar(),
+            
             Positioned(
               top: 165,
               left: 20,
@@ -339,13 +322,47 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ),
               ),
             ),
+            
             _buildActionCard(),
             
-            // لودنج حفظ الطلب للسيرفر
+            // 🔥 شاشة التأمين الباهتة (الآن تأتي بعد العناصر السابقة لتغطيها بالكامل)
+            if (_isMapLoading)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.white.withOpacity(0.95), // زيادة طفيفة في التعتيم للوضوح
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(color: Color(0xFFB21F2D)),
+                        const SizedBox(height: 20),
+                        Text(
+                          _loadingStatus, // 🔥 النص الديناميكي حسب الحالة
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14.sp,
+                            color: const Color(0xFF1A2C3D),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          "يتم الآن مزامنة العهدة مع الخرائط العالمية",
+                          style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+            // لودنج حفظ الطلب للسيرفر (أعلى طبقة)
             if (_isLoading) 
-              Container(
-                color: Colors.black45, 
-                child: const Center(child: CircularProgressIndicator(color: Colors.white))
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black45, 
+                  child: const Center(child: CircularProgressIndicator(color: Colors.white))
+                ),
               ),
           ],
         ),
