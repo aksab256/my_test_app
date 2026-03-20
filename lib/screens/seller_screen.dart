@@ -11,7 +11,7 @@ import 'package:my_test_app/services/user_session.dart';
 import 'package:sizer/sizer.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:my_test_app/widgets/chat_support_widget.dart';
-import 'package:url_launcher/url_launcher.dart'; // تأكد من إضافة الحزمة في pubspec.yaml
+import 'package:url_launcher/url_launcher.dart';
 
 class SellerScreen extends StatefulWidget {
   static const String routeName = '/sellerhome';
@@ -47,7 +47,6 @@ class _SellerScreenState extends State<SellerScreen> {
       FirebaseMessaging messaging = FirebaseMessaging.instance;
       NotificationSettings currentSettings = await messaging.getNotificationSettings();
 
-      // إذا لم يوافق المستخدم بعد ولم تظهر الرسالة التوضيحية
       if (!hasShownDisclosure && currentSettings.authorizationStatus != AuthorizationStatus.authorized) {
         if (!mounted) return;
         
@@ -213,8 +212,8 @@ class _SellerScreenState extends State<SellerScreen> {
         
         body: Column(
           children: [
-            // 🎯 التعديل المطلوب: شريط تنبيه يظهر فقط إذا كان الحساب غير نشط
-            if (controller.data.isActive == false)
+            // ✅ تم تعديل الشرط ليفحص الحقل "status" كما في قاعدة البيانات
+            if (controller.data.status != 'active')
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
@@ -240,7 +239,7 @@ class _SellerScreenState extends State<SellerScreen> {
                           await launchUrl(emailLaunchUri);
                         }
                       },
-                      child: const Text("دعم الفني", style: TextStyle(fontFamily: 'Cairo', color: Colors.blue, fontWeight: FontWeight.bold)),
+                      child: const Text("الدعم الفني", style: TextStyle(fontFamily: 'Cairo', color: Colors.blue, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
