@@ -69,11 +69,13 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
 
     try {
       // 1. جلب بيانات الموقع من كولكشن السوبر ماركت
-      var supermarketDoc = await FirebaseFirestore.instance
-          .collection('deliverySupermarkets')
-          .where('ownerId', '==', uid)
-          .limit(1)
-          .get();
+      // التصحيح:
+var supermarketDoc = await FirebaseFirestore.instance
+    .collection('deliverySupermarkets')
+    .where('ownerId', isEqualTo: uid) // استخدم isEqualTo بدل الفواصل و '=='
+    .limit(1)
+    .get();
+
 
       if (supermarketDoc.docs.isNotEmpty) {
         var data = supermarketDoc.docs.first.data();
