@@ -11,7 +11,7 @@ import 'dart:convert';
 import '../../services/bubble_service.dart';
 import '../../services/delivery_service.dart';
 import 'dart:math';
-import 'package:sizer/sizer.dart'; // ✅ للمقاسات المتجاوبة
+import 'package:sizer/sizer.dart'; // للمقاسات المتجاوبة
 
 enum PickerStep { pickup, dropoff, confirm }
 
@@ -49,9 +49,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   };
 
   String _tempAddress = "جاري تحديد موقعك الحالي...";
-  String _loadingStatus = "جاري بدء المنظومة الجغرافية..."; // 🔥 رسالة التحميل الديناميكية
-  bool _isLoading = false; // لتحميل الطلب للسيرفر
-  bool _isMapLoading = true; // 🔥 تأمين تحميل الخرائط
+  String _loadingStatus = "جاري بدء المنظومة الجغرافية..."; 
+  bool _isLoading = false; 
+  bool _isMapLoading = true; 
   bool _isSearching = false;
   bool _isSatelliteMode = true; 
   List _searchResults = [];
@@ -128,7 +128,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   Future<void> _determinePosition() async {
     if (widget.initialLocation != null) {
-      _getAddress(widget.initialLocation!);
+      await _getAddress(widget.initialLocation!);
+      setState(() => _isMapLoading = false);
       return;
     }
 
@@ -136,23 +137,42 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return;
+      if (permission == LocationPermission.denied) {
+        setState(() => _isMapLoading = false);
+        return;
+      }
     }
 
     setState(() => _loadingStatus = "جاري البحث عن أقمار صناعية (GPS)...");
     try {
-      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
+      );
       LatLng myLocation = LatLng(position.latitude, position.longitude);
+      
       if (mounted) {
         setState(() {
-          _loadingStatus = "تم تحديد موقعك، جاري جلب تفاصيل المنطقة...";
+          _loadingStatus = "تم التحديد، جاري جلب تفاصيل المنطقة...";
           _currentMapCenter = myLocation;
           _mapController.move(myLocation, 15);
-          _getAddress(myLocation);
+        });
+        
+        // ننتظر جلب العنوان الفعلي قبل إغلاق التحميل لضمان عدم ظهور شاشة رصاصي
+        await _getAddress(myLocation);
+        
+        setState(() {
+          _isMapLoading = false; 
         });
       }
     } catch (e) {
       debugPrint("Location Error: $e");
+      if (mounted) {
+        setState(() {
+          _tempAddress = "تعذر جلب العنوان تلقائياً";
+          _isMapLoading = false;
+        });
+      }
     }
   }
 
@@ -265,9 +285,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               options: MapOptions(
                 initialCenter: _currentMapCenter,
                 initialZoom: 15.0,
-                onMapReady: () {
-                  setState(() => _isMapLoading = false); // 🔥 رفع ستار التحميل
-                },
                 onPositionChanged: (pos, hasGesture) {
                   if (hasGesture) {
                     _currentMapCenter = pos.center;
@@ -281,7 +298,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                       ? 'https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken'
                       : 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
                   additionalOptions: {'accessToken': mapboxToken},
-                  tileProvider: NetworkTileProvider(), 
+                  tileProvider: NetworkTileProvider(),
+                  // تحسين تجربة ضعف الإنترنت: عرض لون خلفية هادئ بدل الرصاصي
+                  placeholderColor: Colors.grey[200]!,
                 ),
               ],
             ),
@@ -325,19 +344,20 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             
             _buildActionCard(),
             
-            // 🔥 شاشة التأمين الباهتة (الآن تأتي بعد العناصر السابقة لتغطيها بالكامل)
+            // شاشة التأمين الباهتة - تظهر حتى اكتمال الـ GPS والعنوان
             if (_isMapLoading)
               Positioned.fill(
                 child: Container(
-                  color: Colors.white.withOpacity(0.95), // زيادة طفيفة في التعتيم للوضوح
+                  color: Colors.white, 
                   child: Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const CircularProgressIndicator(color: Color(0xFFB21F2D)),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 25),
                         Text(
-                          _loadingStatus, // 🔥 النص الديناميكي حسب الحالة
+                          _loadingStatus,
+                          textAlign: TextAlign.center,
                           style: TextStyle(
                             fontFamily: 'Cairo',
                             fontWeight: FontWeight.bold,
@@ -345,7 +365,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                             color: const Color(0xFF1A2C3D),
                           ),
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 12),
                         const Text(
                           "يتم الآن مزامنة العهدة مع الخرائط العالمية",
                           style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.grey),
@@ -356,7 +376,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ),
               ),
 
-            // لودنج حفظ الطلب للسيرفر (أعلى طبقة)
             if (_isLoading) 
               Positioned.fill(
                 child: Container(
