@@ -12,7 +12,7 @@ import 'dart:convert';
 import '../../services/bubble_service.dart';
 import '../../services/delivery_service.dart';
 import 'dart:math';
-import 'package:sizer/sizer.dart'; // ✅ إضافة المكتبة المفقودة لحل مشكلة الـ .sp
+import 'package:sizer/sizer.dart'; // ✅ للمقاسات المتجاوبة
 
 enum PickerStep { pickup, dropoff, confirm }
 
@@ -50,7 +50,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   };
 
   String _tempAddress = "جاري تحديد موقعك الحالي...";
-  bool _isLoading = false;
+  bool _isLoading = false; // لتحميل الطلب للسيرفر
+  bool _isMapLoading = true; // 🔥 تأمين تحميل الخرائط
   bool _isSearching = false;
   bool _isSatelliteMode = true; 
   List _searchResults = [];
@@ -65,7 +66,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   @override
   void initState() {
     super.initState();
-    _currentMapCenter = widget.initialLocation ?? const LatLng(30.0444, 31.2357); // القاهرة كافتراضي أدق
+    _currentMapCenter = widget.initialLocation ?? const LatLng(30.0444, 31.2357);
     _determinePosition();
   }
 
@@ -259,6 +260,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               options: MapOptions(
                 initialCenter: _currentMapCenter,
                 initialZoom: 15.0,
+                onMapReady: () {
+                  setState(() => _isMapLoading = false); // 🔥 رفع ستار التحميل
+                },
                 onPositionChanged: (pos, hasGesture) {
                   if (hasGesture) {
                     _currentMapCenter = pos.center;
@@ -276,6 +280,31 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ),
               ],
             ),
+            
+            // 🔥 شاشة التأمين الباهتة (تظهر فقط أثناء تحميل الخريطة)
+            if (_isMapLoading)
+              Container(
+                color: Colors.white.withOpacity(0.9),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(color: Color(0xFFB21F2D)),
+                      const SizedBox(height: 15),
+                      Text(
+                        "جاري مزامنة الموقع وتحميل الخرائط...",
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14.sp,
+                          color: const Color(0xFF1A2C3D),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
             Center(
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 40),
@@ -311,7 +340,13 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               ),
             ),
             _buildActionCard(),
-            if (_isLoading) Container(color: Colors.black26, child: const Center(child: CircularProgressIndicator())),
+            
+            // لودنج حفظ الطلب للسيرفر
+            if (_isLoading) 
+              Container(
+                color: Colors.black45, 
+                child: const Center(child: CircularProgressIndicator(color: Colors.white))
+              ),
           ],
         ),
       ),
