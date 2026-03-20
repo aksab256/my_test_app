@@ -1,3 +1,4 @@
+// lib/controllers/seller_dashboard_controller.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -16,9 +17,10 @@ class SellerDashboardController with ChangeNotifier {
   bool _isLoading = true;
   String? _errorMessage;
   String? _sellerName;
+  String? _accountStatus; // ✅ إضافة متغير لحفظ حالة الحساب
   Map<String, dynamic>? _sellerData;
 
-  // Getters (لا يتم تغييرها لضمان عمل الواجهات الحالية)
+  // Getters
   SellerDashboardData get data => _data;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
@@ -35,6 +37,8 @@ class SellerDashboardController with ChangeNotifier {
       if (userDoc.exists) {
         _sellerData = userDoc.data();
         _sellerName = _sellerData?['fullname'] as String?;
+        // ✅ جلب حالة الحساب من الفايربيز (status)
+        _accountStatus = _sellerData?['status'] as String? ?? 'inactive';
       }
     } catch (e) {
       debugPrint('🚨 Error fetching seller data: $e');
@@ -54,7 +58,7 @@ class SellerDashboardController with ChangeNotifier {
     notifyListeners();
 
     try {
-      // 1. جلب بيانات البائع الأساسية
+      // 1. جلب بيانات البائع الأساسية (بما فيها الحالة)
       await fetchSellerData();
 
       // 2. جلب الطلبات من المجموعتين بالتوازي لسرعة الأداء
@@ -68,7 +72,6 @@ class SellerDashboardController with ChangeNotifier {
       int pendingOrders = 0;
       int newOrders = 0;
 
-      // معالجة البيانات المجمعة
       for (var snapshot in results) {
         for (var doc in snapshot.docs) {
           final orderData = doc.data();
@@ -76,31 +79,29 @@ class SellerDashboardController with ChangeNotifier {
 
           final status = orderData['status']?.toString().toLowerCase().trim() ?? '';
 
-          // حساب المبيعات المكتملة (دعم اللغتين)
           if (status == 'delivered' || status == 'تم التوصيل') {
             completedSales += (orderData['total'] is num) ? (orderData['total'] as num).toDouble() : 0.0;
           } else {
-            // فحص الحالات المعلقة (ليست ملغاة وليست مكتملة)
             const cancelledStatuses = {'ملغى', 'cancelled', 'rejected', 'failed'};
             if (!cancelledStatuses.contains(status)) {
               pendingOrders++;
             }
           }
 
-          // الطلبات الجديدة تماماً
           if (status == 'new-order' || status == 'جديد' || status == 'new') {
             newOrders++;
           }
         }
       }
 
-      // 3. تحديث البيانات النهائية للكروت
+      // 3. تحديث البيانات النهائية للكروت مع إضافة حقل الـ status
       _data = SellerDashboardData(
         totalOrders: totalOrders,
         completedSalesAmount: completedSales,
         pendingOrdersCount: pendingOrders,
         newOrdersCount: newOrders,
         sellerName: _sellerName ?? 'المورد',
+        status: _accountStatus ?? 'inactive', // ✅ تمرير الحالة للموديل
       );
 
     } on FirebaseException catch (e) {
