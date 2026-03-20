@@ -3,9 +3,10 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // أضفنا الفايرستور لجلب بيانات العميل
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sizer/sizer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart'; // مكتبة فتح الروابط
 
 class ChatSupportWidget extends StatefulWidget {
   const ChatSupportWidget({super.key});
@@ -57,23 +58,62 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
     });
   }
 
-  // 🚀 دالة ذكية لجلب بيانات العميل الحالية من الفايرستور قبل الإرسال
-  Future<Map<String, String>> _getUserDetails(String uid) async {
-    // جرد سريع على الـ 3 كولكشنات المتاحة
-    List<String> collections = ['consumers', 'sellers', 'users'];
+  // 🚀 دالة ذكية لجلب بيانات العميل + الإحداثيات من الفايرستور
+  Future<Map<String, dynamic>> _getUserDetails(String uid) async {
+    Map<String, dynamic> results = {
+      "userName": "عميل أكسب",
+      "role": "guest",
+      "userPhone": "N/A",
+      "location": null // سيتم ملؤه من deliverySupermarkets
+    };
+
+    try {
+      // 1. جلب بيانات الموقع من كولكشن السوبر ماركت
+      var supermarketDoc = await FirebaseFirestore.instance
+          .collection('deliverySupermarkets')
+          .where('ownerId', '==', uid)
+          .limit(1)
+          .get();
+
+      if (supermarketDoc.docs.isNotEmpty) {
+        var data = supermarketDoc.docs.first.data();
+        results["location"] = data['location']; // يرسل {lat: ..., lng: ...} كما في الصورة
+        results["address"] = data['address'];
+      }
+
+      // 2. جلب البيانات الشخصية (الاسم والدور)
+      List<String> collections = ['consumers', 'sellers', 'users'];
+      for (var col in collections) {
+        var doc = await FirebaseFirestore.instance.collection(col).doc(uid).get();
+        if (doc.exists) {
+          var data = doc.data()!;
+          results["userName"] = data['fullname'] ?? data['merchantName'] ?? results["userName"];
+          results["role"] = data['role'] ?? col;
+          results["userPhone"] = data['phone'] ?? "N/A";
+          break;
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching user details: $e");
+    }
+    return results;
+  }
+
+  // 🔗 دالة فتح روابط الواتساب أو المواقع
+  Future<void> _launchURL(String text) async {
+    final RegExp urlRegExp = RegExp(r'(https?:\/\/[^\s]+)');
+    final String? url = urlRegExp.stringMatch(text);
     
-    for (var col in collections) {
-      var doc = await FirebaseFirestore.instance.collection(col).doc(uid).get();
-      if (doc.exists) {
-        var data = doc.data()!;
-        return {
-          "userName": data['fullname'] ?? data['merchantName'] ?? "يا غالي",
-          "role": data['role'] ?? col,
-          "userPhone": data['phone'] ?? "N/A"
-        };
+    if (url != null) {
+      final Uri uri = Uri.parse(url);
+      try {
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      } catch (e) {
+        debugPrint("Could not launch $url");
       }
     }
-    return {"userName": "عميل أكسب", "role": "guest", "userPhone": "N/A"};
   }
 
   Future<void> _sendMessage() async {
@@ -92,7 +132,6 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
     await _saveChatHistory();
 
     try {
-      // جلب البيانات من الفايرستور بناءً على الهياكل اللي بعتها
       final userDetails = await _getUserDetails(user.uid);
       final idToken = await user.getIdToken();
 
@@ -108,14 +147,24 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
           "userName": userDetails['userName'],
           "role": userDetails['role'],
           "userPhone": userDetails['userPhone'],
+          "location": userDetails['location'], // إرسال الإحداثيات للامدا
+          "address": userDetails['address'], // إرسال العنوان النصي للمساعدة في الفلترة
         }),
       );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        final String botReply = data['message'] ?? "لا يوجد رد حالياً.";
+        
         setState(() {
-          _messages.add({"role": "bot", "text": data['message'] ?? "لا يوجد رد حالياً."});
+          _messages.add({"role": "bot", "text": botReply});
         });
+
+        // ⚡ إذا كان الرد يحتوي على رابط واتساب، افتحه تلقائياً
+        if (botReply.contains("wa.me") || botReply.contains("wa.link")) {
+          _launchURL(botReply);
+        }
+
         await _saveChatHistory();
       }
     } catch (e) {
@@ -146,7 +195,6 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
           child: Column(
             children: [
               _buildHeader(),
-              
               Expanded(
                 child: Container(
                   color: Colors.grey.withOpacity(0.02),
@@ -161,13 +209,8 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
                   ),
                 ),
               ),
-
               if (_isTyping) _buildTypingIndicator(),
-              
-              SafeArea(
-                top: false,
-                child: _buildInputSection(),
-              ),
+              SafeArea(top: false, child: _buildInputSection()),
             ],
           ),
         ),
@@ -185,8 +228,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
       child: Column(
         children: [
           Container(
-            width: 50,
-            height: 6,
+            width: 50, height: 6,
             decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
           ),
           SizedBox(height: 2.h),
@@ -202,7 +244,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
               Text(
                 "دعم أكسب الذكي",
                 style: TextStyle(
-                  fontSize: 18.sp, // تكبير الخط
+                  fontSize: 18.sp,
                   fontWeight: FontWeight.w900, 
                   color: const Color(0xff1a4d2e),
                   fontFamily: 'Cairo'
@@ -218,38 +260,41 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
   Widget _buildMessageBubble(String text, bool isUser) {
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints: BoxConstraints(maxWidth: 82.w),
-        margin: const EdgeInsets.symmetric(vertical: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-        decoration: BoxDecoration(
-          gradient: isUser 
-            ? const LinearGradient(colors: [Color(0xff28a745), Color(0xff218838)])
-            : null,
-          color: isUser ? null : Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(25),
-            topRight: const Radius.circular(25),
-            bottomLeft: Radius.circular(isUser ? 25 : 5),
-            bottomRight: Radius.circular(isUser ? 5 : 25),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: isUser ? Colors.green.withOpacity(0.2) : Colors.black.withOpacity(0.05),
-              blurRadius: 12,
-              offset: const Offset(0, 6)
+      child: GestureDetector(
+        onTap: () => _launchURL(text), // فتح الروابط عند الضغط على الفقاعة
+        child: Container(
+          constraints: BoxConstraints(maxWidth: 82.w),
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+          decoration: BoxDecoration(
+            gradient: isUser 
+              ? const LinearGradient(colors: [Color(0xff28a745), Color(0xff218838)])
+              : null,
+            color: isUser ? null : Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(25),
+              topRight: const Radius.circular(25),
+              bottomLeft: Radius.circular(isUser ? 25 : 5),
+              bottomRight: Radius.circular(isUser ? 5 : 25),
             ),
-          ],
-          border: isUser ? null : Border.all(color: Colors.grey.shade100),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: 15.sp, // خط كبير وواضح
-            height: 1.4,
-            fontWeight: FontWeight.w600,
-            fontFamily: 'Cairo',
-            color: isUser ? Colors.white : Colors.black87,
+            boxShadow: [
+              BoxShadow(
+                color: isUser ? Colors.green.withOpacity(0.2) : Colors.black.withOpacity(0.05),
+                blurRadius: 12,
+                offset: const Offset(0, 6)
+              ),
+            ],
+            border: isUser ? null : Border.all(color: Colors.grey.shade100),
+          ),
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 15.sp,
+              height: 1.4,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'Cairo',
+              color: isUser ? Colors.white : Colors.black87,
+            ),
           ),
         ),
       ),
@@ -276,9 +321,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
   Widget _buildInputSection() {
     return Container(
       padding: EdgeInsets.only(
-        left: 5.w, 
-        right: 5.w, 
-        top: 2.h,
+        left: 5.w, right: 5.w, top: 2.h,
         bottom: MediaQuery.of(context).viewInsets.bottom > 0 
             ? MediaQuery.of(context).viewInsets.bottom + 1.h 
             : 2.h, 
@@ -300,18 +343,9 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
                 filled: true,
                 fillColor: Colors.grey[50],
                 contentPadding: const EdgeInsets.symmetric(horizontal: 25, vertical: 18),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide(color: Colors.grey.shade200),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide(color: Colors.grey.shade200),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: const BorderSide(color: Color(0xff28a745), width: 2),
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide(color: Colors.grey.shade200)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide(color: Colors.grey.shade200)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: const BorderSide(color: Color(0xff28a745), width: 2)),
               ),
             ),
           ),
