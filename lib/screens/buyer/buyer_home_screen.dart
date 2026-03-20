@@ -52,8 +52,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     if (userAuth == null) return;
     _currentUserId = userAuth.uid;
 
-    _setupNotifications();
-
     final prefs = await SharedPreferences.getInstance();
     _updateCartCount(prefs);
 
@@ -70,12 +68,32 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     // استدعاء دالة الفحص
     await _checkDeliveryStatusAndDisplayIcons();
     await _updateNewDealerOrdersCount();
+
+    // استدعاء الإشعارات في النهاية بعد فحص الحالة والبيانات
+    _setupNotifications();
   }
 
-  // --- منطق الإشعارات ---
+  // --- منطق الإشعارات المطور: يمنع الظهور إذا كان الإذن ممنوحاً بالفعل ---
   Future<void> _setupNotifications() async {
     if (_currentUserId == null) return;
 
+    // 1. فحص حالة الإذن الحالية للجهاز
+    FirebaseMessaging messaging = FirebaseMessaging.instance;
+    NotificationSettings currentSettings = await messaging.getNotificationSettings();
+
+    // إذا كان الإذن ممنوحاً بالفعل، نحدث التوكن بصمت ونخرج
+    if (currentSettings.authorizationStatus == AuthorizationStatus.authorized) {
+      String? token = await messaging.getToken();
+      if (token != null) {
+        await _db.collection('users').doc(_currentUserId).update({
+          'fcmToken': token,
+          'notificationsEnabled': true,
+        });
+      }
+      return; 
+    }
+
+    // 2. إذا لم يكن لديه إذن، نتحقق من الـ SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     bool alreadyShown = prefs.getBool('notifications_dialog_shown') ?? false;
     if (alreadyShown) return;
@@ -103,7 +121,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     await prefs.setBool('notifications_dialog_shown', true);
 
     if (userAgreed == true) {
-      FirebaseMessaging messaging = FirebaseMessaging.instance;
       NotificationSettings settings = await messaging.requestPermission(alert: true, badge: true, sound: true);
 
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
@@ -249,7 +266,24 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
             );
           },
           backgroundColor: const Color(0xFF4CAF50),
-          child: const Icon(Icons.support_agent, color: Colors.white, size: 30),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              const Icon(Icons.chat_bubble_outline, color: Colors.white, size: 28),
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(
+                    color: Colors.yellowAccent,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.auto_awesome, color: Colors.black, size: 12),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
