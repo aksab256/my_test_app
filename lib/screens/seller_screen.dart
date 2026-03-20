@@ -11,6 +11,7 @@ import 'package:my_test_app/services/user_session.dart';
 import 'package:sizer/sizer.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:my_test_app/widgets/chat_support_widget.dart';
+import 'package:url_launcher/url_launcher.dart'; // تأكد من إضافة الحزمة في pubspec.yaml
 
 class SellerScreen extends StatefulWidget {
   static const String routeName = '/sellerhome';
@@ -210,7 +211,44 @@ class _SellerScreenState extends State<SellerScreen> {
           child: const Icon(Icons.support_agent, color: Colors.white, size: 32),
         ),
         
-        body: _activeScreen,
+        body: Column(
+          children: [
+            // 🎯 التعديل المطلوب: شريط تنبيه يظهر فقط إذا كان الحساب غير نشط
+            if (controller.data.isActive == false)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                color: Colors.orange.shade100,
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, color: Colors.orangeAccent),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        "منتجاتكم غير ظاهرة في المتجر حالياً، يرجى التواصل مع الدعم لتفعيل الحساب.",
+                        style: TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        final Uri emailLaunchUri = Uri(
+                          scheme: 'mailto',
+                          path: 'support@aksab.shop',
+                          query: 'subject=استفسار عن تفعيل حساب التاجر: ${UserSession.userId}',
+                        );
+                        if (await canLaunchUrl(emailLaunchUri)) {
+                          await launchUrl(emailLaunchUri);
+                        }
+                      },
+                      child: const Text("دعم الفني", style: TextStyle(fontFamily: 'Cairo', color: Colors.blue, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ),
+            // الشاشة النشطة تملأ بقية المساحة
+            Expanded(child: _activeScreen),
+          ],
+        ),
         
         drawer: SellerSidebar(
           userData: SellerUserData(
