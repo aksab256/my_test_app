@@ -237,11 +237,13 @@ var supermarketDoc = await FirebaseFirestore.instance
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const CircleAvatar(
-                backgroundColor: Color(0xff28a745),
-                radius: 14,
-                child: Icon(Icons.bolt, color: Colors.white, size: 18),
-              ),
+              // ابحث عن الجزء ده في كود الـ Header وغيره
+const CircleAvatar(
+  backgroundColor: Color(0xff28a745),
+  radius: 14,
+  child: Icon(Icons.auto_awesome, color: Colors.white, size: 16), // غيرنا bolt لـ auto_awesome
+),
+
               const SizedBox(width: 12),
               Text(
                 "دعم أكسب الذكي",
