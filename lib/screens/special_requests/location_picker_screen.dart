@@ -354,7 +354,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                       : 'https://api.mapbox.com/v4/mapbox.light/{z}/{x}/{y}.png?access_token=$mapboxToken',
                   additionalOptions: {'accessToken': mapboxToken},
                   tileProvider: CachedTileProvider(
-                    store: FileCacheStore(Directory(_cachePath!)), // متوافق مع نسخة 1.5.2
+                    store: FileCacheStore(_cachePath!), 
+// متوافق مع نسخة 1.5.2
                   ),
                 ),
               ],
