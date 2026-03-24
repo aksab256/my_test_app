@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:sizer/sizer.dart';
-import 'package:permission_handler/permission_handler.dart'; // 🎯 إضافة مكتبة إدارة الأذونات
+import 'package:permission_handler/permission_handler.dart';
 
 // 🎯 الألوان والثوابت المعتمدة
 const Color primaryColor = Color(0xff28a745);
@@ -38,6 +38,15 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
   final _subUserPhoneController = TextEditingController();
 
   String _selectedSubUserRole = 'read_only';
+  
+  // الحقل الجديد لـ "مدة التوصيل"
+  String? _selectedDeliveryDuration; 
+  final List<String> _deliveryOptions = [
+    '24 ساعة',
+    '48 ساعة',
+    '72 ساعة',
+    'أسبوع',
+  ];
 
   @override
   void initState() {
@@ -60,6 +69,14 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
         _merchantNameController.text = sellerDataCache['merchantName'] ?? '';
         _minOrderTotalController.text = (sellerDataCache['minOrderTotal'] ?? 0.0).toString();
         _deliveryFeeController.text = (sellerDataCache['deliveryFee'] ?? 0.0).toString();
+        
+        // جلب قيمة مدة التوصيل بأمان
+        if (sellerDataCache.containsKey('deliveryDuration')) {
+          String? val = sellerDataCache['deliveryDuration'];
+          if (_deliveryOptions.contains(val)) {
+            _selectedDeliveryDuration = val;
+          }
+        }
       }
     } catch (e) {
       debugPrint("Error loading seller data: $e");
@@ -87,6 +104,7 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
         'merchantName': _merchantNameController.text.trim(),
         'minOrderTotal': double.tryParse(_minOrderTotalController.text) ?? 0.0,
         'deliveryFee': double.tryParse(_deliveryFeeController.text) ?? 0.0,
+        'deliveryDuration': _selectedDeliveryDuration, // تحديث الحقل الجديد
       });
       _showFloatingAlert("✅ تم تحديث بيانات العمل بنجاح");
     } catch (e) {
@@ -96,16 +114,10 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
     }
   }
 
-  // 🛡️ دالة رفع اللوجو المحدثة (فحص ذكي للإذن)
   Future<void> _uploadLogo() async {
-    // 1. فحص حالة الإذن الحالية بدقة
     PermissionStatus status = await Permission.photos.status;
     
-    // ملاحظة: في أندرويد 13+، قد نحتاج لفحص Permission.photos أو Permission.videos
-    // الكود التالي يتعامل مع الحالات التي تتطلب "إفصاح"
     if (status.isDenied || status.isPermanentlyDenied || status.isRestricted) {
-      
-      // إظهار رسالة الإفصاح فقط إذا كان الإذن غير متاح
       final bool? proceed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -139,7 +151,6 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
       if (proceed != true) return;
     }
 
-    // 2. فتح المعرض (نظام أندرويد سيتولى إظهار نافذة الإذن الرسمية إذا لزم الأمر)
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
 
@@ -173,7 +184,6 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
     }
   }
 
-  // 🎯 دالة حذف الحساب (Soft Delete) استجابةً لمتطلبات جوجل بلاي
   Future<void> _deleteAccount() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -200,14 +210,12 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
 
     setState(() => _isLoading = true);
     try {
-      // تنفيذ الحذف الناعم في Firestore
       await _firestore.collection("sellers").doc(widget.currentSellerId).update({
         'isDeleted': true,
         'deletedAt': FieldValue.serverTimestamp(),
         'status': 'delete_requested',
       });
 
-      // تسجيل الخروج والعودة للبداية
       await _auth.signOut();
       if (mounted) {
         Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
@@ -288,6 +296,10 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
                     _buildSectionTitle("بيانات العمل"),
                     _buildModernField("اسم النشاط", _merchantNameController, Icons.storefront),
                     _buildReadOnlyField("نوع النشاط", sellerDataCache['businessType'] ?? 'غير محدد', Icons.category),
+                    
+                    // حقل مدة التوصيل الجديد
+                    _buildDeliveryDurationDropdown(),
+
                     Row(
                       children: [
                         Expanded(child: _buildModernField("الحد الأدنى", _minOrderTotalController, Icons.shopping_basket, isNum: true)),
@@ -308,7 +320,6 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
                     SizedBox(height: 3.h),
                     _buildSubUsersList(),
                     
-                    // 🎯 قسم حذف الحساب (متطلب جوجل بلاي)
                     SizedBox(height: 4.h),
                     const Divider(color: Colors.redAccent, thickness: 0.5),
                     TextButton.icon(
@@ -328,6 +339,46 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
   }
 
   // --- المكونات المساعدة (UI Helpers) ---
+
+  Widget _buildDeliveryDurationDropdown() {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 2.h),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(right: 2.w, bottom: 0.5.h),
+            child: Text("مدة التوصيل المتوقعة", style: TextStyle(fontSize: 11.sp, color: Colors.grey[600], fontFamily: 'Cairo')),
+          ),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 0.5.h),
+            decoration: BoxDecoration(
+              color: const Color(0xfff8f9fa),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: const Color(0xffe9ecef)),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _selectedDeliveryDuration,
+                hint: const Text("اختر مدة التوصيل", style: TextStyle(fontFamily: 'Cairo')),
+                isExpanded: true,
+                icon: const Icon(Icons.timer_outlined, color: primaryColor),
+                items: _deliveryOptions.map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                  );
+                }).toList(),
+                onChanged: (newValue) {
+                  setState(() => _selectedDeliveryDuration = newValue);
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildLogoHeader(String? logoUrl) {
     return Stack(
