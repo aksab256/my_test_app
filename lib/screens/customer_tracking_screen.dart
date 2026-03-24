@@ -1,10 +1,15 @@
-// lib/screens/customer_tracking_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:sizer/sizer.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:io';
+
+// مكتبات الكاش والتخزين المتوافقة
+import 'package:flutter_map_cache/flutter_map_cache.dart';
+import 'package:dio_cache_interceptor_file_store/dio_cache_interceptor_file_store.dart';
+import 'package:path_provider/path_provider.dart';
 
 class CustomerTrackingScreen extends StatefulWidget {
   static const routeName = '/customerTracking';
@@ -19,6 +24,45 @@ class CustomerTrackingScreen extends StatefulWidget {
 class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
   final String mapboxToken = "pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw";
   final MapController _mapController = MapController();
+  
+  // متغيرات الكاش
+  String? _cachePath;
+  bool _isMapReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initCache();
+  }
+
+  // تهيئة نظام الكاش للخرائط
+  Future<void> _initCache() async {
+    final cacheDir = await getTemporaryDirectory();
+    _cachePath = '${cacheDir.path}/map_tiles_cache';
+    
+    // تنظيف الكاش القديم (أكبر من 7 أيام)
+    try {
+      final directory = Directory(_cachePath!);
+      if (await directory.exists()) {
+        final now = DateTime.now();
+        final files = directory.listSync();
+        for (var file in files) {
+          final stat = file.statSync();
+          if (now.difference(stat.accessed).inDays > 7) {
+            await file.delete(recursive: true);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Cache Clean Error: $e");
+    }
+
+    if (mounted) {
+      setState(() {
+        _isMapReady = true;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -85,7 +129,7 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                       'status': 'delivered'
                     });
                     
-                    if (driverId != null && driverId.isNotEmpty) {
+                    if (driverId.isNotEmpty) {
                       await FirebaseFirestore.instance.collection('freeDrivers').doc(driverId).update({
                         'totalStars': FieldValue.increment(selectedRating),
                         'reviewsCount': FieldValue.increment(1),
@@ -199,7 +243,6 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                 GeoPoint dLoc = driverData['location'];
                 driverLatLng = LatLng(dLoc.latitude, dLoc.longitude);
                 
-                // ✅ الإصلاح هنا: محاولة التحريك المباشر مع تجاوز الخطأ إذا لم تكتمل التهيئة
                 try {
                    _mapController.move(driverLatLng, 14.5);
                 } catch (_) {}
@@ -219,6 +262,7 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                 ),
                 body: Stack(
                   children: [
+                    if (_isMapReady && _cachePath != null)
                     FlutterMap(
                       mapController: _mapController,
                       options: MapOptions(
@@ -228,7 +272,10 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                       children: [
                         TileLayer(
                           urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
-                          tileProvider: NetworkTileProvider(), // ✅ الحفاظ على سرعة التحميل
+                          additionalOptions: {'accessToken': mapboxToken},
+                          tileProvider: CachedTileProvider(
+                            store: FileCacheStore(_cachePath!), 
+                          ),
                         ),
                         MarkerLayer(
                           markers: [
@@ -239,7 +286,7 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                           ],
                         ),
                       ],
-                    ),
+                    ) else const Center(child: CircularProgressIndicator()),
                     Align(
                       alignment: Alignment.bottomCenter,
                       child: SafeArea(
@@ -346,4 +393,3 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
     );
   }
 }
-
