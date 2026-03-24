@@ -8,10 +8,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:math';
+import 'dart:io';
+import 'package:sizer/sizer.dart';
+
+// مكتبات الكاش والتخزين المتوافقة مع النسخ الحالية
+import 'package:flutter_map_cache/flutter_map_cache.dart';
+import 'package:dio_cache_interceptor_file_store/dio_cache_interceptor_file_store.dart';
+import 'package:path_provider/path_provider.dart';
+
 import '../../services/bubble_service.dart';
 import '../../services/delivery_service.dart';
-import 'dart:math';
-import 'package:sizer/sizer.dart'; // للمقاسات المتجاوبة
 
 enum PickerStep { pickup, dropoff, confirm }
 
@@ -57,6 +64,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   List _searchResults = [];
   String _selectedVehicle = "motorcycle";
 
+  // متغير لحفظ مسار الكاش
+  String? _cachePath;
+
   final List<Map<String, dynamic>> _vehicles = [
     {"id": "motorcycle", "name": "موتوسيكل", "icon": Icons.directions_bike},
     {"id": "pickup", "name": "ربع نقل", "icon": Icons.local_shipping},
@@ -67,7 +77,51 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   void initState() {
     super.initState();
     _currentMapCenter = widget.initialLocation ?? const LatLng(30.0444, 31.2357);
-    _determinePosition();
+    _initCacheAndPosition();
+  }
+
+  // تهيئة الكاش والموقع
+  Future<void> _initCacheAndPosition() async {
+    await _prepareCacheDirectory();
+    await _cleanOldCache(); 
+    await _determinePosition();
+    
+    // إغلاق شاشة التحميل بعد استجابة النظام
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted && _isMapLoading) {
+        setState(() => _isMapLoading = false);
+      }
+    });
+  }
+
+  // تحديد مجلد حفظ الخرائط
+  Future<void> _prepareCacheDirectory() async {
+    final cacheDir = await getTemporaryDirectory();
+    if (mounted) {
+      setState(() {
+        _cachePath = '${cacheDir.path}/map_tiles_cache';
+      });
+    }
+  }
+
+  // تنظيف الملفات القديمة (أكبر من 7 أيام) لتوفير المساحة
+  Future<void> _cleanOldCache() async {
+    try {
+      if (_cachePath == null) return;
+      final directory = Directory(_cachePath!);
+      if (await directory.exists()) {
+        final now = DateTime.now();
+        final files = directory.listSync();
+        for (var file in files) {
+          final stat = file.statSync();
+          if (now.difference(stat.accessed).inDays > 7) {
+            await file.delete(recursive: true);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Cache Clean Error: $e");
+    }
   }
 
   @override
@@ -115,7 +169,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     double lon = double.parse(result['lon']);
     LatLng target = LatLng(lat, lon);
     
-    _mapController.move(target, 16.5);
+    _mapController.move(target, 12.0); 
     
     setState(() {
       _currentMapCenter = target;
@@ -124,6 +178,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       _searchController.clear();
       FocusScope.of(context).unfocus();
     });
+    _getAddress(target);
   }
 
   Future<void> _determinePosition() async {
@@ -155,17 +210,13 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         setState(() {
           _loadingStatus = "تم التحديد، جاري جلب تفاصيل المنطقة...";
           _currentMapCenter = myLocation;
-          _mapController.move(myLocation, 15);
+          _mapController.move(myLocation, 12.0); 
         });
         
         await _getAddress(myLocation);
-        
-        setState(() {
-          _isMapLoading = false; 
-        });
+        setState(() => _isMapLoading = false);
       }
     } catch (e) {
-      debugPrint("Location Error: $e");
       if (mounted) {
         setState(() {
           _tempAddress = "تعذر جلب العنوان تلقائياً";
@@ -279,14 +330,19 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         resizeToAvoidBottomInset: false,
         body: Stack(
           children: [
+            if (_cachePath != null) 
             FlutterMap(
               mapController: _mapController,
               options: MapOptions(
                 initialCenter: _currentMapCenter,
-                initialZoom: 15.0,
+                initialZoom: 12.0, 
                 onPositionChanged: (pos, hasGesture) {
                   if (hasGesture) {
                     _currentMapCenter = pos.center;
+                  }
+                },
+                onMapEvent: (event) {
+                  if (event is MapEventMoveEnd) {
                     _getAddress(_currentMapCenter);
                   }
                 },
@@ -294,11 +350,12 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               children: [
                 TileLayer(
                   urlTemplate: _isSatelliteMode
-                      ? 'https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken'
-                      : 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
+                      ? 'https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.jpg?access_token=$mapboxToken'
+                      : 'https://api.mapbox.com/v4/mapbox.light/{z}/{x}/{y}.png?access_token=$mapboxToken',
                   additionalOptions: {'accessToken': mapboxToken},
-                  tileProvider: NetworkTileProvider(),
-                  // تم حذف placeholderColor لحل خطأ الـ Build في الإصدار الجديد من flutter_map
+                  tileProvider: CachedTileProvider(
+                    store: FileCacheStore(Directory(_cachePath!)), // متوافق مع نسخة 1.5.2
+                  ),
                 ),
               ],
             ),
@@ -614,3 +671,4 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     );
   }
 }
+
