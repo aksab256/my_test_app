@@ -8,13 +8,13 @@ import 'package:sizer/sizer.dart';
 
 class ManufacturersBanner extends StatefulWidget {
   final Function(String? id) onManufacturerSelected;
-  // 🎯 [تم الإضافة]: استقبال معرف القسم الفرعي
+  // استقبال معرف القسم الفرعي لفلترة الشركات
   final String? subCategoryId;
 
   const ManufacturersBanner({
     super.key,
     required this.onManufacturerSelected,
-    this.subCategoryId, // تمريره هنا
+    this.subCategoryId, 
   });
 
   @override
@@ -27,13 +27,13 @@ class _ManufacturersBannerState extends State<ManufacturersBanner> {
   void initState() {
     super.initState();                                      
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // 🎯 [تم التعديل]: تمرير المعرف للـ Provider لفلترة الشركات
+      // تمرير المعرف للـ Provider لفلترة الشركات عند بدء الشاشة
       Provider.of<ManufacturersProvider>(context, listen: false)
           .fetchManufacturers(subCategoryId: widget.subCategoryId);                          
     });
   }
 
-  // دالة بناء الكارت (بقيت كما هي تماماً مع تحسين بسيط في حجم الخط لسهولة القراءة)
+  // دالة بناء الكارت الفردي لكل شركة مصنعة
   Widget _buildManufacturerCard(ManufacturerModel manufacturer) {
     final bool isAllOption = manufacturer.id == 'ALL';  
     final Color primaryColor = Theme.of(context).primaryColor;
@@ -42,23 +42,56 @@ class _ManufacturersBannerState extends State<ManufacturersBanner> {
     final double iconSize = 0.5 * radius;
                                                                                                                     
     final Widget iconContent;
+    
     if (isAllOption) {
+      // خيار عرض "الكل"
       iconContent = Icon(
         Icons.filter_list_alt,                          
         size: iconSize,
         color: primaryColor,                                                                                          
       );
     } else {
-      iconContent = manufacturer.name.isNotEmpty
-          ? Text(
-              manufacturer.name[0],                                   
+      // فحص توافر الصورة في الحقول المحددة (imageUrl أو imagePublicId)
+      // ملاحظة: تأكد أن الموديل ManufacturerModel يحتوي على هذه الحقول
+      bool hasImage = (manufacturer.imageUrl != null && manufacturer.imageUrl!.isNotEmpty) || 
+                      (manufacturer.imagePublicId != null && manufacturer.imagePublicId!.isNotEmpty);
+
+      if (hasImage) {
+        // تحديد الرابط المتاح (الأولوية لـ imageUrl)
+        String imagePath = (manufacturer.imageUrl != null && manufacturer.imageUrl!.isNotEmpty) 
+            ? manufacturer.imageUrl! 
+            : manufacturer.imagePublicId!;
+
+        iconContent = ClipOval(
+          child: Image.network(
+            imagePath,
+            width: radius * 2,
+            height: radius * 2,
+            fit: BoxFit.cover,
+            // في حالة فشل تحميل الصورة من الرابط، يتم عرض أول حرف كبديل (Fallback)
+            errorBuilder: (context, error, stackTrace) => Text(
+              manufacturer.name.isNotEmpty ? manufacturer.name[0] : "?",
               style: GoogleFonts.cairo(
                 fontSize: 16.sp, 
                 fontWeight: FontWeight.w700,                            
                 color: primaryColor,                                  
               ),
-            )
-          : Icon(Icons.business, size: iconSize, color: primaryColor);
+            ),
+          ),
+        );
+      } else {
+        // في حال عدم وجود أي بيانات صور، يتم عرض أول حرف من الاسم
+        iconContent = manufacturer.name.isNotEmpty
+            ? Text(
+                manufacturer.name[0],                                   
+                style: GoogleFonts.cairo(
+                  fontSize: 16.sp, 
+                  fontWeight: FontWeight.w700,                            
+                  color: primaryColor,                                  
+                ),
+              )
+            : Icon(Icons.business, size: iconSize, color: primaryColor);
+      }
     }
 
     return InkWell(                                           
@@ -94,7 +127,7 @@ class _ManufacturersBannerState extends State<ManufacturersBanner> {
               maxLines: 2,                                                                                                    
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.cairo(
-                fontSize: 10.sp, // زيادة طفيفة جداً للوضوح كما طلبنا سابقاً
+                fontSize: 10.sp,
                 fontWeight: FontWeight.w600,
                 color: Colors.black87,
               ),
@@ -114,6 +147,7 @@ class _ManufacturersBannerState extends State<ManufacturersBanner> {
       padding: const EdgeInsets.only(top: 10.0, bottom: 10.0),                                                                                                                
       child: Consumer<ManufacturersProvider>(
         builder: (context, provider, child) {
+          // حالة التحميل
           if (provider.isLoading) {
             return SizedBox(                            
               height: bannerHeight,                                   
@@ -121,14 +155,20 @@ class _ManufacturersBannerState extends State<ManufacturersBanner> {
             );                                          
           }
                                                         
+          // حالة وجود خطأ
           if (provider.errorMessage != null) {
             return SizedBox(
               height: bannerHeight,                     
-              child: Center(child: Text('خطأ في التحميل: ${provider.errorMessage}',
-              style: const TextStyle(color: Colors.red)))
+              child: Center(
+                child: Text(
+                  'خطأ في التحميل: ${provider.errorMessage}',
+                  style: const TextStyle(color: Colors.red, fontFamily: 'Cairo')
+                )
+              )
             );
           }
                                                         
+          // حالة عدم وجود شركات تابعة لهذا القسم
           if (provider.manufacturers.isEmpty) {
             return const SizedBox.shrink();                                                                               
           }
