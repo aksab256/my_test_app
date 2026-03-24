@@ -58,12 +58,10 @@ class _TradersScreenState extends State<TradersScreen> {
         break;
       
       case 1:
-        // الرجوع للرئيسية اللي مستنية تحتنا في الـ Stack
         Navigator.of(context).pop(); 
         break;
 
       case 2:
-        // ✅ تعديل أيقونة الطلبات لتفتح مباشرة لضمان عمل زر الرجوع والحفاظ على الـ Stack
         Navigator.push(
           context, 
           MaterialPageRoute(builder: (context) => const MyOrdersScreen())
@@ -80,7 +78,6 @@ class _TradersScreenState extends State<TradersScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
     
-    // 🎯 جلب بيانات المستخدم لتحديد الرتبة (Role)
     final prefs = await SharedPreferences.getInstance();
     final userJson = prefs.getString('loggedUser');
     if (userJson != null) {
