@@ -14,7 +14,8 @@ class TradersListWidget extends StatelessWidget {
   });
 
   Widget _buildTraderCard(BuildContext context, DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    // تأمين جلب البيانات وتحويلها لـ Map
+    final data = doc.data() as Map<String, dynamic>? ?? {};
 
     final String merchantName = data['merchantName']?.toString() ?? "تاجر غير معروف";
     final String businessType = data['businessType']?.toString() ?? "غير محدد";
@@ -22,7 +23,11 @@ class TradersListWidget extends StatelessWidget {
     final String? merchantLogoUrl = data['merchantLogoUrl']?.toString();
     final num? minOrderTotal = data['minOrderTotal'] as num?;
     
-    // تم إلغاء متغير الـ rating بناءً على طلبك
+    // 🎯 [التعديل الرئيسي]: جلب مدة التوصيل من حقل deliveryDuration
+    // تم التأمين باستخدام ?? لضمان عدم ضرب الكود إذا كان الحقل null أو فارغ
+    final String deliveryDuration = (data['deliveryDuration'] != null && data['deliveryDuration'].toString().isNotEmpty)
+        ? data['deliveryDuration'].toString()
+        : "قيد التحديد"; // القيمة الافتراضية في حال عدم وجود بيانات
 
     final bool isDeliveryActive = data['isDeliveryActive'] ?? true;
 
@@ -51,7 +56,6 @@ class TradersListWidget extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // الشعار بتصميم دائري محسّن
                     Container(
                       width: 65,
                       height: 65,
@@ -74,7 +78,6 @@ class TradersListWidget extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 15),
-                    // تفاصيل التاجر الرئيسية
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -87,7 +90,6 @@ class TradersListWidget extends StatelessWidget {
                                 color: Color(0xFF2D3142)),
                           ),
                           const SizedBox(height: 6),
-                          // نوع النشاط كـ Badge صغير
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
@@ -117,7 +119,6 @@ class TradersListWidget extends StatelessWidget {
                   child: Divider(height: 1, color: Color(0xFFEEEEEE)),
                 ),
 
-                // العنوان والمعلومات اللوجستية
                 Row(
                   children: [
                     const Icon(Icons.location_on_rounded, color: Colors.grey, size: 18),
@@ -137,7 +138,6 @@ class TradersListWidget extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // حالة التوصيل
                     Row(
                       children: [
                         Icon(
@@ -154,9 +154,18 @@ class TradersListWidget extends StatelessWidget {
                             color: isDeliveryActive ? const Color(0xFF4CAF50) : Colors.orange,
                           ),
                         ),
+                        // 🎯 عرض مدة التوصيل بشكل مؤمن
+                        if (isDeliveryActive) ...[
+                          const SizedBox(width: 10),
+                          const Icon(Icons.access_time_filled_rounded, color: Colors.blueGrey, size: 16),
+                          const SizedBox(width: 4),
+                          Text(
+                            deliveryDuration,
+                            style: const TextStyle(fontSize: 12, color: Colors.blueGrey, fontWeight: FontWeight.w600),
+                          ),
+                        ],
                       ],
                     ),
-                    // الحد الأدنى للطلب بتصميم بارز
                     if (minOrderTotal != null)
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
@@ -173,11 +182,10 @@ class TradersListWidget extends StatelessWidget {
 
                 const SizedBox(height: 18),
                 
-                // زر الدخول للمتجر بتصميم عصري
                 ElevatedButton(
                   onPressed: () => onTraderTap(doc),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2D3142), // لون داكن فخم
+                    backgroundColor: const Color(0xFF2D3142), 
                     foregroundColor: Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 14),
