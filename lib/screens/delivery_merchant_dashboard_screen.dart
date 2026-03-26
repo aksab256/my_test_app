@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/widgets/delivery_merchant_sidebar_widget.dart';
 // استيراد صفحة السجلات (تأكد من وجود الملف بهذا الاسم في مشروعك)
-import 'package:my_test_app/screens/merchant_balance_screen.dart'; 
+import 'package:my_test_app/screens/merchant_balance_screen.dart';
 
 class DashboardData {
   final int totalProducts;
@@ -12,6 +12,7 @@ class DashboardData {
   final int pendingOrders;
   final double totalSales;
   final double securityPoints;
+  final String subscriptionStatus; // التعديل: إضافة حالة الاشتراك
 
   DashboardData({
     required this.totalProducts,
@@ -19,11 +20,12 @@ class DashboardData {
     required this.pendingOrders,
     required this.totalSales,
     required this.securityPoints,
+    required this.subscriptionStatus, // التعديل: إضافة حالة الاشتراك
   });
 }
 
 class DeliveryMerchantDashboardScreen extends StatefulWidget {
-  static const routeName = '/deliveryMerchantDashboard'; 
+  static const routeName = '/deliveryMerchantDashboard';
 
   const DeliveryMerchantDashboardScreen({super.key});
 
@@ -45,7 +47,7 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
     // 2. جلب إحصائيات الطلبات
     final ordersRef = _firestore.collection("consumerorders");
     final allOrdersSnapshot = await ordersRef.where("supermarketId", isEqualTo: userId).count().get();
-    
+
     // الطلبات في حالة الانتظار أو المعالجة
     final pendingOrdersSnapshot = await ordersRef
         .where("supermarketId", isEqualTo: userId)
@@ -55,7 +57,7 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
     final deliveredOrdersDocs = await ordersRef
         .where("supermarketId", isEqualTo: userId)
         .where("status", isEqualTo: "delivered").get();
-    
+
     double totalSales = 0;
     for (var doc in deliveredOrdersDocs.docs) {
       final data = doc.data();
@@ -64,14 +66,18 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
       }
     }
 
-    // 4. جلب نقاط الأمان (العهدة) من سجلات السوبر ماركت
+    // 4. جلب نقاط الأمان وحالة الاشتراك من سجلات السوبر ماركت
     final merchantSnapshot = await _firestore.collection("deliverySupermarkets")
         .where("ownerId", isEqualTo: userId)
         .limit(1).get();
-    
+
     double securityPoints = 0;
+    String subscriptionStatus = "active"; // القيمة الافتراضية
+
     if (merchantSnapshot.docs.isNotEmpty) {
-      securityPoints = double.tryParse(merchantSnapshot.docs.first.data()['walletBalance'].toString()) ?? 0.0;
+      final data = merchantSnapshot.docs.first.data();
+      securityPoints = double.tryParse(data['walletBalance'].toString()) ?? 0.0;
+      subscriptionStatus = data['subscriptionStatus']?.toString() ?? "active"; // قراءة الحالة من Firestore
     }
 
     return DashboardData(
@@ -80,6 +86,7 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
       pendingOrders: pendingOrdersSnapshot.count ?? 0,
       totalSales: totalSales,
       securityPoints: securityPoints,
+      subscriptionStatus: subscriptionStatus, // التعديل: تمرير الحالة
     );
   }
 
@@ -89,7 +96,7 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
     if (_dashboardDataFuture == null) {
       final buyerData = Provider.of<BuyerDataProvider>(context, listen: false);
       final userId = buyerData.loggedInUser?.id;
-      
+
       if (userId != null && userId.isNotEmpty) {
         _dashboardDataFuture = _fetchDashboardData(userId);
       } else {
@@ -102,7 +109,7 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
   Widget build(BuildContext context) {
     final buyerProvider = Provider.of<BuyerDataProvider>(context);
     final userName = buyerProvider.loggedInUser?.fullname ?? 'التاجر';
-    final planName = buyerProvider.planName; 
+    final planName = buyerProvider.planName;
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -148,7 +155,34 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
                       } else if (snapshot.hasError) {
                         return _buildErrorState(snapshot.error.toString());
                       } else if (snapshot.hasData) {
-                        return _buildStatsGrid(snapshot.data!, context);
+                        return Column(
+                          children: [
+                            // 🎯 التنبيه الخاص بانتهاء الباقة
+                            if (snapshot.data!.subscriptionStatus == "expired")
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 20),
+                                padding: const EdgeInsets.all(15),
+                                decoration: BoxDecoration(
+                                  color: Colors.red[50],
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(color: Colors.red.shade200),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.warning_amber_rounded, color: Colors.red),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'عفواً، باقة الاشتراك الحالية منتهية. يرجى التواصل مع الإدارة لتجديد الاشتراك وتفعيل العروض.',
+                                        style: TextStyle(color: Colors.red.shade900, fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            _buildStatsGrid(snapshot.data!, context),
+                          ],
+                        );
                       }
                       return const Center(child: Text('لا توجد بيانات متاحة حالياً.'));
                     },
@@ -179,8 +213,8 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
           ),
           child: Row(
             children: [
-              Icon(isFree ? Icons.bolt : Icons.workspace_premium, 
-                   size: 14, color: isFree ? Colors.green : Colors.amber.shade800),
+              Icon(isFree ? Icons.bolt : Icons.workspace_premium,
+                  size: 14, color: isFree ? Colors.green : Colors.amber.shade800),
               const SizedBox(width: 4),
               Text(plan, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
             ],
@@ -212,8 +246,8 @@ class _DeliveryMerchantDashboardScreenState extends State<DeliveryMerchantDashbo
           color: Colors.teal,
           onTap: () {
             Navigator.push(
-              context, 
-              MaterialPageRoute(builder: (context) => MerchantPointBalanceScreen())
+                context,
+                MaterialPageRoute(builder: (context) => MerchantPointBalanceScreen())
             );
           },
         ),
@@ -285,8 +319,8 @@ class _DashboardCard extends StatelessWidget {
   final VoidCallback? onTap;
 
   const _DashboardCard({
-    required this.icon, 
-    required this.title, 
+    required this.icon,
+    required this.title,
     required this.value,
     required this.color,
     this.onTap,
