@@ -347,18 +347,28 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   }
                 },
               ),
-              children: [
-                TileLayer(
-                  urlTemplate: _isSatelliteMode
-                      ? 'https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.jpg?access_token=$mapboxToken'
-                      : 'https://api.mapbox.com/v4/mapbox.light/{z}/{x}/{y}.png?access_token=$mapboxToken',
-                  additionalOptions: {'accessToken': mapboxToken},
-                  tileProvider: CachedTileProvider(
-                    store: FileCacheStore(_cachePath!), 
-// متوافق مع نسخة 1.5.2
-                  ),
-                ),
-              ],
+                                              children: [
+                                  // 1. طبقة الخريطة العادية (شوارع)
+                                  TileLayer(
+                                    urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
+                                    additionalOptions: {'accessToken': mapboxToken},
+                                    tileProvider: CachedTileProvider(
+                                      store: FileCacheStore(_cachePath!),
+                                    ),
+                                    opacity: !_isSatelliteMode ? 1.0 : 0.0,
+                                  ),
+                                  
+                                  // 2. طبقة القمر الصناعي
+                                  TileLayer(
+                                    urlTemplate: 'https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.jpg?access_token=$mapboxToken',
+                                    additionalOptions: {'accessToken': mapboxToken},
+                                    tileProvider: CachedTileProvider(
+                                      store: FileCacheStore(_cachePath!),
+                                    ),
+                                    opacity: _isSatelliteMode ? 1.0 : 0.0,
+                                  ),
+                                ],
+
             ),
 
             Center(
