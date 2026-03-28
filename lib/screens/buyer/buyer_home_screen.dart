@@ -7,10 +7,10 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:convert';
 
 // استيراد الـ Widgets والمحتويات
-import 'package:my_test_app/widgets/home_content.dart'; 
+import 'package:my_test_app/widgets/home_content.dart';
 import 'package:my_test_app/widgets/buyer_header_widget.dart';
 import 'package:my_test_app/widgets/buyer_mobile_nav_widget.dart';
-import 'package:my_test_app/widgets/chat_support_widget.dart'; 
+import 'package:my_test_app/widgets/chat_support_widget.dart';
 
 // 🎯 استيراد الصفحة مباشرة لضمان عمل التوجيه المستقل
 import 'package:my_test_app/screens/buyer/my_orders_screen.dart';
@@ -28,9 +28,9 @@ class BuyerHomeScreen extends StatefulWidget {
 
 class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  
+
   // 🎯 نحن في الصفحة الرئيسية، لذا الاندكس هو 1 دائماً في هذا الملف
-  final int _selectedIndex = 1; 
+  final int _selectedIndex = 1;
 
   String _userName = 'مرحباً بك!';
   String? _currentUserId;
@@ -64,7 +64,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     } catch (e) {
       debugPrint('Error loading user data: $e');
     }
-    
+
     // استدعاء دالة الفحص
     await _checkDeliveryStatusAndDisplayIcons();
     await _updateNewDealerOrdersCount();
@@ -90,7 +90,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
           'notificationsEnabled': true,
         });
       }
-      return; 
+      return;
     }
 
     // 2. إذا لم يكن لديه إذن، نتحقق من الـ SharedPreferences
@@ -99,7 +99,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     if (alreadyShown) return;
 
     if (!mounted) return;
-    
+
     bool? userAgreed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -190,27 +190,22 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     if (mounted) setState(() => _newOrdersCount = q.size);
   }
 
-    void _onItemTapped(int index) {
+  void _onItemTapped(int index) {
     if (index == _selectedIndex) return;
     switch (index) {
-      case 0: 
-        // ❌ كان: Navigator.pushReplacementNamed(context, '/traders');
-        // ✅ الصح:
-        Navigator.pushNamed(context, '/traders'); 
+      case 0:
+        Navigator.pushNamed(context, '/traders');
         break;
-      case 1: 
+      case 1:
         break; // نحن هنا بالفعل
       case 2:
         Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
         break;
-      case 3: 
-        // ❌ كان: Navigator.pushReplacementNamed(context, '/wallet');
-        // ✅ الصح:
-        Navigator.pushNamed(context, '/wallet'); 
+      case 3:
+        Navigator.pushNamed(context, '/wallet');
         break;
     }
   }
-
 
   void _handleLogout() async {
     try {
@@ -255,9 +250,9 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
           cartCount: _cartCount,
           ordersChanged: false,
         ),
-        floatingActionButton: FloatingActionButton(
-          heroTag: "buyer_home_chat_btn",
-          onPressed: () {
+        // 🚀 تحديث أيقونة شـيرا لتكون هي اللوجو الجديد وتصميم عصري عائم
+        floatingActionButton: GestureDetector(
+          onTap: () {
             showModalBottomSheet(
               context: context,
               isScrollControlled: true,
@@ -265,27 +260,63 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
               builder: (context) => const ChatSupportWidget(),
             );
           },
-          backgroundColor: const Color(0xFF4CAF50),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              const Icon(Icons.chat_bubble_outline, color: Colors.white, size: 28),
-              Positioned(
-                top: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(
-                    color: Colors.yellowAccent,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.auto_awesome, color: Colors.black, size: 12),
+          child: Hero(
+            tag: "buyer_home_chat_btn",
+            child: Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [Color(0xff1a237e), Color(0xFF4CAF50)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xff1a237e).withOpacity(0.4),
+                    blurRadius: 15,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+                border: Border.all(color: Colors.white, width: 2),
               ),
-            ],
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // استخدام اللوجو الجديد كخلفية للزر
+                  ClipOval(
+                    child: Image.asset(
+                      'assets/images/shira_logo.png',
+                      width: 55,
+                      height: 55,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => 
+                          const Icon(Icons.auto_awesome, color: Colors.white, size: 30),
+                    ),
+                  ),
+                  // مؤشر "الذكاء" النشط
+                  Positioned(
+                    top: 5,
+                    right: 5,
+                    child: Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: Colors.yellowAccent,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 }
+
