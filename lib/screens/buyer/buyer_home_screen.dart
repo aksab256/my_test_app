@@ -26,7 +26,8 @@ class BuyerHomeScreen extends StatefulWidget {
   State<BuyerHomeScreen> createState() => _BuyerHomeScreenState();
 }
 
-class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
+// 🛑 إضافة SingleTickerProviderStateMixin للتحكم في الأنميشن
+class _BuyerHomeScreenState extends State<BuyerHomeScreen> with SingleTickerProviderStateMixin {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   // 🎯 نحن في الصفحة الرئيسية، لذا الاندكس هو 1 دائماً في هذا الملف
@@ -40,10 +41,35 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   bool _deliveryPricesAvailable = false;
   bool _deliveryIsActive = false;
 
+  // 🚀 متغيرات الأنميشن (النبض)
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
   @override
   void initState() {
     super.initState();
     _initializeAppLogic();
+
+    // 🚀 تهيئة أنميشن النبض: الحركة ناعمة وبطيئة (ثانية ونصف للنبضة الواحدة)
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+
+    // النبض بيبدأ من الحجم الطبيعي (1.0) لزيادة خفيفة جداً (1.1) ويرجع تاني
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    // جعل الأنميشن يستمر للأبد (ينبض ويرجع)
+    _pulseController.repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    // 🛑 مهم جداً: إغلاق الكنترولر عند إغلاق الصفحة لمنع تسريب الذاكرة
+    _pulseController.dispose();
+    super.dispose();
   }
 
   // --- منطق تهيئة التطبيق ---
@@ -260,57 +286,61 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
               builder: (context) => const ChatSupportWidget(),
             );
           },
-          child: Hero(
-            tag: "buyer_home_chat_btn",
-            child: Container(
-              width: 70,
-              height: 70,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [Color(0xff1a237e), Color(0xFF4CAF50)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xff1a237e).withOpacity(0.4),
-                    blurRadius: 15,
-                    spreadRadius: 2,
-                    offset: const Offset(0, 5),
+          // 🚀 استخدام ScaleTransition لتنفيذ تأثير النبض
+          child: ScaleTransition(
+            scale: _pulseAnimation,
+            child: Hero(
+              tag: "buyer_home_chat_btn",
+              child: Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xff1a237e), Color(0xFF4CAF50)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                ],
-                border: Border.all(color: Colors.white, width: 2),
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // استخدام اللوجو الجديد كخلفية للزر
-                  ClipOval(
-                    child: Image.asset(
-                      'assets/images/shira_logo.png',
-                      width: 55,
-                      height: 55,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => 
-                          const Icon(Icons.auto_awesome, color: Colors.white, size: 30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xff1a237e).withOpacity(0.4),
+                      blurRadius: 15,
+                      spreadRadius: 2,
+                      offset: const Offset(0, 5),
                     ),
-                  ),
-                  // مؤشر "الذكاء" النشط
-                  Positioned(
-                    top: 5,
-                    right: 5,
-                    child: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: Colors.yellowAccent,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
+                  ],
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // استخدام اللوجو الجديد كخلفية للزر
+                    ClipOval(
+                      child: Image.asset(
+                        'assets/images/shira_logo.png',
+                        width: 55,
+                        height: 55,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => 
+                            const Icon(Icons.auto_awesome, color: Colors.white, size: 30),
                       ),
                     ),
-                  ),
-                ],
+                    // مؤشر "الذكاء" النشط
+                    Positioned(
+                      top: 5,
+                      right: 5,
+                      child: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: Colors.yellowAccent,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
