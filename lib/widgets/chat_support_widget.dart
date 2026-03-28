@@ -36,13 +36,11 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
     final prefs = await SharedPreferences.getInstance();
     final cachedData = prefs.getString('chat_cache');
     if (cachedData != null) {
-      if (mounted) {
-        setState(() {
-          _messages = List<Map<String, String>>.from(
-              json.decode(cachedData).map((item) => Map<String, String>.from(item))
-          );
-        });
-      }
+      setState(() {
+        _messages = List<Map<String, String>>.from(
+            json.decode(cachedData).map((item) => Map<String, String>.from(item))
+        );
+      });
       _scrollToBottom();
     }
   }
@@ -113,37 +111,36 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final String botReply = data['message'] ?? "أنا هنا لمساعدتك.";
-        if (mounted) setState(() => _messages.add({"role": "bot", "text": botReply}));
+        setState(() => _messages.add({"role": "bot", "text": botReply}));
         _scrollToBottom();
         await _saveChatHistory();
       }
     } catch (e) {
-      if (mounted) setState(() => _messages.add({"role": "bot", "text": "عذراً، شـيرا واجهت مشكلة في الاتصال."}));
+      setState(() => _messages.add({"role": "bot", "text": "عذراً، شـيرا واجهت مشكلة في الاتصال."}));
     } finally {
-      if (mounted) setState(() => _isTyping = false);
+      setState(() => _isTyping = false);
       _scrollToBottom();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Media Query لمعرفة مسافة الكيبورد ومسافة النظام السفلية
-    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-    
+    // Media Query عشان نعرف مسافة الكيبورد وزرار الهوم
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
       child: Container(
-        height: 85.h,
-        margin: EdgeInsets.symmetric(horizontal: 0.w),
+        height: 80.h,
+        margin: EdgeInsets.symmetric(horizontal: 0),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.92),
+          color: Colors.white.withOpacity(0.94),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(40)),
-          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 25, spreadRadius: 5)],
+          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20, spreadRadius: 5)],
         ),
-        child: SafeArea( // يضمن عدم التداخل مع نوتش الكاميرا أو أزرار النظام
-          bottom: false,
+        child: SafeArea( // يضمن عدم التداخل مع السيستم
           child: Padding(
-            padding: EdgeInsets.only(bottom: bottomPadding),
+            padding: EdgeInsets.only(bottom: bottomInset),
             child: Column(
               children: [
                 _buildHeader(),
@@ -167,32 +164,23 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
 
   Widget _buildHeader() {
     return Container(
-      padding: EdgeInsets.only(top: 1.5.h, bottom: 2.h),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.5),
-        border: const Border(bottom: BorderSide(color: Colors.black12, width: 0.5)),
+      padding: EdgeInsets.symmetric(vertical: 2.h),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.black12, width: 0.5)),
       ),
       child: Column(
         children: [
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[400], borderRadius: BorderRadius.circular(10))),
-          SizedBox(height: 2.h),
+          Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+          SizedBox(height: 1.5.h),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // إظهار اللوجو في الهيدر
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xff1a237e).withOpacity(0.1), width: 2),
-                ),
-                child: ClipOval(
-                  child: Image.asset(
-                    'assets/images/shira_logo.png',
-                    height: 50,
-                    width: 50,
-                    fit: BoxFit.cover,
-                    errorBuilder: (c, e, s) => CircleAvatar(backgroundColor: Color(0xff1a237e), radius: 25, child: Icon(Icons.auto_awesome, color: Colors.white)),
-                  ),
+              ClipOval(
+                child: Image.asset(
+                  'assets/images/shira_logo.png', // تم حذف errorBuilder لاختبار المسار
+                  height: 55,
+                  width: 55,
+                  fit: BoxFit.cover,
                 ),
               ),
               const SizedBox(width: 15),
@@ -222,11 +210,10 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
               padding: const EdgeInsets.only(right: 8, top: 5),
               child: ClipOval(
                 child: Image.asset(
-                  'assets/images/shira_logo.png',
-                  height: 32,
-                  width: 32,
+                  'assets/images/shira_logo.png', // تم حذف errorBuilder هنا أيضاً
+                  height: 35,
+                  width: 35,
                   fit: BoxFit.cover,
-                  errorBuilder: (c, e, s) => CircleAvatar(radius: 16, backgroundColor: Color(0xff1a237e), child: Icon(Icons.auto_awesome, size: 15, color: Colors.white)),
                 ),
               ),
             ),
@@ -236,8 +223,8 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
               decoration: BoxDecoration(
                 color: isUser ? const Color(0xff1a237e) : Colors.white,
                 borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
+                  topLeft: const Radius.circular(20),
+                  topRight: const Radius.circular(20),
                   bottomLeft: Radius.circular(isUser ? 20 : 5),
                   bottomRight: Radius.circular(isUser ? 5 : 20),
                 ),
@@ -259,7 +246,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
       padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 1.h),
       child: Row(
         children: [
-          SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xff1a237e))),
+          const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xff1a237e))),
           const SizedBox(width: 12),
           Text("شـيرا تفكر الآن...", style: TextStyle(fontSize: 10.sp, color: Colors.grey, fontFamily: 'Cairo', fontStyle: FontStyle.italic)),
         ],
@@ -269,12 +256,8 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
 
   Widget _buildInputSection() {
     return Container(
-      // Padding سفلي إضافي لضمان الارتفاع عن أزرار الهاتف
-      padding: EdgeInsets.fromLTRB(4.w, 1.h, 4.w, 4.h),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.8),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))],
-      ),
+      padding: EdgeInsets.fromLTRB(4.w, 1.h, 4.w, 3.h), // مساحة إضافية من تحت (3.h)
+      decoration: const BoxDecoration(color: Colors.transparent),
       child: Row(
         children: [
           Expanded(
@@ -292,24 +275,10 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
             ),
           ),
           const SizedBox(width: 10),
-          Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [Color(0xff1a237e), Color(0xFF388E3C)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              boxShadow: [BoxShadow(color: const Color(0xff1a237e).withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 3))],
-            ),
-            child: CircleAvatar(
-              backgroundColor: Colors.transparent,
-              radius: 25,
-              child: IconButton(
-                onPressed: _sendMessage,
-                icon: const Icon(Icons.send_rounded, color: Colors.white, size: 24),
-              ),
-            ),
+          CircleAvatar(
+            backgroundColor: const Color(0xff1a237e),
+            radius: 25,
+            child: IconButton(onPressed: _sendMessage, icon: const Icon(Icons.send_rounded, color: Colors.white, size: 24)),
           ),
         ],
       ),
