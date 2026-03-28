@@ -1,3 +1,4 @@
+// lib/widgets/chat_support_widget.dart
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -14,17 +15,38 @@ class ChatSupportWidget extends StatefulWidget {
   State<ChatSupportWidget> createState() => _ChatSupportWidgetState();
 }
 
-class _ChatSupportWidgetState extends State<ChatSupportWidget> {
+class _ChatSupportWidgetState extends State<ChatSupportWidget> with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   List<Map<String, String>> _messages = [];
   bool _isTyping = false;
   final String apiGatewayUrl = "https://st6zcrb8k1.execute-api.us-east-1.amazonaws.com/dev/chat";
 
+  // إضافة أنميشن بسيط للهيدر للتأكد من التفاعل
+  late AnimationController _pulseController;
+  late Animation<double> _scaleAnimation;
+
   @override
   void initState() {
     super.initState();
     _loadChatHistory();
+    
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _saveChatHistory() async {
@@ -38,7 +60,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
     if (cachedData != null) {
       setState(() {
         _messages = List<Map<String, String>>.from(
-            json.decode(cachedData).map((item) => Map<String, String>.from(item))
+          json.decode(cachedData).map((item) => Map<String, String>.from(item))
         );
       });
       _scrollToBottom();
@@ -125,20 +147,19 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // Media Query عشان نعرف مسافة الكيبورد وزرار الهوم
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
       child: Container(
         height: 80.h,
-        margin: EdgeInsets.symmetric(horizontal: 0),
+        margin: const EdgeInsets.symmetric(horizontal: 0),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.94),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(40)),
-          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20, spreadRadius: 5)],
+          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 20, spreadRadius: 5)],
         ),
-        child: SafeArea( // يضمن عدم التداخل مع السيستم
+        child: SafeArea(
           child: Padding(
             padding: EdgeInsets.only(bottom: bottomInset),
             child: Column(
@@ -175,12 +196,26 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              ClipOval(
-                child: Image.asset(
-                  'assets/images/shira_logo.png', // تم حذف errorBuilder لاختبار المسار
-                  height: 55,
-                  width: 55,
-                  fit: BoxFit.cover,
+              ScaleTransition(
+                scale: _scaleAnimation,
+                child: Container(
+                  width: 65, // حجم الحاوية أكبر قليلاً من الصورة
+                  height: 65,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, spreadRadius: 1)
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/images/shira_logo.png',
+                      height: 60,
+                      width: 60,
+                      fit: BoxFit.contain, // استخدمنا contain لضمان عدم قص اللوجو
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 15),
@@ -208,12 +243,18 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
           if (!isUser)
             Padding(
               padding: const EdgeInsets.only(right: 8, top: 5),
-              child: ClipOval(
-                child: Image.asset(
-                  'assets/images/shira_logo.png', // تم حذف errorBuilder هنا أيضاً
-                  height: 35,
-                  width: 35,
-                  fit: BoxFit.cover,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xff1a237e).withOpacity(0.2), width: 1),
+                ),
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/images/shira_logo.png',
+                    height: 35,
+                    width: 35,
+                    fit: BoxFit.contain,
+                  ),
                 ),
               ),
             ),
@@ -256,7 +297,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
 
   Widget _buildInputSection() {
     return Container(
-      padding: EdgeInsets.fromLTRB(4.w, 1.h, 4.w, 3.h), // مساحة إضافية من تحت (3.h)
+      padding: EdgeInsets.fromLTRB(4.w, 1.h, 4.w, 3.h),
       decoration: const BoxDecoration(color: Colors.transparent),
       child: Row(
         children: [
