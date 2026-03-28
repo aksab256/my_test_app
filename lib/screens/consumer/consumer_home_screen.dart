@@ -39,12 +39,12 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
     _checkInitialPoints();
     _checkForPendingRating();
 
-    // إعداد أنميشن النبض
+    // إعداد أنميشن النبض (نفس إعدادات ويدجت الشات للاتساق)
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
-    
+
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
@@ -193,21 +193,21 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
           iconTheme: IconThemeData(color: softGreen, size: 28),
           centerTitle: true,
           title: StreamBuilder<DocumentSnapshot>(
-            stream: FirebaseFirestore.instance.collection('consumers').doc(user?.uid).snapshots(),
-            builder: (context, snapshot) {
-              String firstName = "زائر";
-              if (snapshot.hasData && snapshot.data!.exists) {
-                final data = snapshot.data!.data() as Map<String, dynamic>;
-                firstName = (data['fullname'] ?? "").toString().split(' ').first;
+              stream: FirebaseFirestore.instance.collection('consumers').doc(user?.uid).snapshots(),
+              builder: (context, snapshot) {
+                String firstName = "زائر";
+                if (snapshot.hasData && snapshot.data!.exists) {
+                  final data = snapshot.data!.data() as Map<String, dynamic>;
+                  firstName = (data['fullname'] ?? "").toString().split(' ').first;
+                }
+                return Column(
+                  children: [
+                    Text("مرحباً بك،", style: TextStyle(color: Colors.black54, fontSize: 10.sp)),
+                    Text(firstName.isEmpty ? "زائر" : firstName,
+                        style: TextStyle(color: darkGreenText, fontWeight: FontWeight.w900, fontSize: 17.sp)),
+                  ],
+                );
               }
-              return Column(
-                children: [
-                  Text("مرحباً بك،", style: TextStyle(color: Colors.black54, fontSize: 10.sp)),
-                  Text(firstName.isEmpty ? "زائر" : firstName,
-                      style: TextStyle(color: darkGreenText, fontWeight: FontWeight.w900, fontSize: 17.sp)),
-                ],
-              );
-            }
           ),
           actions: [_buildNotificationIcon(user?.uid), _buildPointsStream(user?.uid), const SizedBox(width: 5)],
         ),
@@ -232,17 +232,17 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
             ),
           ),
         ),
-        // 🛡️ زر شـيرا بنبض ذكي وتصميم مخصص
+        // 🛡️ زر شـيرا بنبض ذكي وتصميم مخصص مع Fallback في حالة فشل الصورة
         floatingActionButton: ScaleTransition(
           scale: _pulseAnimation,
           child: FloatingActionButton(
             heroTag: "consumer_home_chat_btn",
             onPressed: () {
               showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (context) => const ChatSupportWidget()
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) => const ChatSupportWidget()
               );
             },
             backgroundColor: Colors.transparent,
@@ -263,10 +263,20 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
               ),
               child: ClipOval(
                 child: Padding(
-                  padding: const EdgeInsets.all(8.0), // مساحة صغيرة داخل الدائرة
+                  padding: const EdgeInsets.all(8.0),
                   child: Image.asset(
                     'assets/images/shira_logo.png',
                     fit: BoxFit.contain,
+                    // 🛡️ إضافة معالج الخطأ لضمان عدم ظهور دائرة فارغة
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Center(
+                        child: Icon(
+                          Icons.auto_awesome, 
+                          color: Colors.white, 
+                          size: 30,
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -289,9 +299,9 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
         child: Container(
           height: 100,
           decoration: BoxDecoration(
-            gradient: LinearGradient(colors: [softGreen, const Color(0xFF43A047)]),
-            borderRadius: BorderRadius.circular(45),
-            boxShadow: [BoxShadow(color: softGreen.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))]
+              gradient: LinearGradient(colors: [softGreen, const Color(0xFF43A047)]),
+              borderRadius: BorderRadius.circular(45),
+              boxShadow: [BoxShadow(color: softGreen.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))]
           ),
           child: Row(
             children: [
