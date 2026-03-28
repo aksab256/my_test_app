@@ -6,7 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sizer/sizer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart'; // مكتبة فتح الروابط
+import 'package:url_launcher/url_launcher.dart';
 
 class ChatSupportWidget extends StatefulWidget {
   const ChatSupportWidget({super.key});
@@ -20,6 +20,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
   final ScrollController _scrollController = ScrollController();
   List<Map<String, String>> _messages = [];
   bool _isTyping = false;
+  // رابط الأي بي آي الخاص بك
   final String apiGatewayUrl = "https://st6zcrb8k1.execute-api.us-east-1.amazonaws.com/dev/chat";
 
   @override
@@ -39,7 +40,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
     if (cachedData != null) {
       setState(() {
         _messages = List<Map<String, String>>.from(
-          json.decode(cachedData).map((item) => Map<String, String>.from(item))
+            json.decode(cachedData).map((item) => Map<String, String>.from(item))
         );
       });
       _scrollToBottom();
@@ -58,32 +59,27 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
     });
   }
 
-  // 🚀 دالة ذكية لجلب بيانات العميل + الإحداثيات من الفايرستور
   Future<Map<String, dynamic>> _getUserDetails(String uid) async {
     Map<String, dynamic> results = {
-      "userName": "عميل أكسب",
+      "userName": "عميل شـيرا",
       "role": "guest",
       "userPhone": "N/A",
-      "location": null // سيتم ملؤه من deliverySupermarkets
+      "location": null
     };
 
     try {
-      // 1. جلب بيانات الموقع من كولكشن السوبر ماركت
-      // التصحيح:
-var supermarketDoc = await FirebaseFirestore.instance
-    .collection('deliverySupermarkets')
-    .where('ownerId', isEqualTo: uid) // استخدم isEqualTo بدل الفواصل و '=='
-    .limit(1)
-    .get();
-
+      var supermarketDoc = await FirebaseFirestore.instance
+          .collection('deliverySupermarkets')
+          .where('ownerId', isEqualTo: uid)
+          .limit(1)
+          .get();
 
       if (supermarketDoc.docs.isNotEmpty) {
         var data = supermarketDoc.docs.first.data();
-        results["location"] = data['location']; // يرسل {lat: ..., lng: ...} كما في الصورة
+        results["location"] = data['location'];
         results["address"] = data['address'];
       }
 
-      // 2. جلب البيانات الشخصية (الاسم والدور)
       List<String> collections = ['consumers', 'sellers', 'users'];
       for (var col in collections) {
         var doc = await FirebaseFirestore.instance.collection(col).doc(uid).get();
@@ -101,11 +97,9 @@ var supermarketDoc = await FirebaseFirestore.instance
     return results;
   }
 
-  // 🔗 دالة فتح روابط الواتساب أو المواقع
   Future<void> _launchURL(String text) async {
     final RegExp urlRegExp = RegExp(r'(https?:\/\/[^\s]+)');
     final String? url = urlRegExp.stringMatch(text);
-    
     if (url != null) {
       final Uri uri = Uri.parse(url);
       try {
@@ -149,29 +143,27 @@ var supermarketDoc = await FirebaseFirestore.instance
           "userName": userDetails['userName'],
           "role": userDetails['role'],
           "userPhone": userDetails['userPhone'],
-          "location": userDetails['location'], // إرسال الإحداثيات للامدا
-          "address": userDetails['address'], // إرسال العنوان النصي للمساعدة في الفلترة
+          "location": userDetails['location'],
+          "address": userDetails['address'],
         }),
       );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final String botReply = data['message'] ?? "لا يوجد رد حالياً.";
-        
+        final String botReply = data['message'] ?? "أنا هنا لمساعدتك، اطلب ما تشاء.";
+
         setState(() {
           _messages.add({"role": "bot", "text": botReply});
         });
 
-        // ⚡ إذا كان الرد يحتوي على رابط واتساب، افتحه تلقائياً
         if (botReply.contains("wa.me") || botReply.contains("wa.link")) {
           _launchURL(botReply);
         }
-
         await _saveChatHistory();
       }
     } catch (e) {
       setState(() {
-        _messages.add({"role": "bot", "text": "عذراً يا فنان، واجهت مشكلة في الاتصال بالسيرفر."});
+        _messages.add({"role": "bot", "text": "عذراً يا فنان، شـيرا واجهت مشكلة في الاتصال بالسيرفر."});
       });
     } finally {
       setState(() => _isTyping = false);
@@ -184,75 +176,56 @@ var supermarketDoc = await FirebaseFirestore.instance
     return Container(
       height: 88.h,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
+        color: Colors.white.withOpacity(0.98),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(35)),
         boxShadow: [
           BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, spreadRadius: 5)
         ],
       ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(35)),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-          child: Column(
-            children: [
-              _buildHeader(),
-              Expanded(
-                child: Container(
-                  color: Colors.grey.withOpacity(0.02),
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 2.h),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, i) {
-                      final msg = _messages[i];
-                      return _buildMessageBubble(msg['text']!, msg['role'] == 'user');
-                    },
-                  ),
-                ),
-              ),
-              if (_isTyping) _buildTypingIndicator(),
-              SafeArea(top: false, child: _buildInputSection()),
-            ],
+      child: Column(
+        children: [
+          _buildHeader(),
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
+              itemCount: _messages.length,
+              itemBuilder: (context, i) {
+                final msg = _messages[i];
+                return _buildMessageBubble(msg['text']!, msg['role'] == 'user');
+              },
+            ),
           ),
-        ),
+          if (_isTyping) _buildTypingIndicator(),
+          SafeArea(top: false, child: _buildInputSection()),
+        ],
       ),
     );
   }
 
   Widget _buildHeader() {
     return Container(
-      padding: EdgeInsets.only(top: 1.5.h, bottom: 2.h),
+      padding: EdgeInsets.only(top: 1.5.h, bottom: 1.5.h),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.5),
+        color: Colors.white,
         border: Border(bottom: BorderSide(color: Colors.grey.withOpacity(0.1))),
       ),
       child: Column(
         children: [
-          Container(
-            width: 50, height: 6,
-            decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
-          ),
-          SizedBox(height: 2.h),
+          Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+          SizedBox(height: 1.5.h),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // ابحث عن الجزء ده في كود الـ Header وغيره
-const CircleAvatar(
-  backgroundColor: Color(0xff28a745),
-  radius: 14,
-  child: Icon(Icons.auto_awesome, color: Colors.white, size: 16), // غيرنا bolt لـ auto_awesome
-),
-
+              // لوجو شـيرا الجديد
+              Image.asset('assets/images/shira_logo.png', height: 40, width: 40),
               const SizedBox(width: 12),
-              Text(
-                "دعم أكسب الذكي",
-                style: TextStyle(
-                  fontSize: 18.sp,
-                  fontWeight: FontWeight.w900, 
-                  color: const Color(0xff1a4d2e),
-                  fontFamily: 'Cairo'
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("شـيرا | Shira AI", style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w900, color: const Color(0xff1a237e), fontFamily: 'Cairo')),
+                  Text("المساعد الذكي لشركة شـيرا", style: TextStyle(fontSize: 9.sp, color: Colors.grey, fontFamily: 'Cairo')),
+                ],
               ),
             ],
           ),
@@ -262,61 +235,57 @@ const CircleAvatar(
   }
 
   Widget _buildMessageBubble(String text, bool isUser) {
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: GestureDetector(
-        onTap: () => _launchURL(text), // فتح الروابط عند الضغط على الفقاعة
-        child: Container(
-          constraints: BoxConstraints(maxWidth: 82.w),
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-          decoration: BoxDecoration(
-            gradient: isUser 
-              ? const LinearGradient(colors: [Color(0xff28a745), Color(0xff218838)])
-              : null,
-            color: isUser ? null : Colors.white,
-            borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(25),
-              topRight: const Radius.circular(25),
-              bottomLeft: Radius.circular(isUser ? 25 : 5),
-              bottomRight: Radius.circular(isUser ? 5 : 25),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: isUser ? Colors.green.withOpacity(0.2) : Colors.black.withOpacity(0.05),
-                blurRadius: 12,
-                offset: const Offset(0, 6)
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!isUser) // أيقونة شـيرا تظهر بجانب رد البوت
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: CircleAvatar(
+                radius: 14,
+                backgroundColor: Colors.transparent,
+                backgroundImage: const AssetImage('assets/images/shira_logo.png'),
               ),
-            ],
-            border: isUser ? null : Border.all(color: Colors.grey.shade100),
-          ),
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: 15.sp,
-              height: 1.4,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'Cairo',
-              color: isUser ? Colors.white : Colors.black87,
+            ),
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              decoration: BoxDecoration(
+                color: isUser ? const Color(0xff1a237e) : Colors.grey[100],
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(20),
+                  topRight: const Radius.circular(20),
+                  bottomLeft: Radius.circular(isUser ? 20 : 4),
+                  bottomRight: Radius.circular(isUser ? 4 : 20),
+                ),
+              ),
+              child: Text(
+                text,
+                style: TextStyle(
+                  fontSize: 13.sp,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'Cairo',
+                  color: isUser ? Colors.white : Colors.black87,
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildTypingIndicator() {
     return Padding(
-      padding: EdgeInsets.only(left: 6.w, bottom: 2.h),
+      padding: EdgeInsets.only(left: 10.w, bottom: 1.5.h),
       child: Row(
         children: [
-          const SizedBox(
-            width: 16, height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.green),
-          ),
-          const SizedBox(width: 12),
-          Text("يتم الآن معالجة طلبك...", 
-            style: TextStyle(fontSize: 12.sp, color: Colors.grey[700], fontFamily: 'Cairo', fontStyle: FontStyle.italic)),
+          SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blue[900])),
+          const SizedBox(width: 10),
+          Text("شـيرا تفكر الآن...", style: TextStyle(fontSize: 10.sp, color: Colors.grey[600], fontFamily: 'Cairo', fontStyle: FontStyle.italic)),
         ],
       ),
     );
@@ -324,50 +293,32 @@ const CircleAvatar(
 
   Widget _buildInputSection() {
     return Container(
-      padding: EdgeInsets.only(
-        left: 5.w, right: 5.w, top: 2.h,
-        bottom: MediaQuery.of(context).viewInsets.bottom > 0 
-            ? MediaQuery.of(context).viewInsets.bottom + 1.h 
-            : 2.h, 
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 20, offset: const Offset(0, -5))]
-      ),
+      padding: EdgeInsets.fromLTRB(4.w, 1.h, 4.w, MediaQuery.of(context).viewInsets.bottom + 1.h),
+      decoration: const BoxDecoration(color: Colors.white),
       child: Row(
         children: [
           Expanded(
             child: TextField(
               controller: _controller,
-              style: TextStyle(fontSize: 15.sp, fontFamily: 'Cairo'),
+              style: const TextStyle(fontFamily: 'Cairo'),
               decoration: InputDecoration(
-                hintText: "اكتب استفسارك هنا...",
-                hintStyle: TextStyle(fontSize: 13.sp, color: Colors.grey[400], fontFamily: 'Cairo'),
+                hintText: "اسأل شـيرا عن أي شيء...",
+                hintStyle: TextStyle(color: Colors.grey[400], fontSize: 12.sp),
                 filled: true,
                 fillColor: Colors.grey[50],
-                contentPadding: const EdgeInsets.symmetric(horizontal: 25, vertical: 18),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide(color: Colors.grey.shade200)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide(color: Colors.grey.shade200)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: const BorderSide(color: Color(0xff28a745), width: 2)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               ),
             ),
           ),
-          SizedBox(width: 3.w),
-          InkWell(
-            onTap: _sendMessage,
-            borderRadius: BorderRadius.circular(35),
-            child: Container(
-              height: 60, width: 60,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(colors: [Color(0xff28a745), Color(0xff1a4d2e)]),
-              ),
-              child: const Icon(Icons.send_rounded, color: Colors.white, size: 30),
-            ),
+          SizedBox(width: 2.w),
+          IconButton(
+            onPressed: _sendMessage,
+            icon: const Icon(Icons.send_rounded, color: Color(0xff1a237e), size: 32),
           ),
         ],
       ),
     );
   }
 }
+
