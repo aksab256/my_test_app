@@ -1,5 +1,4 @@
 // lib/screens/consumer/consumer_home_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:my_test_app/screens/consumer/consumer_widgets.dart';
 import 'package:my_test_app/screens/consumer/consumer_data_models.dart';
@@ -9,32 +8,52 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:my_test_app/screens/consumer/consumer_store_search_screen.dart';
 import 'package:my_test_app/screens/consumer/points_loyalty_screen.dart';
-import 'package:my_test_app/widgets/promo_slider_widget.dart'; 
-import 'package:my_test_app/widgets/chat_support_widget.dart'; 
+import 'package:my_test_app/widgets/promo_slider_widget.dart';
+import 'package:my_test_app/widgets/chat_support_widget.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:sizer/sizer.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ConsumerHomeScreen extends StatefulWidget {
-  static const routeName = '/consumerhome'; 
+  static const routeName = '/consumerhome';
   const ConsumerHomeScreen({super.key});
 
   @override
   State<ConsumerHomeScreen> createState() => _ConsumerHomeScreenState();
 }
 
-class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTickerProviderStateMixin {
+class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProviderStateMixin {
   final ConsumerDataService dataService = ConsumerDataService();
   final Color softGreen = const Color(0xFF66BB6A);
   final Color darkGreenText = const Color(0xFF2E7D32);
-  bool _celebrationTriggered = false; 
+  bool _celebrationTriggered = false;
+
+  // تعريف متحكم النبض لـ شـيرا
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
     _checkInitialPoints();
     _checkForPendingRating();
+
+    // إعداد أنميشن النبض
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+    
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
   }
 
   void _checkForPendingRating() async {
@@ -74,7 +93,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
   Future<void> _requestNotificationPermissions() async {
     final prefs = await SharedPreferences.getInstance();
     bool alreadyAsked = prefs.getBool('notifications_asked') ?? false;
-    
+
     if (alreadyAsked || !mounted) return;
 
     showDialog(
@@ -116,7 +135,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
     late OverlayEntry overlayEntry;
     overlayEntry = OverlayEntry(
       builder: (context) => _CelebrationWidget(
-        points: points, 
+        points: points,
         onDismiss: () {
           overlayEntry.remove();
           _requestNotificationPermissions();
@@ -128,7 +147,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
 
   Future<void> _checkFirstTimeWelcome(int points) async {
     final prefs = await SharedPreferences.getInstance();
-    bool shown = prefs.getBool('welcome_anim_shown_v2') ?? false; 
+    bool shown = prefs.getBool('welcome_anim_shown_v2') ?? false;
     if (!shown) {
       Future.microtask(() { if (mounted) _showCelebrationOverlay(points); });
       await prefs.setBool('welcome_anim_shown_v2', true);
@@ -166,7 +185,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xFFFBFBFB),
-        drawer: const ConsumerSideMenu(), 
+        drawer: const ConsumerSideMenu(),
         appBar: AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
@@ -213,24 +232,47 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
             ),
           ),
         ),
-        // 🛡️ تأمين زر الشات ليكون دائماً فوق شريط التنقل بمسافة واضحة
-        floatingActionButton: Padding(
-          padding: const EdgeInsets.only(bottom: 10), 
+        // 🛡️ زر شـيرا بنبض ذكي وتصميم مخصص
+        floatingActionButton: ScaleTransition(
+          scale: _pulseAnimation,
           child: FloatingActionButton(
             heroTag: "consumer_home_chat_btn",
             onPressed: () {
               showModalBottomSheet(
-                context: context, 
-                isScrollControlled: true, 
-                backgroundColor: Colors.transparent, 
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
                 builder: (context) => const ChatSupportWidget()
               );
             },
-            backgroundColor: softGreen,
-            child: const Icon(Icons.support_agent, color: Colors.white, size: 30),
+            backgroundColor: Colors.transparent,
+            elevation: 8,
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(colors: [Color(0xff1a237e), Color(0xFF3F51B5)]),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xff1a237e).withOpacity(0.4),
+                    blurRadius: 15,
+                    spreadRadius: 2,
+                  )
+                ],
+              ),
+              child: ClipOval(
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0), // مساحة صغيرة داخل الدائرة
+                  child: Image.asset(
+                    'assets/images/shira_logo.png',
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
-        // 🛡️ تأمين شريط التنقل السفلي باستخدام SafeArea
         bottomNavigationBar: SafeArea(
           top: false,
           child: const ConsumerFooterNav(cartCount: 0, activeIndex: 0),
@@ -322,15 +364,15 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
         return PopupMenuButton<int>(
           icon: Stack(children: [Icon(Icons.notifications_none, color: softGreen, size: 28), if (count > 0) Positioned(right: 0, top: 0, child: CircleAvatar(radius: 7, backgroundColor: Colors.red, child: Text('$count', style: const TextStyle(fontSize: 8, color: Colors.white))))]),
           itemBuilder: (ctx) {
-             if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-               return [const PopupMenuItem<int>(value: 0, child: Text("لا توجد إشعارات"))];
-             }
-             return snapshot.data!.docs.map((d) {
-               return PopupMenuItem<int>(
-                 value: 1,
-                 child: Text(d['title'] ?? 'إشعار', style: const TextStyle(fontSize: 12)),
-               );
-             }).toList();
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              return [const PopupMenuItem<int>(value: 0, child: Text("لا توجد إشعارات"))];
+            }
+            return snapshot.data!.docs.map((d) {
+              return PopupMenuItem<int>(
+                value: 1,
+                child: Text(d['title'] ?? 'إشعار', style: const TextStyle(fontSize: 12)),
+              );
+            }).toList();
           },
         );
       },
@@ -338,8 +380,8 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with SingleTick
   }
 
   Widget _buildPointsStream(String? uid) => StreamBuilder<DocumentSnapshot>(
-    stream: FirebaseFirestore.instance.collection('consumers').doc(uid).snapshots(),
-    builder: (context, snapshot) => _buildPointsBadge(snapshot.hasData ? (snapshot.data!.data() as Map<String, dynamic>)['loyaltyPoints'] ?? 0 : 0)
+      stream: FirebaseFirestore.instance.collection('consumers').doc(uid).snapshots(),
+      builder: (context, snapshot) => _buildPointsBadge(snapshot.hasData ? (snapshot.data!.data() as Map<String, dynamic>)['loyaltyPoints'] ?? 0 : 0)
   );
 
   Widget _buildPointsBadge(int points) => InkWell(onTap: () => Navigator.pushNamed(context, PointsLoyaltyScreen.routeName), child: Container(margin: const EdgeInsets.all(10), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(15)), child: Row(children: [const Icon(Icons.stars, color: Colors.orange, size: 20), const SizedBox(width: 5), Text(points.toString(), style: const TextStyle(fontWeight: FontWeight.bold))])));
@@ -353,6 +395,7 @@ class _CelebrationWidget extends StatefulWidget {
   final int points;
   final VoidCallback onDismiss;
   const _CelebrationWidget({required this.points, required this.onDismiss});
+
   @override
   State<_CelebrationWidget> createState() => _CelebrationWidgetState();
 }
@@ -365,7 +408,8 @@ class _CelebrationWidgetState extends State<_CelebrationWidget> with SingleTicke
   @override
   void dispose() { _controller.dispose(); super.dispose(); }
   @override
-  Widget build(BuildContext context) { 
-    return Material(color: Colors.black45, child: Center(child: ScaleTransition(scale: _scale, child: Container(margin: const EdgeInsets.all(30), padding: const EdgeInsets.all(30), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30)), child: Column(mainAxisSize: MainAxisSize.min, children: [Text("🎉", style: TextStyle(fontSize: 40.sp)), const SizedBox(height: 20), Text("هدية ترحيبية!", style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.bold, color: Colors.orange)), const SizedBox(height: 10), Text("لقد حصلت على ${widget.points} نقطة", style: TextStyle(fontSize: 16.sp)), const SizedBox(height: 30), ElevatedButton(onPressed: widget.onDismiss, child: const Text("استمتع الآن"))]))))); 
+  Widget build(BuildContext context) {
+    return Material(color: Colors.black45, child: Center(child: ScaleTransition(scale: _scale, child: Container(margin: const EdgeInsets.all(30), padding: const EdgeInsets.all(30), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30)), child: Column(mainAxisSize: MainAxisSize.min, children: [Text("🎉", style: TextStyle(fontSize: 40.sp)), const SizedBox(height: 20), Text("هدية ترحيبية!", style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.bold, color: Colors.orange)), const SizedBox(height: 10), Text("لقد حصلت على ${widget.points} نقطة", style: TextStyle(fontSize: 16.sp)), const SizedBox(height: 30), ElevatedButton(onPressed: widget.onDismiss, child: const Text("استمتع الآن"))])))));
   }
 }
+
