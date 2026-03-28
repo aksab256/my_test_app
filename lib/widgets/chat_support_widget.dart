@@ -15,14 +15,13 @@ class ChatSupportWidget extends StatefulWidget {
   State<ChatSupportWidget> createState() => _ChatSupportWidgetState();
 }
 
-class _ChatSupportWidgetState extends State<ChatSupportWidget> with SingleTickerProviderStateMixin {
+class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   List<Map<String, String>> _messages = [];
   bool _isTyping = false;
   final String apiGatewayUrl = "https://st6zcrb8k1.execute-api.us-east-1.amazonaws.com/dev/chat";
 
-  // إضافة أنميشن بسيط للهيدر للتأكد من التفاعل
   late AnimationController _pulseController;
   late Animation<double> _scaleAnimation;
 
@@ -31,12 +30,13 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with SingleTicker
     super.initState();
     _loadChatHistory();
     
+    // أنميشن النبض لتعزيز الهوية البصرية لشـيرا
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
 
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
   }
@@ -152,12 +152,11 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with SingleTicker
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
       child: Container(
-        height: 80.h,
-        margin: const EdgeInsets.symmetric(horizontal: 0),
+        height: 85.h,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.94),
+          color: Colors.white.withOpacity(0.96),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(40)),
-          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 20, spreadRadius: 5)],
+          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 25, spreadRadius: 5)],
         ),
         child: SafeArea(
           child: Padding(
@@ -168,7 +167,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with SingleTicker
                 Expanded(
                   child: ListView.builder(
                     controller: _scrollController,
-                    padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
+                    padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 2.h),
                     itemCount: _messages.length,
                     itemBuilder: (context, i) => _buildMessageBubble(_messages[i]['text']!, _messages[i]['role'] == 'user'),
                   ),
@@ -185,35 +184,37 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with SingleTicker
 
   Widget _buildHeader() {
     return Container(
-      padding: EdgeInsets.symmetric(vertical: 2.h),
+      padding: EdgeInsets.symmetric(vertical: 2.5.h),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: Colors.black12, width: 0.5)),
       ),
       child: Column(
         children: [
-          Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-          SizedBox(height: 1.5.h),
+          Container(width: 45, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+          SizedBox(height: 2.h),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               ScaleTransition(
                 scale: _scaleAnimation,
                 child: Container(
-                  width: 65, // حجم الحاوية أكبر قليلاً من الصورة
+                  width: 65,
                   height: 65,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, spreadRadius: 1)
-                    ],
+                    boxShadow: [BoxShadow(color: const Color(0xff1a237e).withOpacity(0.15), blurRadius: 10)],
                   ),
                   child: ClipOval(
                     child: Image.asset(
                       'assets/images/shira_logo.png',
                       height: 60,
                       width: 60,
-                      fit: BoxFit.contain, // استخدمنا contain لضمان عدم قص اللوجو
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: const Color(0xff1a237e).withOpacity(0.1),
+                        child: const Icon(Icons.auto_awesome, size: 35, color: Color(0xff1a237e)),
+                      ),
                     ),
                   ),
                 ),
@@ -235,18 +236,18 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with SingleTicker
 
   Widget _buildMessageBubble(String text, bool isUser) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isUser)
             Padding(
-              padding: const EdgeInsets.only(right: 8, top: 5),
+              padding: const EdgeInsets.only(left: 8, top: 5),
               child: Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xff1a237e).withOpacity(0.2), width: 1),
+                  border: Border.all(color: const Color(0xff1a237e).withOpacity(0.1), width: 1),
                 ),
                 child: ClipOval(
                   child: Image.asset(
@@ -254,6 +255,11 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with SingleTicker
                     height: 35,
                     width: 35,
                     fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      width: 35, height: 35,
+                      color: const Color(0xff1a237e),
+                      child: const Icon(Icons.smart_toy_outlined, size: 20, color: Colors.white),
+                    ),
                   ),
                 ),
               ),
@@ -269,14 +275,21 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with SingleTicker
                   bottomLeft: Radius.circular(isUser ? 20 : 5),
                   bottomRight: Radius.circular(isUser ? 5 : 20),
                 ),
-                boxShadow: [if(!isUser) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)],
+                boxShadow: [if(!isUser) BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 3))],
               ),
               child: Text(
                 text,
-                style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, fontFamily: 'Cairo', color: isUser ? Colors.white : Colors.black87),
+                style: TextStyle(
+                  fontSize: 11.5.sp, 
+                  fontWeight: FontWeight.w600, 
+                  fontFamily: 'Cairo', 
+                  color: isUser ? Colors.white : Colors.black87,
+                  height: 1.4,
+                ),
               ),
             ),
           ),
+          if (isUser) const SizedBox(width: 8),
         ],
       ),
     );
@@ -287,9 +300,9 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with SingleTicker
       padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 1.h),
       child: Row(
         children: [
-          const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xff1a237e))),
+          const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xff1a237e))),
           const SizedBox(width: 12),
-          Text("شـيرا تفكر الآن...", style: TextStyle(fontSize: 10.sp, color: Colors.grey, fontFamily: 'Cairo', fontStyle: FontStyle.italic)),
+          Text("شـيرا تحلل طلبك الآن...", style: TextStyle(fontSize: 10.sp, color: Colors.grey[500], fontFamily: 'Cairo', fontStyle: FontStyle.italic)),
         ],
       ),
     );
@@ -297,29 +310,36 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with SingleTicker
 
   Widget _buildInputSection() {
     return Container(
-      padding: EdgeInsets.fromLTRB(4.w, 1.h, 4.w, 3.h),
-      decoration: const BoxDecoration(color: Colors.transparent),
+      padding: EdgeInsets.fromLTRB(4.w, 1.5.h, 4.w, 3.5.h),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, -5))],
+      ),
       child: Row(
         children: [
           Expanded(
             child: TextField(
               controller: _controller,
-              style: const TextStyle(fontFamily: 'Cairo'),
+              style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600),
               decoration: InputDecoration(
-                hintText: "اسأل شـيرا...",
+                hintText: "كيف يمكن لشـيرا مساعدتك؟",
                 hintStyle: TextStyle(color: Colors.grey[400], fontSize: 11.sp),
                 filled: true,
                 fillColor: Colors.grey[100],
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
               ),
+              onSubmitted: (_) => _sendMessage(),
             ),
           ),
-          const SizedBox(width: 10),
-          CircleAvatar(
-            backgroundColor: const Color(0xff1a237e),
-            radius: 25,
-            child: IconButton(onPressed: _sendMessage, icon: const Icon(Icons.send_rounded, color: Colors.white, size: 24)),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: _sendMessage,
+            child: CircleAvatar(
+              backgroundColor: const Color(0xff1a237e),
+              radius: 26,
+              child: const Icon(Icons.send_rounded, color: Colors.white, size: 24),
+            ),
           ),
         ],
       ),
