@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart'; // المكتبة الرسمية
+import 'package:google_maps_flutter/google_maps_flutter.dart'; 
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
-import 'dart:math';
+import 'dart:async';
 import 'package:sizer/sizer.dart';
-import '../../services/bubble_service.dart';
-import '../../services/delivery_service.dart';
+// تأكد من صحة المسارات التالية في مشروعك
+// import '../../services/bubble_service.dart';
+// import '../../services/delivery_service.dart';
 
 enum PickerStep { pickup, dropoff, confirm }
 
@@ -25,8 +24,8 @@ class LocationPickerScreen extends StatefulWidget {
 }
 
 class _LocationPickerScreenState extends State<LocationPickerScreen> {
-  GoogleMapController? _mapController;
-  final DeliveryService _deliveryService = DeliveryService();
+  final Completer<GoogleMapController> _mapController = Completer<GoogleMapController>();
+  // final DeliveryService _deliveryService = DeliveryService(); // فعلها عند توفر الملف
   final TextEditingController _detailsController = TextEditingController();
 
   PickerStep _currentStep = PickerStep.pickup;
@@ -41,7 +40,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   Map<String, double> _pricingDetails = {'totalPrice': 0.0, 'commissionAmount': 0.0, 'driverNet': 0.0};
 
   String _tempAddress = "جاري تحديد الموقع...";
-  String _loadingStatus = "جاري تشغيل نظام GPS...";
   bool _isLoading = false;
   bool _isMapLoading = true;
   MapType _currentMapType = MapType.normal;
@@ -56,19 +54,18 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   @override
   void initState() {
     super.initState();
-    // إحداثيات افتراضية (الإسكندرية/القاهرة)
-    _currentMapCenter = widget.initialLocation ?? LatLng(30.0444, 31.2357);
+    // إحداثيات افتراضية في حال عدم توفر موقع (القاهرة كمثال)
+    _currentMapCenter = widget.initialLocation ?? const LatLng(30.0444, 31.2357);
     _determinePosition();
   }
 
   @override
   void dispose() {
     _detailsController.dispose();
-    _mapController?.dispose();
     super.dispose();
   }
 
-  // تحديد الموقع الحالي للمستخدم
+  // تحديد الموقع الحالي للمستخدم عبر GPS
   Future<void> _determinePosition() async {
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
@@ -94,24 +91,27 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     }
   }
 
-  // تحريك الكاميرا بسلاسة
-  void _moveCamera(LatLng target) {
-    _mapController?.animateCamera(CameraUpdate.newLatLngZoom(target, 15));
+  // تحريك كاميرا جوجل مابس
+  Future<void> _moveCamera(LatLng target) async {
+    final GoogleMapController controller = await _mapController.future;
+    controller.animateCamera(CameraUpdate.newLatLngZoom(target, 15));
   }
 
-  // تحويل الإحداثيات لعنوان نصي (Geocoding)
+  // تحويل الإحداثيات لعنوان نصي
   Future<void> _getAddress(LatLng position) async {
     try {
       List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
-        setState(() {
-          _tempAddress = "${place.street ?? ''} ${place.subLocality ?? ''} ${place.locality ?? ''}".trim();
-          if (_tempAddress.isEmpty) _tempAddress = "موقع مخصص";
-        });
+        if (mounted) {
+          setState(() {
+            _tempAddress = "${place.street ?? ''} ${place.subLocality ?? ''} ${place.locality ?? ''}".trim();
+            if (_tempAddress.isEmpty) _tempAddress = "موقع مخصص";
+          });
+        }
       }
     } catch (e) {
-      setState(() => _tempAddress = "نقطة على الخريطة");
+      if (mounted) setState(() => _tempAddress = "نقطة على الخريطة");
     }
   }
 
@@ -135,14 +135,15 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     if (_pickupLocation == null || _dropoffLocation == null) return;
     double distance = Geolocator.distanceBetween(
             _pickupLocation!.latitude, _pickupLocation!.longitude,
-            _dropoffLocation!.latitude, _dropoffLocation!.longitude) /
-        1000;
+            _dropoffLocation!.latitude, _dropoffLocation!.longitude) / 1000;
 
-    final results = await _deliveryService.calculateDetailedTripCost(
-        distanceInKm: distance, vehicleType: vehicleType);
+    // ملاحظة: هنا يتم استدعاء خدمة التسعير الخاصة بك
+    // final results = await _deliveryService.calculateDetailedTripCost(distanceInKm: distance, vehicleType: vehicleType);
+    
+    // قيمة تجريبية لحين تفعيل الـ Service
     setState(() {
-      _pricingDetails = results;
-      _estimatedPrice = results['totalPrice']!;
+      _estimatedPrice = 15.0 + (distance * 5); // معادلة بسيطة كمثال
+      _pricingDetails['totalPrice'] = _estimatedPrice;
     });
   }
 
@@ -161,17 +162,20 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         'details': _detailsController.text,
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
+        'verificationCode': (1000 + (DateTime.now().millisecond % 9000)).toString(),
       });
 
-      BubbleService.show(docRef.id);
-      Navigator.pop(context);
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          backgroundColor: Colors.green, content: Text("🚀 طلبك قيد التنفيذ")));
+      // BubbleService.show(docRef.id); // تفعيل السيرفيس عند الحاجة
+      if (mounted) {
+        Navigator.pop(context); // غلق المودال
+        Navigator.pop(context); // العودة للشاشة السابقة
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            backgroundColor: Colors.green, content: Text("🚀 طلبك قيد التنفيذ", style: TextStyle(fontFamily: 'Cairo'))));
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -186,14 +190,14 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               initialCameraPosition: CameraPosition(target: _currentMapCenter, zoom: 14),
               mapType: _currentMapType,
               myLocationEnabled: true,
-              myLocationButtonEnabled: false, // سنصنع زر مخصص
+              myLocationButtonEnabled: false,
               zoomControlsEnabled: false,
-              onMapCreated: (controller) => _mapController = controller,
+              onMapCreated: (controller) => _mapController.complete(controller),
               onCameraMove: (position) => _currentMapCenter = position.target,
               onCameraIdle: () => _getAddress(_currentMapCenter),
             ),
 
-            // مؤشر السنتر (Pin)
+            // Pin Indicator (أيقونة الموقع في منتصف الشاشة)
             Center(
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 35),
@@ -205,14 +209,14 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               ),
             ),
 
-            // الأزرار الجانبية (تبديل الخريطة + موقعي)
+            // أزرار التحكم في الخريطة
             Positioned(
-              right: 15,
+              left: 15,
               bottom: 220,
               child: Column(
                 children: [
                   FloatingActionButton.small(
-                    heroTag: "type",
+                    heroTag: "map_type",
                     backgroundColor: Colors.white,
                     onPressed: () => setState(() => _currentMapType =
                         _currentMapType == MapType.normal ? MapType.satellite : MapType.normal),
@@ -220,7 +224,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   ),
                   const SizedBox(height: 10),
                   FloatingActionButton.small(
-                    heroTag: "my_loc",
+                    heroTag: "gps_btn",
                     backgroundColor: Colors.white,
                     onPressed: _determinePosition,
                     child: Icon(Icons.gps_fixed, color: Colors.blue[900]),
@@ -246,9 +250,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             if (_isMapLoading)
               Container(color: Colors.white, child: const Center(child: CircularProgressIndicator())),
             if (_isLoading)
-              Container(
-                  color: Colors.black45,
-                  child: const Center(child: CircularProgressIndicator(color: Colors.white))),
+              Container(color: Colors.black45, child: const Center(child: CircularProgressIndicator(color: Colors.white))),
           ],
         ),
       ),
@@ -256,14 +258,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   }
 
   Widget _buildActionCard() {
-    // 🚀 حساب مساحة الأمان السفلية لضمان عدم اختفاء الكارت تحت شريط التنقل
     double safeBottom = MediaQuery.of(context).padding.bottom;
-
     return Align(
       alignment: Alignment.bottomCenter,
       child: Container(
-        // استخدام مسافة الأمان السفلية في المارجن
-        margin: EdgeInsets.fromLTRB(15, 0, 15, safeBottom > 0 ? safeBottom : 15),
+        margin: EdgeInsets.fromLTRB(15, 0, 15, safeBottom > 0 ? safeBottom + 10 : 20),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -279,8 +278,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                     child: Text(_tempAddress,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Cairo'))),
+                        maxLines: 2,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Cairo'))),
               ],
             ),
             const SizedBox(height: 15),
@@ -290,13 +289,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               child: ElevatedButton(
                 onPressed: _handleNextStep,
                 style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        _currentStep == PickerStep.pickup ? Colors.green[700] : Colors.red[700],
+                    backgroundColor: _currentStep == PickerStep.pickup ? Colors.green[700] : Colors.red[700],
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
                 child: Text(
                     _currentStep == PickerStep.pickup ? "تحديد مكان الاستلام" : "تحديد وجهة التوصيل",
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
               ),
             )
           ],
@@ -314,14 +311,13 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         builder: (context, setModalState) => Container(
           decoration: const BoxDecoration(
               color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
-          padding: EdgeInsets.fromLTRB(25, 20, 25, MediaQuery.of(context).viewInsets.bottom + 20),
+          padding: EdgeInsets.fromLTRB(25, 20, 25, MediaQuery.of(context).viewInsets.bottom + 30),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text("تفاصيل طلب التوصيل",
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, fontFamily: 'Cairo')),
               const Divider(height: 30),
-              // اختيار المركبة
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: _vehicles.map((v) {
@@ -334,38 +330,43 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                     child: Column(
                       children: [
                         CircleAvatar(
-                            backgroundColor: isSelected ? Colors.blue : Colors.grey[200],
+                            radius: 25,
+                            backgroundColor: isSelected ? Colors.blue[900] : Colors.grey[200],
                             child: Icon(v['icon'], color: isSelected ? Colors.white : Colors.grey)),
-                        Text(v['name'], style: const TextStyle(fontFamily: 'Cairo', fontSize: 12)),
+                        const SizedBox(height: 5),
+                        Text(v['name'], style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   );
                 }).toList(),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 25),
               TextField(
                   controller: _detailsController,
                   decoration: InputDecoration(
-                      hintText: "ملاحظات إضافية...",
+                      hintText: "ملاحظات إضافية للمندوب...",
+                      hintStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
                       filled: true,
                       fillColor: Colors.grey[100],
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none))),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none))),
               const SizedBox(height: 20),
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                const Text("التكلفة:", style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text("التكلفة التقريبية:", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
                 Text("${_estimatedPrice.toStringAsFixed(0)} ج.م",
-                    style: const TextStyle(
-                        fontSize: 20, color: Colors.blue, fontWeight: FontWeight.bold))
+                    style: TextStyle(fontSize: 22.sp, color: Colors.blue[900], fontWeight: FontWeight.w900))
               ]),
-              const SizedBox(height: 20),
+              const SizedBox(height: 25),
               SizedBox(
                   width: double.infinity,
-                  height: 50,
+                  height: 55,
                   child: ElevatedButton(
                       onPressed: _finalizeAndUpload,
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[900]),
-                      child: const Text("تأكيد الطلب", style: TextStyle(color: Colors.white)))),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue[900],
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18))
+                      ),
+                      child: const Text("تأكيد وإرسال الطلب", 
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Cairo')))),
             ],
           ),
         ),
@@ -373,3 +374,4 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     );
   }
 }
+

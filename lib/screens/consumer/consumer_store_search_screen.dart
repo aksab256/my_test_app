@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:flutter_map/flutter_map.dart';
-// نستخدم NetworkTileProvider الافتراضي من المكتبة لسرعة الاستجابة
-import 'package:latlong2/latlong.dart' show LatLng, Distance;
+import 'package:google_maps_flutter/google_maps_flutter.dart'; // المكتبة المعتمدة
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/screens/consumer/MarketplaceHomeScreen.dart';
+import 'dart:async';
+import 'dart:math' show cos, sqrt, asin; // لحساب المسافة يدوياً بدون مكتبات خارجية
 
 class ConsumerStoreSearchScreen extends StatefulWidget {
   static const routeName = '/consumerStoreSearch';
@@ -20,19 +20,17 @@ class ConsumerStoreSearchScreen extends StatefulWidget {
 }
 
 class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
-  final MapController _mapController = MapController();
+  final Completer<GoogleMapController> _mapController = Completer<GoogleMapController>();
   LatLng? _currentSearchLocation;
   bool _isLoading = false;
   bool _searchFinished = false; 
   String _loadingMessage = 'جاري المسح الجغرافي...';
   List<Map<String, dynamic>> _nearbySupermarkets = [];
-  List<Marker> _mapMarkers = [];
+  Set<Marker> _mapMarkers = {}; // جوجل مابس تستخدم Set من الماركرز
 
   final double _searchRadiusKm = 5.0;
-  final Distance distance = const Distance();
   final Color brandGreen = const Color(0xFF66BB6A);
   final Color darkText = const Color(0xFF212121);
-  final String mapboxToken = 'pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw';
 
   @override
   void initState() {
@@ -42,10 +40,13 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     });
   }
 
-  @override
-  void dispose() {
-    _mapController.dispose(); // ✅ تفريغ الذاكرة بشكل صحيح
-    super.dispose();
+  // دالة حساب المسافة (Haversine formula) بدلاً من مكتبة Distance القديمة
+  double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    var p = 0.017453292519943295;
+    var c = cos;
+    var a = 0.5 - c((lat2 - lat1) * p) / 2 +
+        c(lat1 * p) * c(lat2 * p) * (1 - c((lon2 - lon1) * p)) / 2;
+    return 12742 * asin(sqrt(a));
   }
 
   Future<bool> _showLocationExplanation() async {
@@ -132,13 +133,17 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
     }
 
     try {
-      // ✅ تحريك الكاميرا بأمان للموقع المختار
-      Future.delayed(const Duration(milliseconds: 100), () {
-        try { _mapController.move(location, 14.5); } catch (_) {}
-      });
+      // تحريك الكاميرا في جوجل مابس
+      final controller = await _mapController.future;
+      controller.animateCamera(CameraUpdate.newLatLngZoom(location, 14.5));
 
       _mapMarkers.clear();
-      _mapMarkers.add(Marker(point: location, width: 80, height: 80, child: _buildUserLocationMarker()));
+      _mapMarkers.add(Marker(
+        markerId: const MarkerId('user_location'),
+        position: location,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        infoWindow: const InfoWindow(title: "موقع البحث"),
+      ));
 
       final QuerySnapshot snapshot = await FirebaseFirestore.instance
           .collection('deliverySupermarkets')
@@ -164,7 +169,7 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
         }
 
         if (storeLoc != null) {
-          final distInKm = distance(location, storeLoc) / 1000;
+          final distInKm = _calculateDistance(location.latitude, location.longitude, storeLoc.latitude, storeLoc.longitude);
           if (distInKm <= _searchRadiusKm) {
             final storeData = {
               'id': doc.id,
@@ -174,13 +179,12 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
               'storeType': data['storeType'] ?? 'supermarket'
             };
             foundStores.add(storeData);
+            
             _mapMarkers.add(Marker(
-              point: storeLoc,
-              width: 60, height: 60,
-              child: GestureDetector(
-                onTap: () => _showStoreDetailSheet(storeData),
-                child: _buildStoreMarker(storeData),
-              ),
+              markerId: MarkerId(doc.id),
+              position: storeLoc,
+              onTap: () => _showStoreDetailSheet(storeData),
+              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
             ));
           }
         }
@@ -196,6 +200,8 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
       if (mounted) setState(() { _isLoading = false; _searchFinished = true; });
     }
   }
+
+  // --- [باقي الودجتات UI مطابقة للأصل تماماً] ---
 
   Widget _buildNoResultsCard() {
     return Container(
@@ -275,13 +281,6 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
         ),
       ),
     );
-  }
-
-  Widget _buildUserLocationMarker() => const Icon(Icons.person_pin_circle, color: Colors.blue, size: 50);
-
-  Widget _buildStoreMarker(Map<String, dynamic> store) {
-    final style = _getStoreStyle(store['storeType']);
-    return Icon(style['icon'], color: style['color'], size: 40);
   }
 
   Map<String, dynamic> _getStoreStyle(String? type) {
@@ -425,19 +424,19 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
         ),
         body: Stack(
           children: [
-            FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: _currentSearchLocation ?? const LatLng(31.2001, 29.9187), 
-                initialZoom: 13.0,
+            GoogleMap(
+              initialCameraPosition: CameraPosition(
+                target: _currentSearchLocation ?? const LatLng(31.2001, 29.9187),
+                zoom: 13.0,
               ),
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
-                  tileProvider: NetworkTileProvider(), // ✅ تحسين سرعة التحميل ويدعم الكاش
-                ),
-                MarkerLayer(markers: _mapMarkers),
-              ],
+              onMapCreated: (GoogleMapController controller) {
+                _mapController.complete(controller);
+              },
+              markers: _mapMarkers,
+              myLocationEnabled: false,
+              myLocationButtonEnabled: false,
+              zoomControlsEnabled: false,
+              mapToolbarEnabled: false,
             ),
             Positioned(top: 115, left: 15, right: 15, child: _buildRadarStatusCard()),
             if (_searchFinished && _nearbySupermarkets.isEmpty)
