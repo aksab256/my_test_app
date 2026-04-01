@@ -1,15 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart'; // المكتبة الوحيدة للخرائط
 import 'package:sizer/sizer.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:io';
-
-// مكتبات الكاش والتخزين المتوافقة
-import 'package:flutter_map_cache/flutter_map_cache.dart';
-import 'package:dio_cache_interceptor_file_store/dio_cache_interceptor_file_store.dart';
-import 'package:path_provider/path_provider.dart';
+import 'dart:async';
 
 class CustomerTrackingScreen extends StatefulWidget {
   static const routeName = '/customerTracking';
@@ -22,54 +16,29 @@ class CustomerTrackingScreen extends StatefulWidget {
 }
 
 class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
-  final String mapboxToken = "pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw";
-  final MapController _mapController = MapController();
+  // استخدام Completer للتحكم في الـ Google Map Controller
+  final Completer<GoogleMapController> _mapController = Completer<GoogleMapController>();
   
-  // متغيرات الكاش
-  String? _cachePath;
   bool _isMapReady = false;
 
   @override
   void initState() {
     super.initState();
-    _initCache();
-  }
-
-  // تهيئة نظام الكاش للخرائط
-  Future<void> _initCache() async {
-    final cacheDir = await getTemporaryDirectory();
-    _cachePath = '${cacheDir.path}/map_tiles_cache';
-    
-    // تنظيف الكاش القديم (أكبر من 7 أيام)
-    try {
-      final directory = Directory(_cachePath!);
-      if (await directory.exists()) {
-        final now = DateTime.now();
-        final files = directory.listSync();
-        for (var file in files) {
-          final stat = file.statSync();
-          if (now.difference(stat.accessed).inDays > 7) {
-            await file.delete(recursive: true);
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint("Cache Clean Error: $e");
-    }
-
-    if (mounted) {
+    // جوجل مابس لا تحتاج لتهيئة كاش يدوي مثل المكتبة السابقة
+    Future.delayed(Duration.zero, () {
       setState(() {
         _isMapReady = true;
       });
-    }
+    });
   }
 
   @override
   void dispose() {
-    _mapController.dispose();
+    // التخلص من أي موارد إذا لزم الأمر
     super.dispose();
   }
 
+  // --- [منطق التقييم - مطابق للأصل] ---
   void _showRatingDialog(BuildContext context, String driverId) {
     double selectedRating = 5;
     TextEditingController commentController = TextEditingController();
@@ -148,6 +117,7 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
     );
   }
 
+  // --- [منطق الإلغاء الذكي - مطابق للأصل] ---
   Future<void> _handleSmartCancel(BuildContext context, String currentStatus) async {
     bool isAccepted = currentStatus != 'pending';
     String targetStatus = isAccepted
@@ -203,6 +173,7 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
         String status = orderData['status'] ?? "pending";
         bool isRated = orderData.containsKey('rating');
 
+        // التعامل مع حالات انتهاء الطلب
         if (status.contains('cancelled') || status == 'no_drivers_available' || (status == 'delivered' && isRated)) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (context.mounted) {
@@ -226,6 +197,8 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
         String verificationCode = orderData['verificationCode'] ?? "----";
         GeoPoint pickup = orderData['pickupLocation'];
         GeoPoint dropoff = orderData['dropoffLocation'];
+        
+        // تحويل لـ Google Maps LatLng
         LatLng pickupLatLng = LatLng(pickup.latitude, pickup.longitude);
         LatLng dropoffLatLng = LatLng(dropoff.latitude, dropoff.longitude);
 
@@ -243,9 +216,8 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                 GeoPoint dLoc = driverData['location'];
                 driverLatLng = LatLng(dLoc.latitude, dLoc.longitude);
                 
-                try {
-                   _mapController.move(driverLatLng, 14.5);
-                } catch (_) {}
+                // تحريك الكاميرا لموقع المندوب في جوجل مابس
+                _animateCameraToDriver(driverLatLng);
               }
             }
 
@@ -262,30 +234,36 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                 ),
                 body: Stack(
                   children: [
-                    if (_isMapReady && _cachePath != null)
-                    FlutterMap(
-                      mapController: _mapController,
-                      options: MapOptions(
-                        initialCenter: driverLatLng ?? pickupLatLng,
-                        initialZoom: 14.5,
+                    if (_isMapReady)
+                    GoogleMap(
+                      initialCameraPosition: CameraPosition(
+                        target: driverLatLng ?? pickupLatLng,
+                        zoom: 14.5,
                       ),
-                      children: [
-                        TileLayer(
-                          urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
-                          additionalOptions: {'accessToken': mapboxToken},
-                          tileProvider: CachedTileProvider(
-                            store: FileCacheStore(_cachePath!), 
+                      onMapCreated: (GoogleMapController controller) {
+                        _mapController.complete(controller);
+                      },
+                      zoomControlsEnabled: false,
+                      myLocationButtonEnabled: false,
+                      markers: {
+                        Marker(
+                          markerId: const MarkerId('pickup'),
+                          position: pickupLatLng,
+                          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+                        ),
+                        Marker(
+                          markerId: const MarkerId('dropoff'),
+                          position: dropoffLatLng,
+                          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                        ),
+                        if (driverLatLng != null)
+                          Marker(
+                            markerId: const MarkerId('driver'),
+                            position: driverLatLng,
+                            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+                            // ملاحظة: لجعل الماركر بأيقونة سيارة/موتوسيكل مخصصة في جوجل مابس نحتاج تحويل الـ Widget لـ BitmapDescriptor
                           ),
-                        ),
-                        MarkerLayer(
-                          markers: [
-                            Marker(point: pickupLatLng, width: 45, height: 45, child: const Icon(Icons.location_on, color: Colors.green, size: 40)),
-                            Marker(point: dropoffLatLng, width: 45, height: 45, child: const Icon(Icons.flag_circle, color: Colors.red, size: 40)),
-                            if (driverLatLng != null)
-                              Marker(point: driverLatLng, width: 60, height: 60, child: _buildDriverMarker(orderData['vehicleType'] ?? 'motorcycle')),
-                          ],
-                        ),
-                      ],
+                      },
                     ) else const Center(child: CircularProgressIndicator()),
                     Align(
                       alignment: Alignment.bottomCenter,
@@ -301,6 +279,12 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
         );
       },
     );
+  }
+
+  // تحريك الكاميرا بسلاسة في جوجل مابس
+  Future<void> _animateCameraToDriver(LatLng location) async {
+    final GoogleMapController controller = await _mapController.future;
+    controller.animateCamera(CameraUpdate.newLatLng(location));
   }
 
   Widget _buildUnifiedBottomPanel(BuildContext context, String status, Map<String, dynamic> order, Map<String, dynamic>? driver, String code) {
@@ -358,7 +342,7 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(driver != null ? driver['fullname'] : "بحث عن مندوب...", style: const TextStyle(fontWeight: FontWeight.bold)),
-                    const Text("موثق من أكسب", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                    const Text("موثق من رابية أحلى", style: TextStyle(fontSize: 10, color: Colors.grey)),
                   ],
                 ),
               ),
@@ -381,15 +365,5 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
       ),
     );
   }
-
-  Widget _buildDriverMarker(String vehicleType) {
-    IconData vehicleIcon = Icons.delivery_dining;
-    if (vehicleType == 'motorcycle') vehicleIcon = Icons.directions_bike;
-    if (vehicleType == 'pickup') vehicleIcon = Icons.local_shipping;
-
-    return Container(
-      decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: Colors.blue, width: 2), boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 5)]),
-      child: Icon(vehicleIcon, color: Colors.blue, size: 30),
-    );
-  }
 }
+
