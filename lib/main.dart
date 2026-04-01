@@ -1,3 +1,5 @@
+// lib/main.dart
+
 import 'package:firebase_crashlytics/firebase_crashlytics.dart'; 
 import 'package:flutter/foundation.dart'; 
 import 'package:flutter/material.dart';
@@ -12,7 +14,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:latlong2/latlong.dart';
+
+// --- حل صراع المكتبات هنا ---
+import 'package:latlong2/latlong.dart' as old_lat; // المكتبة القديمة
+import 'package:google_maps_flutter/google_maps_flutter.dart' as google_map; // جوجل مابس
+// --------------------------
+
 import 'package:facebook_app_events/facebook_app_events.dart';
 import 'package:my_test_app/firebase_options.dart';
 import 'package:my_test_app/theme/app_theme.dart';
@@ -31,6 +38,7 @@ import 'package:my_test_app/controllers/seller_dashboard_controller.dart';
 import 'package:my_test_app/models/logged_user.dart';
 import 'package:my_test_app/services/user_session.dart';
 import 'package:my_test_app/models/user_role.dart';
+
 // استيراد الشاشات
 import 'package:my_test_app/screens/login_screen.dart';
 import 'package:my_test_app/screens/seller_screen.dart';
@@ -94,34 +102,29 @@ void main() async {
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
-// 🛡️ إعدادات أندرويد
-const AndroidInitializationSettings androidSettings =
-    AndroidInitializationSettings('notif_icon');
+  const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('notif_icon');
 
-// 🛡️ إعدادات عامة
-const InitializationSettings initSettings =
-    InitializationSettings(android: androidSettings);
+  const InitializationSettings initSettings = InitializationSettings(android: androidSettings);
 
-// 🚀 التهيئة الصحيحة حسب النسخة الحديثة
-await flutterLocalNotificationsPlugin.initialize(
-  settings: initSettings,
-  onDidReceiveNotificationResponse: (NotificationResponse details) {
-    // تعامل مع الضغط على الإشعار هنا
-  },
-);
+  await flutterLocalNotificationsPlugin.initialize(
+    initSettings,
+    onDidReceiveNotificationResponse: (NotificationResponse details) {
+      // تعامل مع الضغط على الإشعار هنا
+    },
+  );
 
-// إنشاء قناة الإشعارات
-const AndroidNotificationChannel channel = AndroidNotificationChannel(
-  'high_importance_channel',
-  'إشعارات هامة',
-  description: 'هذه القناة مخصصة لإشعارات الطلبات الهامة.',
-  importance: Importance.max,
-  playSound: true,
-);
+  const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    'high_importance_channel',
+    'إشعارات هامة',
+    description: 'هذه القناة مخصصة لإشعارات الطلبات الهامة.',
+    importance: Importance.max,
+    playSound: true,
+  );
 
-await flutterLocalNotificationsPlugin
-    .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-    ?.createNotificationChannel(channel);
+  await flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(channel);
+
   runApp(
     MultiProvider(
       providers: [
@@ -148,7 +151,6 @@ await flutterLocalNotificationsPlugin
   );
 }
 
-// ... باقي الكود كما هو تماماً بدون أي تغيير ...
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -158,7 +160,7 @@ class MyApp extends StatelessWidget {
       builder: (context, orientation, deviceType) {
         return MaterialApp(
           navigatorKey: navigatorKey,
-          title: 'أسواق أكسب',
+          title: 'رابية أحلى',
           debugShowCheckedModeBanner: false,
           builder: (context, child) => ConnectivityWrapper(child: child!),
           locale: const Locale('ar', 'EG'),
@@ -220,13 +222,27 @@ class MyApp extends StatelessWidget {
             '/add-offer': (context) => const AddOfferScreen(),
             '/create-gift': (context) => const CreateGiftPromoScreen(currentSellerId: ''),
             '/delivery-areas': (context) => const DeliveryAreaScreen(currentSellerId: ''),
+            
+            // --- التعديل الجوهري لحل الكراش في السطر القادم ---
             '/abaatly-had': (context) {
               final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+              
+              // تحويل الإحداثيات يدوياً لضمان أنها من نوع Google Map LatLng
+              // حتى لو الصفحة السابقة بعتت نوع قديم، هنا بنصلحها
+              google_map.LatLng finalLocation = const google_map.LatLng(30.0444, 31.2357);
+              
+              if (args != null && args['location'] != null) {
+                final loc = args['location'];
+                // استخراج الأرقام سواء كانت من LatLng القديم أو الجديد
+                finalLocation = google_map.LatLng(loc.latitude, loc.longitude);
+              }
+
               return AbaatlyHadProScreen(
-                userCurrentLocation: args?['location'] ?? const LatLng(30.0444, 31.2357),
+                userCurrentLocation: finalLocation,
                 isStoreOwner: args?['isStoreOwner'] ?? false,
               );
             },
+            
             '/customerTracking': (context) {
               final orderId = ModalRoute.of(context)?.settings.arguments as String? ?? '';
               return CustomerTrackingScreen(orderId: orderId);
