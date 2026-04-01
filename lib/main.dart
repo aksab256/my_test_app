@@ -12,7 +12,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 // ✅ المكتبة القديمة كما هي
-import 'package:latlong2/latlong.dart' as latlong; 
+import 'package:latlong2/latlong.dart' as latlong;
 
 // ✅ إضافة مكتبة جوجل مابس باسم مستعار لمنع التعارض
 import 'package:google_maps_flutter/google_maps_flutter.dart' as google_maps;
@@ -78,7 +78,7 @@ void main() async {
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
-  
+
   // ✅ تعديل "دالة الإشعارات" لضمان نجاح الـ Build
   await flutterLocalNotificationsPlugin.initialize(
     settings: initializationSettings,
@@ -167,10 +167,9 @@ class MyApp extends StatelessWidget {
             CheckoutScreen.routeName: (context) => const CheckoutScreen(),
             MyOrdersScreen.routeName: (context) => const MyOrdersScreen(),
             SearchScreen.routeName: (context) => SearchScreen(
-              userRole: Provider.of<BuyerDataProvider>(context, listen: false).userRole == 'consumer' 
-                  ? UserRole.consumer 
-                  : UserRole.buyer
-            ),
+                userRole: Provider.of<BuyerDataProvider>(context, listen: false).userRole == 'consumer'
+                    ? UserRole.consumer
+                    : UserRole.buyer),
             '/register': (context) => const NewClientScreen(),
             '/traders': (context) => const TradersScreen(),
             '/wallet': (context) => const WalletScreen(),
@@ -194,9 +193,20 @@ class MyApp extends StatelessWidget {
 
             '/abaatly-had': (context) {
               final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+              final rawLocation = args?['location'];
+
+              // تحويل اللوكيشن من latlong2 إلى نوع جوجل اللي الشاشة مستنياه حصرياً
+              google_maps.LatLng finalLocation;
+              if (rawLocation is latlong.LatLng) {
+                finalLocation = google_maps.LatLng(rawLocation.latitude, rawLocation.longitude);
+              } else if (rawLocation is google_maps.LatLng) {
+                finalLocation = rawLocation;
+              } else {
+                finalLocation = const google_maps.LatLng(30.0444, 31.2357);
+              }
+
               return AbaatlyHadProScreen(
-                // ✅ استخدام latlong الصريح لمنع التعارض مع جوجل
-                userCurrentLocation: args?['location'] ?? latlong.LatLng(30.0444, 31.2357),
+                userCurrentLocation: finalLocation,
                 isStoreOwner: args?['isStoreOwner'] ?? false,
               );
             },
@@ -206,7 +216,6 @@ class MyApp extends StatelessWidget {
               return CustomerTrackingScreen(orderId: orderId);
             },
           },
-          // ... (باقي الكود كما هو بدون تغيير)
           onGenerateRoute: (settings) {
             if (settings.name == MarketplaceHomeScreen.routeName) {
               final args = settings.arguments as Map<String, dynamic>?;
