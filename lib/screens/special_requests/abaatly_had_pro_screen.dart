@@ -1,7 +1,8 @@
 // lib/screens/consumer/abaatly_had_pro_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:latlong2/latlong.dart';
+// تم حذف latlong2 واستخدام مكتبة جوجل مابس حصرياً
+import 'package:google_maps_flutter/google_maps_flutter.dart'; 
 import 'package:sizer/sizer.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:my_test_app/screens/consumer/consumer_widgets.dart'; 
@@ -9,6 +10,7 @@ import 'location_picker_screen.dart';
 
 class AbaatlyHadProScreen extends StatefulWidget {
   static const routeName = '/abaatly-had';
+  // النوع هنا أصبح Google Maps LatLng
   final LatLng userCurrentLocation;
   final bool isStoreOwner;
 
@@ -33,14 +35,11 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
   void initState() {
     super.initState();
     _liveLocation = widget.userCurrentLocation;
-    // التحقق من الأذونات بنظام الإفصاح المطلوب من جوجل
     _handleLocationPermission();
   }
 
-  // 🟢 إدارة الأذونات: تظهر الرسالة فقط إذا كان الإذن غير ممنوح
   Future<void> _handleLocationPermission() async {
     LocationPermission permission = await Geolocator.checkPermission();
-
     if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
       _showLocationRationale(); 
     } else {
@@ -48,7 +47,6 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
     }
   }
 
-  // 🟢 رسالة الإفصاح (الضرورية لقبول جوجل)
   void _showLocationRationale() {
     showDialog(
       context: context,
@@ -102,6 +100,7 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
       Position position = await Geolocator.getCurrentPosition();
       if (mounted) {
         setState(() {
+          // استخدام LatLng الخاص بـ google_maps_flutter
           _liveLocation = LatLng(position.latitude, position.longitude);
         });
       }
@@ -161,16 +160,11 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
                 isConfirmed: _pickupConfirmed,
                 onTap: () => _pickLocation(),
               ),
-
               const SizedBox(height: 35),
-              
               _buildTermsSection(),
-              
               const SizedBox(height: 35),
-              
               if (_pickupConfirmed)
                 _buildConfirmButton(),
-              
               const SizedBox(height: 50), 
             ],
           ),
@@ -179,6 +173,8 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
       ),
     );
   }
+
+  // --- [باقي الودجتات الـ UI كما هي بدون تغيير] ---
 
   Widget _buildLocationCard({
     required String label, 
@@ -258,7 +254,6 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
             ],
           ),
           const Divider(height: 35),
-          // 🛡️ بند الوسيط التقني
           _buildTermItem(
             "تطبيق 'أكسب' هو وسيط تقني فقط يربط بين الأطراف، ولا يتدخل في طبيعة أو جودة المنقولات، وتعتبر موافقتك إقراراً بمسؤوليتك الكاملة عن محتوى الطلب.",
             isBold: true
@@ -306,7 +301,7 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
       ),
       child: ElevatedButton(
         onPressed: () {
-          // منطق التأكيد
+          // هنا يتم ربط اللوكيشن النهائي (_pickupCoords) مع أمازون
         }, 
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent, 
@@ -322,3 +317,4 @@ class _AbaatlyHadProScreenState extends State<AbaatlyHadProScreen> {
 extension OnWidget on Widget {
   Widget paddingOnly({double top = 0}) => Padding(padding: EdgeInsets.only(top: top), child: this);
 }
+
