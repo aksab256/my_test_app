@@ -72,6 +72,7 @@ dependencies:
   connectivity_plus: ^7.0.0
   flutter_map_cache: ^1.5.2
   dio_cache_interceptor_file_store: ^1.2.3
+  google_maps_flutter: ^2.17.0
 
 dev_dependencies:
   flutter_test:
