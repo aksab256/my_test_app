@@ -1,19 +1,18 @@
 // lib/screens/retailer/retailer_dispatch_screen.dart
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart'; // التبديل لجوجل ماب
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:provider/provider.dart'; 
+import 'package:provider/provider.dart';
 import '../../models/consumer_order_model.dart';
 import '../../services/delivery_service.dart';
-import '../../providers/buyer_data_provider.dart'; 
+import '../../providers/buyer_data_provider.dart';
 import 'dart:math';
 
 class RetailerDispatchScreen extends StatefulWidget {
   final ConsumerOrderModel order;
-  final LatLng storeLocation; 
+  final LatLng storeLocation; // تأكد أن هذا LatLng من حزمة google_maps_flutter
 
   const RetailerDispatchScreen({
     super.key,
@@ -26,10 +25,8 @@ class RetailerDispatchScreen extends StatefulWidget {
 }
 
 class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
-  final MapController _mapController = MapController();
+  late GoogleMapController _mapController;
   final DeliveryService _deliveryService = DeliveryService();
-  
-  final String mapboxToken = "pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw";
 
   String _pickupAddress = "جاري جلب العنوان...";
   String _dropoffAddress = "جاري جلب العنوان...";
@@ -52,15 +49,15 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
     await _getAddress(widget.order.customerLatLng, false);
 
     double distance = _deliveryService.calculateDistance(
-      widget.storeLocation.latitude, 
-      widget.storeLocation.longitude,
-      widget.order.customerLatLng.latitude, 
-      widget.order.customerLatLng.longitude
+        widget.storeLocation.latitude,
+        widget.storeLocation.longitude,
+        widget.order.customerLatLng.latitude,
+        widget.order.customerLatLng.longitude
     );
 
     final results = await _deliveryService.calculateDetailedTripCost(
-      distanceInKm: distance,
-      vehicleType: "motorcycle" 
+        distanceInKm: distance,
+        vehicleType: "motorcycle"
     );
 
     if (mounted) {
@@ -68,16 +65,29 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
         _pricingDetails = results;
         _estimatedPrice = results['totalPrice']!;
       });
-      _fitMapBounds();
     }
   }
 
+  // ضبط حدود الخريطة لتشمل النقطتين
+  void _onMapCreated(GoogleMapController controller) {
+    _mapController = controller;
+    _fitMapBounds();
+  }
+
   void _fitMapBounds() {
-    final bounds = LatLngBounds.fromPoints([
-      widget.storeLocation,
-      widget.order.customerLatLng,
-    ]);
-    _mapController.fitCamera(CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(70)));
+    LatLngBounds bounds;
+    if (widget.storeLocation.latitude > widget.order.customerLatLng.latitude) {
+      bounds = LatLngBounds(
+        southwest: widget.order.customerLatLng,
+        northeast: widget.storeLocation,
+      );
+    } else {
+      bounds = LatLngBounds(
+        southwest: widget.storeLocation,
+        northeast: widget.order.customerLatLng,
+      );
+    }
+    _mapController.animateCamera(CameraUpdate.newLatLngBounds(bounds, 70));
   }
 
   Future<void> _getAddress(LatLng position, bool isPickup) async {
@@ -95,9 +105,9 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() { 
-          if (isPickup) _pickupAddress = "موقع المتجر المعروف"; 
-          else _dropoffAddress = widget.order.customerAddress; 
+        setState(() {
+          if (isPickup) _pickupAddress = "موقع المتجر المعروف";
+          else _dropoffAddress = widget.order.customerAddress;
         });
       }
     }
@@ -107,17 +117,13 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
 
   Future<void> _sendToRadar() async {
     if (_estimatedPrice == 0) return;
-    
+
     final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
-    
-    // 💡 حيلة الذكاء الاصطناعي: استخراج الرقم الصافي من الإيميل الذكي (مثلاً 01012345678@aksab.com)
-    // نأخذ الجزء قبل العلامة @ لضمان وصول رقم الراسل الصحيح للمندوب
     final String? authEmail = FirebaseAuth.instance.currentUser?.email;
-    final String? phoneFromEmail = authEmail != null && authEmail.contains('@') 
-        ? authEmail.split('@').first 
+    final String? phoneFromEmail = authEmail != null && authEmail.contains('@')
+        ? authEmail.split('@').first
         : null;
 
-    // تحديد رقم الراسل النهائي (من البروفايدر أولاً، ثم الإيميل كحل احتياطي)
     final String senderPhone = buyerProvider.loggedInUser?.phone ?? phoneFromEmail ?? 'غير متوفر';
     final String? merchantName = buyerProvider.loggedInUser?.fullname ?? widget.order.supermarketName;
 
@@ -127,18 +133,12 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
       final user = FirebaseAuth.instance.currentUser;
       final String securityCode = _generateOTP();
 
-      // 1. إنشاء وثيقة الرادار في specialRequests
       DocumentReference radarRef = await FirebaseFirestore.instance.collection('specialRequests').add({
         'userId': user?.uid ?? 'anonymous_retailer',
         'userName': merchantName,
-        
-        // 📞 رقم الراسل (صاحب السوبر ماركت) المستخرج بذكاء
-        'userPhone': senderPhone, 
-        
-        // 📞 رقم المستلم (الزبون النهائي) مأخوذ من بيانات الأوردر الأصلية
+        'userPhone': senderPhone,
         'customerPhone': widget.order.customerPhone,
         'customerName': widget.order.customerName,
-
         'pickupLocation': GeoPoint(widget.storeLocation.latitude, widget.storeLocation.longitude),
         'pickupAddress': _pickupAddress,
         'dropoffLocation': GeoPoint(widget.order.customerLatLng.latitude, widget.order.customerLatLng.longitude),
@@ -150,13 +150,12 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
         'status': 'pending',
         'verificationCode': securityCode,
         'createdAt': FieldValue.serverTimestamp(),
-        'requestSource': 'retailer', 
-        'originalOrderId': widget.order.id, 
-        'orderFinalAmount': widget.order.finalAmount, 
+        'requestSource': 'retailer',
+        'originalOrderId': widget.order.id,
+        'orderFinalAmount': widget.order.finalAmount,
         'details': "🛒 استلام من: $merchantName\n👤 تسليم لعميل: ${widget.order.customerName}\n💰 تحصيل كاش: ${widget.order.finalAmount} ج.م",
       });
 
-      // 2. الربط مع طلب المستهلك (تحديث حقل الـ ID)
       await FirebaseFirestore.instance
           .collection('consumerorders')
           .doc(widget.order.id)
@@ -165,12 +164,11 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
       });
 
       if (!mounted) return;
-      Navigator.pop(context); 
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.green, 
-          content: Text("🚀 تم بث الطلب للرادار وربطه بنجاح!", style: TextStyle(fontFamily: 'Cairo'))
-        )
+          const SnackBar(
+              backgroundColor: Colors.green,
+              content: Text("🚀 تم بث الطلب للرادار وربطه بنجاح!", style: TextStyle(fontFamily: 'Cairo')))
       );
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ أثناء الإرسال: $e")));
@@ -193,31 +191,23 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
         ),
         body: Stack(
           children: [
-            FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: widget.storeLocation,
-                initialZoom: 13.0,
-              ),
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken',
+            GoogleMap(
+              onMapCreated: _onMapCreated,
+              initialCameraPosition: CameraPosition(target: widget.storeLocation, zoom: 13),
+              myLocationEnabled: true,
+              zoomControlsEnabled: false,
+              markers: {
+                Marker(
+                  markerId: const MarkerId('pickup'),
+                  position: widget.storeLocation,
+                  icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
                 ),
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: widget.storeLocation,
-                      width: 50, height: 50,
-                      child: const Icon(Icons.storefront_rounded, color: Colors.green, size: 45),
-                    ),
-                    Marker(
-                      point: widget.order.customerLatLng,
-                      width: 50, height: 50,
-                      child: const Icon(Icons.person_pin_circle, color: Colors.red, size: 45),
-                    ),
-                  ],
+                Marker(
+                  markerId: const MarkerId('dropoff'),
+                  position: widget.order.customerLatLng,
+                  icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
                 ),
-              ],
+              },
             ),
             SafeArea(
               child: Align(
@@ -276,9 +266,9 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
             child: ElevatedButton(
               onPressed: _sendToRadar,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue[900],
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))
+                  backgroundColor: Colors.blue[900],
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))
               ),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -314,3 +304,4 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
     );
   }
 }
+

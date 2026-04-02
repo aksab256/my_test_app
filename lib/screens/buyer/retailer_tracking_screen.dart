@@ -1,48 +1,54 @@
-// lib/screens/retailer/retailer_tracking_screen.dart
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart'; // التبديل لجوجل ماب
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:sizer/sizer.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:async';
 
-class RetailerTrackingScreen extends StatelessWidget {
+class RetailerTrackingScreen extends StatefulWidget {
   static const routeName = '/retailerTracking';
-  final String orderId; 
+  final String orderId;
 
   const RetailerTrackingScreen({super.key, required this.orderId});
 
-  final String mapboxToken = "pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw";
+  @override
+  State<RetailerTrackingScreen> createState() => _RetailerTrackingScreenState();
+}
 
-  // دالة الإلغاء
+class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
+  GoogleMapController? _mapController;
+  
+  // دالة الإلغاء (كما هي في منطقك البرمجي)
   Future<void> _handleRetailerCancel(BuildContext context, String currentStatus, String? originalOrderId) async {
     bool isAccepted = currentStatus != 'pending';
-    
     bool confirm = await showDialog(
-      context: context,
-      builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text("إلغاء طلب التوصيل", style: TextStyle(fontFamily: 'Cairo')),
-          content: Text(isAccepted 
-              ? "المندوب وافق بالفعل وهو في طريقه إليك. إلغاء الطلب الآن قد يترتب عليه رسوم تعويض نتيجة حجز العهدة. هل أنت متأكد؟" 
-              : "هل تريد إلغاء البحث عن مندوب؟", style: const TextStyle(fontFamily: 'Cairo')),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("تراجع")),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true), 
-              child: const Text("تأكيد وإلغاء", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontFamily: 'Cairo'))
+          context: context,
+          builder: (ctx) => Directionality(
+            textDirection: TextDirection.rtl,
+            child: AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text("إلغاء طلب التوصيل", style: TextStyle(fontFamily: 'Cairo')),
+              content: Text(
+                  isAccepted
+                      ? "المندوب وافق بالفعل وهو في طريقه إليك. إلغاء الطلب الآن قد يترتب عليه رسوم تعويض نتيجة حجز العهدة. هل أنت متأكد؟"
+                      : "هل تريد إلغاء البحث عن مندوب؟",
+                  style: const TextStyle(fontFamily: 'Cairo')),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("تراجع")),
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text("تأكيد وإلغاء",
+                        style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontFamily: 'Cairo'))),
+              ],
             ),
-          ],
-        ),
-      ),
-    ) ?? false;
+          ),
+        ) ??
+        false;
 
     if (!confirm) return;
 
     try {
-      await FirebaseFirestore.instance.collection('specialRequests').doc(orderId).update({
+      await FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).update({
         'status': isAccepted ? 'cancelled_by_retailer_after_accept' : 'cancelled_by_retailer_before_accept',
         'cancelledAt': FieldValue.serverTimestamp(),
         'cancelledBy': 'retailer'
@@ -62,10 +68,10 @@ class RetailerTrackingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (orderId.isEmpty) return const Scaffold(body: Center(child: Text("طلب غير موجود")));
+    if (widget.orderId.isEmpty) return const Scaffold(body: Center(child: Text("طلب غير موجود")));
 
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('specialRequests').doc(orderId).snapshots(),
+      stream: FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).snapshots(),
       builder: (context, orderSnapshot) {
         if (!orderSnapshot.hasData || !orderSnapshot.data!.exists) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -74,17 +80,14 @@ class RetailerTrackingScreen extends StatelessWidget {
         var orderData = orderSnapshot.data!.data() as Map<String, dynamic>;
         String status = orderData['status'] ?? "pending";
         String? originalOrderId = orderData['originalOrderId'];
-        
-        // 🛡️ منطق الأكواد الذكي:
-        // لو الحالة عودة للتاجر (مرتجع)، نقرأ كود المرتجع، غير كدة نقرأ كود الاستلام العادي
-        bool isReturning = status == 'returning_to_seller';
-        String verificationCode = isReturning 
-            ? (orderData['returnVerificationCode'] ?? "----") 
-            : (orderData['verificationCode'] ?? "----");
 
-        // الخروج من الصفحة لو تم الإلغاء أو التسليم النهائي
+        // منطق الأكواد الذكي
+        bool isReturning = status == 'returning_to_seller';
+        String verificationCode = isReturning ? (orderData['returnVerificationCode'] ?? "----") : (orderData['verificationCode'] ?? "----");
+
+        // الخروج التلقائي عند الانتهاء
         if (status.contains('cancelled_by') || status == 'delivered') {
-           WidgetsBinding.instance.addPostFrameCallback((_) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
             if (context.mounted) Navigator.of(context).pop();
           });
         }
@@ -108,6 +111,11 @@ class RetailerTrackingScreen extends StatelessWidget {
               if (driverData != null && driverData.containsKey('location')) {
                 GeoPoint dLoc = driverData['location'];
                 driverLatLng = LatLng(dLoc.latitude, dLoc.longitude);
+                
+                // تحريك الكاميرا لملاحقة المندوب تلقائياً
+                if (_mapController != null && driverLatLng != null) {
+                  _mapController!.animateCamera(CameraUpdate.newLatLng(driverLatLng));
+                }
               }
             }
 
@@ -118,26 +126,50 @@ class RetailerTrackingScreen extends StatelessWidget {
                 appBar: AppBar(
                   backgroundColor: Colors.white.withOpacity(0.9),
                   elevation: 0,
-                  title: Text(isReturning ? "متابعة عودة العهدة (مرتجع)" : "متابعة العهدة والنقل", 
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16.sp, color: isReturning ? Colors.red[900] : Colors.black, fontFamily: 'Cairo')),
+                  title: Text(isReturning ? "متابعة عودة العهدة (مرتجع)" : "متابعة العهدة والنقل",
+                      style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16.sp,
+                          color: isReturning ? Colors.red[900] : Colors.black,
+                          fontFamily: 'Cairo')),
                   centerTitle: true,
-                  leading: IconButton(icon: Icon(Icons.arrow_back_ios, color: isReturning ? Colors.red : Colors.black), onPressed: () => Navigator.pop(context)),
+                  leading: IconButton(
+                      icon: Icon(Icons.arrow_back_ios, color: isReturning ? Colors.red : Colors.black),
+                      onPressed: () => Navigator.pop(context)),
+                  actions: [
+                    if (status == 'pending' || status == 'accepted' || status == 'at_pickup')
+                      IconButton(
+                        icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+                        onPressed: () => _handleRetailerCancel(context, status, originalOrderId),
+                      )
+                  ],
                 ),
                 body: Stack(
                   children: [
-                    FlutterMap(
-                      options: MapOptions(initialCenter: driverLatLng ?? pickupLatLng, initialZoom: 14.0),
-                      children: [
-                        TileLayer(urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}?access_token=$mapboxToken'),
-                        MarkerLayer(
-                          markers: [
-                            Marker(point: pickupLatLng, width: 45, height: 45, child: const Icon(Icons.store, color: Colors.green, size: 40)),
-                            Marker(point: dropoffLatLng, width: 45, height: 45, child: const Icon(Icons.person_pin_circle, color: Colors.red, size: 40)),
-                            if (driverLatLng != null)
-                              Marker(point: driverLatLng, width: 60, height: 60, child: _buildDriverMarker(isReturning)),
-                          ],
+                    GoogleMap(
+                      initialCameraPosition: CameraPosition(target: driverLatLng ?? pickupLatLng, zoom: 15.0),
+                      onMapCreated: (controller) => _mapController = controller,
+                      myLocationEnabled: true,
+                      zoomControlsEnabled: false,
+                      markers: {
+                        Marker(
+                          markerId: const MarkerId('pickup'),
+                          position: pickupLatLng,
+                          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
                         ),
-                      ],
+                        Marker(
+                          markerId: const MarkerId('dropoff'),
+                          position: dropoffLatLng,
+                          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                        ),
+                        if (driverLatLng != null)
+                          Marker(
+                            markerId: const MarkerId('driver'),
+                            position: driverLatLng,
+                            icon: BitmapDescriptor.defaultMarkerWithHue(isReturning ? BitmapDescriptor.hueOrange : BitmapDescriptor.hueAzure),
+                            infoWindow: InfoWindow(title: driverData?['fullname'] ?? "المندوب"),
+                          ),
+                      },
                     ),
                     Align(
                       alignment: Alignment.bottomCenter,
@@ -164,16 +196,26 @@ class RetailerTrackingScreen extends StatelessWidget {
       progress = 0.9;
       statusDesc = "المستهلك رفض الاستلام.. العهدة عائدة إليك";
       mainColor = Colors.red[900]!;
-    } else if (status == 'accepted') { progress = 0.4; statusDesc = "تم تخصيص مندوب.. في طريقه للاستلام"; mainColor = Colors.blue; }
-    else if (status == 'at_pickup') { progress = 0.6; statusDesc = "المندوب في نقطة الاستلام (توقيع العهدة)"; mainColor = Colors.indigo; }
-    else if (status == 'picked_up') { progress = 0.8; statusDesc = "العهدة في حوزة المندوب (قيد التوصيل)"; mainColor = Colors.green; }
+    } else if (status == 'accepted') {
+      progress = 0.4;
+      statusDesc = "تم تخصيص مندوب.. في طريقه للاستلام";
+      mainColor = Colors.blue;
+    } else if (status == 'at_pickup') {
+      progress = 0.6;
+      statusDesc = "المندوب في نقطة الاستلام (توقيع العهدة)";
+      mainColor = Colors.indigo;
+    } else if (status == 'picked_up') {
+      progress = 0.8;
+      statusDesc = "العهدة في حوزة المندوب (قيد التوصيل)";
+      mainColor = Colors.green;
+    }
 
     return Container(
       margin: const EdgeInsets.fromLTRB(10, 0, 10, 15),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white, 
-        borderRadius: BorderRadius.circular(25), 
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(25),
         boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 15)],
         border: isReturning ? Border.all(color: Colors.red, width: 2) : null,
       ),
@@ -190,17 +232,15 @@ class RetailerTrackingScreen extends StatelessWidget {
           const SizedBox(height: 12),
           Text(statusDesc, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14.sp, color: mainColor, fontFamily: 'Cairo')),
           const Divider(height: 25),
-
-          // ✅ كارت الكود (استلام عهدة أو استلام مرتجع)
+          
           if (status == 'accepted' || status == 'at_pickup' || isReturning)
             Container(
               margin: const EdgeInsets.only(bottom: 15),
               padding: const EdgeInsets.all(15),
               decoration: BoxDecoration(
-                color: isReturning ? Colors.red[50] : Colors.amber[50], 
-                borderRadius: BorderRadius.circular(15), 
-                border: Border.all(color: isReturning ? Colors.red.shade200 : Colors.amber.shade300)
-              ),
+                  color: isReturning ? Colors.red[50] : Colors.amber[50],
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: isReturning ? Colors.red.shade200 : Colors.amber.shade300)),
               child: Column(
                 children: [
                   Row(
@@ -208,7 +248,7 @@ class RetailerTrackingScreen extends StatelessWidget {
                     children: [
                       Icon(isReturning ? Icons.assignment_return : Icons.security, color: isReturning ? Colors.red : Colors.amber, size: 24),
                       const SizedBox(width: 10),
-                      Text(isReturning ? "كود استلام المرتجع: " : "كود تأكيد العهدة: ", 
+                      Text(isReturning ? "كود استلام المرتجع: " : "كود تأكيد العهدة: ",
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.sp, fontFamily: 'Cairo')),
                       Text(code, style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w900, color: isReturning ? Colors.red[900] : Colors.blue[900])),
                     ],
@@ -218,17 +258,15 @@ class RetailerTrackingScreen extends StatelessWidget {
                     child: Divider(thickness: 0.5),
                   ),
                   Text(
-                    isReturning 
-                      ? "⚠️ لا تعطي هذا الكود للمندوب إلا بعد استلام البضاعة المرتجعة والتأكد من سلامتها تماماً."
-                      : "⚠️ تنبيه: إدخال المندوب لهذا الكود بمثابة توقيع إلكتروني باستلام العهدة وتأمين قيمتها.",
+                    isReturning
+                        ? "⚠️ لا تعطي هذا الكود للمندوب إلا بعد استلام البضاعة المرتجعة والتأكد من سلامتها تماماً."
+                        : "⚠️ تنبيه: إدخال المندوب لهذا الكود بمثابة توقيع إلكتروني باستلام العهدة وتأمين قيمتها.",
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 10.sp, color: Colors.black87, fontFamily: 'Cairo', fontWeight: FontWeight.w600, height: 1.4),
                   ),
                 ],
               ),
             ),
-
-          // بيانات المندوب المسؤول
           Row(
             children: [
               CircleAvatar(radius: 25, backgroundColor: Colors.grey[100], child: Icon(Icons.delivery_dining, color: mainColor)),
@@ -253,16 +291,5 @@ class RetailerTrackingScreen extends StatelessWidget {
       ),
     );
   }
-
-  Widget _buildDriverMarker(bool isReturning) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white, 
-        shape: BoxShape.circle, 
-        border: Border.all(color: isReturning ? Colors.red : Colors.blue, width: 2.5), 
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 5)]
-      ),
-      child: Icon(Icons.delivery_dining, color: isReturning ? Colors.red : Colors.blue, size: 35),
-    );
-  }
 }
+
