@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart'; // ✅ الاعتماد على جوجل ماب
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geocoding/geocoding.dart';
@@ -24,7 +24,7 @@ class RetailerDispatchScreen extends StatefulWidget {
 }
 
 class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
-  GoogleMapController? _mapController; // ✅ جعلناه Nullable لتجنب خطأ Late Initialization
+  GoogleMapController? _mapController; 
   final DeliveryService _deliveryService = DeliveryService();
 
   String _pickupAddress = "جاري جلب العنوان...";
@@ -45,7 +45,7 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
 
   @override
   void dispose() {
-    _mapController?.dispose(); // ✅ تنظيف الـ Controller عند الخروج
+    _mapController?.dispose(); 
     super.dispose();
   }
 
@@ -72,8 +72,7 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
 
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
-    // ✅ تأخير بسيط لضمان استقرار الخريطة قبل تحريك الكاميرا
-    Future.delayed(const Duration(milliseconds: 500), () {
+    Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted) _fitMapBounds();
     });
   }
@@ -105,22 +104,16 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
         Placemark place = placemarks[0];
         if (mounted) {
           setState(() {
-            String addr =
-                "${place.street ?? ''} ${place.subLocality ?? ''}, ${place.locality ?? ''}";
-            if (isPickup)
-              _pickupAddress = addr;
-            else
-              _dropoffAddress = addr;
+            String addr = "${place.street ?? ''} ${place.subLocality ?? ''}, ${place.locality ?? ''}";
+            if (isPickup) _pickupAddress = addr; else _dropoffAddress = addr;
           });
         }
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          if (isPickup)
-            _pickupAddress = "موقع المتجر المعروف";
-          else
-            _dropoffAddress = widget.order.customerAddress;
+          if (isPickup) _pickupAddress = "موقع المتجر المعروف";
+          else _dropoffAddress = widget.order.customerAddress;
         });
       }
     }
@@ -134,13 +127,10 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
     final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
     final String? authEmail = FirebaseAuth.instance.currentUser?.email;
     final String? phoneFromEmail = authEmail != null && authEmail.contains('@')
-        ? authEmail.split('@').first
-        : null;
+        ? authEmail.split('@').first : null;
 
-    final String senderPhone =
-        buyerProvider.loggedInUser?.phone ?? phoneFromEmail ?? 'غير متوفر';
-    final String merchantName =
-        buyerProvider.loggedInUser?.fullname ?? widget.order.supermarketName;
+    final String senderPhone = buyerProvider.loggedInUser?.phone ?? phoneFromEmail ?? 'غير متوفر';
+    final String merchantName = buyerProvider.loggedInUser?.fullname ?? widget.order.supermarketName;
 
     setState(() => _isLoading = true);
 
@@ -148,26 +138,19 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
       final user = FirebaseAuth.instance.currentUser;
       final String securityCode = _generateOTP();
 
-      // ✅ تصليح بيانات الرادار: المندوب بيشوف شاشة رصاصي لأن الـ Map بتتوقع حقول معينة
-      DocumentReference radarRef =
-          await FirebaseFirestore.instance.collection('specialRequests').add({
+      // ✅ التعديل الجوهري: إرسال GeoPoint صافي لعدم ضرب شاشة المندوب
+      DocumentReference radarRef = await FirebaseFirestore.instance.collection('specialRequests').add({
         'userId': user?.uid ?? 'anonymous_retailer',
         'userName': merchantName,
         'userPhone': senderPhone,
         'customerPhone': widget.order.customerPhone,
         'customerName': widget.order.customerName,
-        // ✅ تخزين المواقع بصيغة Map صريحة بالإضافة للـ GeoPoint لضمان التوافق
-        'pickupLocation': {
-          'lat': widget.storeLocation.latitude,
-          'lng': widget.storeLocation.longitude
-        },
-        'pickupGeo': GeoPoint(widget.storeLocation.latitude, widget.storeLocation.longitude),
+        
+        // 🚀 الحل: إرسال كـ GeoPoint فقط كما يتوقع تطبيق المندوب في دالة _calculateDistance
+        'pickupLocation': GeoPoint(widget.storeLocation.latitude, widget.storeLocation.longitude),
+        'dropoffLocation': GeoPoint(widget.order.customerLatLng.latitude, widget.order.customerLatLng.longitude),
+        
         'pickupAddress': _pickupAddress,
-        'dropoffLocation': {
-          'lat': widget.order.customerLatLng.latitude,
-          'lng': widget.order.customerLatLng.longitude
-        },
-        'dropoffGeo': GeoPoint(widget.order.customerLatLng.latitude, widget.order.customerLatLng.longitude),
         'dropoffAddress': _dropoffAddress,
         'totalPrice': _pricingDetails['totalPrice'],
         'commissionAmount': _pricingDetails['commissionAmount'],
@@ -179,14 +162,10 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
         'requestSource': 'retailer',
         'originalOrderId': widget.order.id,
         'orderFinalAmount': widget.order.finalAmount,
-        'details':
-            "🛒 استلام من: $merchantName\n👤 تسليم لعميل: ${widget.order.customerName}\n💰 تحصيل كاش: ${widget.order.finalAmount} ج.م",
+        'details': "🛒 استلام من: $merchantName\n👤 تسليم لعميل: ${widget.order.customerName}\n💰 تحصيل كاش: ${widget.order.finalAmount} ج.م",
       });
 
-      await FirebaseFirestore.instance
-          .collection('consumerorders')
-          .doc(widget.order.id)
-          .update({
+      await FirebaseFirestore.instance.collection('consumerorders').doc(widget.order.id).update({
         'specialRequestId': radarRef.id,
       });
 
@@ -194,12 +173,9 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           backgroundColor: Colors.green,
-          content: Text("🚀 تم بث الطلب للرادار وربطه بنجاح!",
-              style: TextStyle(fontFamily: 'Cairo'))));
+          content: Text("🚀 تم بث الطلب للرادار وربطه بنجاح!", style: TextStyle(fontFamily: 'Cairo'))));
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text("خطأ أثناء الإرسال: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ أثناء الإرسال: $e")));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -211,53 +187,36 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text("تأكيد مسار التوصيل",
-              style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                  fontSize: 18,
-                  fontFamily: 'Cairo')),
+          title: const Text("تأكيد مسار التوصيل", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 18, fontFamily: 'Cairo')),
           backgroundColor: Colors.white,
           elevation: 1,
-          leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
-              onPressed: () => Navigator.pop(context)),
+          leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.black), onPressed: () => Navigator.pop(context)),
           centerTitle: true,
         ),
         body: Stack(
           children: [
             GoogleMap(
               onMapCreated: _onMapCreated,
-              initialCameraPosition:
-                  CameraPosition(target: widget.storeLocation, zoom: 13),
+              initialCameraPosition: CameraPosition(target: widget.storeLocation, zoom: 13),
               myLocationEnabled: true,
               zoomControlsEnabled: false,
               markers: {
                 Marker(
                   markerId: const MarkerId('pickup'),
                   position: widget.storeLocation,
-                  icon: BitmapDescriptor.defaultMarkerWithHue(
-                      BitmapDescriptor.hueGreen),
+                  icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
                 ),
                 Marker(
                   markerId: const MarkerId('dropoff'),
                   position: widget.order.customerLatLng,
-                  icon: BitmapDescriptor.defaultMarkerWithHue(
-                      BitmapDescriptor.hueRed),
+                  icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
                 ),
               },
             ),
             SafeArea(
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: _buildDispatchCard(),
-              ),
+              child: Align(alignment: Alignment.bottomCenter, child: _buildDispatchCard()),
             ),
-            if (_isLoading)
-              Container(
-                  color: Colors.black45,
-                  child: const Center(
-                      child: CircularProgressIndicator(color: Colors.white))),
+            if (_isLoading) Container(color: Colors.black45, child: const Center(child: CircularProgressIndicator(color: Colors.white))),
           ],
         ),
       ),
@@ -271,31 +230,16 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(25),
-        boxShadow: const [
-          BoxShadow(
-              color: Colors.black26,
-              blurRadius: 15,
-              offset: Offset(0, -5))
-        ],
+        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 15, offset: Offset(0, -5))],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(10))),
+          Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
           const SizedBox(height: 20),
-          _buildLocationRow(
-              Icons.circle, Colors.green, "الاستلام من المتجر (الراسل):", _pickupAddress),
-          const Padding(
-              padding: EdgeInsets.only(right: 7),
-              child: SizedBox(
-                  height: 15, child: VerticalDivider(width: 2, color: Colors.grey))),
-          _buildLocationRow(Icons.location_on, Colors.red,
-              "التسليم للعميل (المستلم):", _dropoffAddress),
+          _buildLocationRow(Icons.circle, Colors.green, "الاستلام من المتجر (الراسل):", _pickupAddress),
+          const Padding(padding: EdgeInsets.only(right: 7), child: SizedBox(height: 15, child: VerticalDivider(width: 2, color: Colors.grey))),
+          _buildLocationRow(Icons.location_on, Colors.red, "التسليم للعميل (المستلم):", _dropoffAddress),
           const Divider(height: 30),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -303,29 +247,15 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("أجرة التوصيل",
-                      style: TextStyle(
-                          color: Colors.grey, fontSize: 12, fontFamily: 'Cairo')),
-                  Text("${_estimatedPrice.toStringAsFixed(0)} ج.م",
-                      style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.blue,
-                          fontFamily: 'Cairo')),
+                  const Text("أجرة التوصيل", style: TextStyle(color: Colors.grey, fontSize: 12, fontFamily: 'Cairo')),
+                  Text("${_estimatedPrice.toStringAsFixed(0)} ج.م", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.blue, fontFamily: 'Cairo')),
                 ],
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const Text("ثمن الأوردر (كاش)",
-                      style: TextStyle(
-                          color: Colors.grey, fontSize: 12, fontFamily: 'Cairo')),
-                  Text("${widget.order.finalAmount.toStringAsFixed(0)} ج.م",
-                      style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.green,
-                          fontFamily: 'Cairo')),
+                  const Text("ثمن الأوردر (كاش)", style: TextStyle(color: Colors.grey, fontSize: 12, fontFamily: 'Cairo')),
+                  Text("${widget.order.finalAmount.toStringAsFixed(0)} ج.م", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.green, fontFamily: 'Cairo')),
                 ],
               ),
             ],
@@ -336,22 +266,13 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
             height: 55,
             child: ElevatedButton(
               onPressed: _sendToRadar,
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue[900],
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15))),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[900], elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.radar, color: Colors.white),
                   SizedBox(width: 10),
-                  Text("تأكيد وبث للمناديب",
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Cairo')),
+                  Text("تأكيد وبث للمناديب", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
                 ],
               ),
             ),
@@ -361,32 +282,18 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
     );
   }
 
-  Widget _buildLocationRow(
-      IconData icon, Color color, String label, String address) {
+  Widget _buildLocationRow(IconData icon, Color color, String label, String address) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Icon(icon, color: color, size: 18)),
+        Padding(padding: const EdgeInsets.only(top: 4), child: Icon(icon, color: color, size: 18)),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Cairo')),
-              Text(address,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Cairo')),
+              Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+              Text(address, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
             ],
           ),
         ),
