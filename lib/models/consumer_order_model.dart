@@ -1,7 +1,7 @@
 // lib/models/consumer_order_model.dart
-
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:latlong2/latlong.dart'; 
+// ❌ امسح import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart'; // ✅ البديل الصحيح لجوجل ماب
 import '../constants/constants.dart';
 
 // نموذج المنتج داخل الطلب
@@ -10,23 +10,23 @@ class OrderItem {
   final num? quantity;
   final String? imageUrl;
   final double? price;
-  final String? productId; 
+  final String? productId;
 
   OrderItem({
-    this.name, 
-    this.quantity, 
-    this.imageUrl, 
+    this.name,
+    this.quantity,
+    this.imageUrl,
     this.price,
     this.productId,
   });
 
   factory OrderItem.fromMap(Map<String, dynamic> data) {
     return OrderItem(
-      name: (data['name'] ?? data['productName']) as String?, 
+      name: (data['name'] ?? data['productName']) as String?,
       quantity: data['quantity'] as num?,
       imageUrl: (data['imageUrl'] ?? data['productImage']) as String?,
       price: (data['price'] as num?)?.toDouble(),
-      productId: data['productId'] as String?, 
+      productId: data['productId'] as String?,
     );
   }
 }
@@ -43,18 +43,17 @@ class ConsumerOrderModel {
   final String supermarketPhone;
   final double finalAmount;
   final String status;
-  final DateTime? orderDate; 
+  final DateTime? orderDate;
   final String paymentMethod;
-  final double deliveryFee; 
+  final double deliveryFee;
   final int pointsUsed;
   final List<OrderItem> items;
-  
   final double? lat;
   final double? lng;
-  final String? specialRequestId; 
+  final String? specialRequestId;
 
-  // 🎯 الحقول الجديدة لدعم منطق المرتجع (لحل أخطاء البناء)
-  final bool returnRequested; 
+  // الحقول الجديدة لدعم منطق المرتجع
+  final bool returnRequested;
   final String? returnVerificationCode;
 
   ConsumerOrderModel({
@@ -76,10 +75,11 @@ class ConsumerOrderModel {
     this.lat,
     this.lng,
     this.specialRequestId,
-    this.returnRequested = false, // القيمة الافتراضية
+    this.returnRequested = false,
     this.returnVerificationCode,
   });
 
+  // 🎯 التعديل الجوهري هنا: الـ Getter الآن يعيد LatLng الخاص بجوجل
   LatLng get customerLatLng => LatLng(lat ?? 0.0, lng ?? 0.0);
 
   factory ConsumerOrderModel.fromFirestore(DocumentSnapshot doc) {
@@ -87,15 +87,16 @@ class ConsumerOrderModel {
 
     final itemsList = (data?['items'] as List<dynamic>?)
             ?.map((item) => OrderItem.fromMap(item as Map<String, dynamic>))
-            .toList() ?? <OrderItem>[];
+            .toList() ??
+        <OrderItem>[];
 
     double extractedFee = (data?['deliveryFee'] as num?)?.toDouble() ?? 0.0;
     if (extractedFee == 0) {
       for (var item in itemsList) {
-        if (item.productId == 'DELIVERY_FEE' || 
+        if (item.productId == 'DELIVERY_FEE' ||
             (item.name != null && (item.name!.contains("توصيل") || item.name!.contains("Delivery")))) {
           extractedFee = item.price ?? 0.0;
-          break; 
+          break;
         }
       }
     }
@@ -105,15 +106,12 @@ class ConsumerOrderModel {
     if (data?['deliveryLocation'] != null && data?['deliveryLocation'] is Map) {
       extractedLat = (data?['deliveryLocation']['lat'] as num?)?.toDouble();
       extractedLng = (data?['deliveryLocation']['lng'] as num?)?.toDouble();
-    } 
-    else if (data?['customerLatLng'] is GeoPoint) {
+    } else if (data?['customerLatLng'] is GeoPoint) {
       extractedLat = (data?['customerLatLng'] as GeoPoint).latitude;
       extractedLng = (data?['customerLatLng'] as GeoPoint).longitude;
     }
 
     final String? specialId = data?['specialRequestId'] as String?;
-    
-    // 🚩 استخراج حقول المرتجع من Firestore
     final bool isReturnReq = data?['returnRequested'] ?? false;
     final String? returnCode = data?['returnVerificationCode']?.toString();
 
@@ -130,22 +128,23 @@ class ConsumerOrderModel {
       orderId: data?['orderId']?.toString() ?? doc.id,
       customerName: data?['customerName'] ?? 'غير معروف',
       customerAddress: data?['customerAddress'] ?? 'غير متوفر',
-      customerPhone: data?['customerPhone'] ?? '', 
+      customerPhone: data?['customerPhone'] ?? '',
       supermarketId: data?['supermarketId'] ?? '',
       supermarketName: data?['supermarketName'] ?? 'غير معروف',
-      supermarketPhone: data?['supermarketPhone'] ?? '', 
+      supermarketPhone: data?['supermarketPhone'] ?? '',
       finalAmount: (data?['finalAmount'] as num?)?.toDouble() ?? 0.0,
-      status: data?['status'] ?? 'new-order', 
+      status: data?['status'] ?? 'new-order',
       orderDate: parsedDate,
       paymentMethod: data?['paymentMethod'] ?? 'كاش',
-      deliveryFee: extractedFee, 
+      deliveryFee: extractedFee,
       pointsUsed: (data?['pointsUsed'] as num?)?.toInt() ?? 0,
       items: itemsList,
       lat: extractedLat,
       lng: extractedLng,
       specialRequestId: specialId,
-      returnRequested: isReturnReq, // ✅ ربط القيمة
-      returnVerificationCode: returnCode, // ✅ ربط القيمة
+      returnRequested: isReturnReq,
+      returnVerificationCode: returnCode,
     );
   }
 }
+
