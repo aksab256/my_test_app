@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:latlong2/latlong.dart';
+// تم حذف latlong2 هنا نهائياً
+import 'package:google_maps_flutter/google_maps_flutter.dart'; 
 import 'package:sizer/sizer.dart';
 
 import '../providers/customer_orders_provider.dart';
@@ -18,11 +19,11 @@ class ConsumerOrdersScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ordersProvider = Provider.of<CustomerOrdersProvider>(context);
-    
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text('إدارة عهدة الطلبات', 
+        title: Text('إدارة عهدة الطلبات',
             style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18.sp, fontFamily: 'Cairo')),
         centerTitle: true,
         backgroundColor: Colors.white,
@@ -96,7 +97,7 @@ class _OrderCardState extends State<OrderCard> {
       MaterialPageRoute(
         builder: (context) => RetailerDispatchScreen(
           order: widget.order,
-          storeLocation: LatLng(
+          storeLocation: LatLng( // ✅ هنا تم التأكد من استخدام LatLng الخاص بجوجل ماب
             buyerProvider.userLat ?? 31.2001,
             buyerProvider.userLng ?? 29.9187,
           ),
@@ -109,21 +110,21 @@ class _OrderCardState extends State<OrderCard> {
   Widget build(BuildContext context) {
     final order = widget.order;
     final buyerProvider = Provider.of<BuyerDataProvider>(context);
-    
+
     Color borderColor = order.status == OrderStatuses.NEW_ORDER
         ? const Color(0xFFFFC107)
         : const Color(0xFF4CAF50);
-    
+
     if (order.returnRequested == true) {
       borderColor = Colors.redAccent;
     }
 
-    final bool isLockedByRadar = order.status == OrderStatuses.SHIPPED && 
-                                (order.specialRequestId != null && order.specialRequestId!.isNotEmpty);
+    final bool isLockedByRadar = order.status == OrderStatuses.SHIPPED &&
+        (order.specialRequestId != null && order.specialRequestId!.isNotEmpty);
 
-    final bool isDisabled = order.status == OrderStatuses.DELIVERED || 
-                           order.status == OrderStatuses.CANCELLED ||
-                           isLockedByRadar;
+    final bool isDisabled = order.status == OrderStatuses.DELIVERED ||
+        order.status == OrderStatuses.CANCELLED ||
+        isLockedByRadar;
 
     return Container(
       margin: EdgeInsets.only(bottom: 2.5.h),
@@ -147,16 +148,16 @@ class _OrderCardState extends State<OrderCard> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('سجل عهدة: #${order.orderId}', 
+            Text('سجل عهدة: #${order.orderId}',
                 style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900, color: Colors.black87, fontFamily: 'Cairo')),
             SizedBox(height: 0.5.h),
-            Text(order.customerName, 
+            Text(order.customerName,
                 style: TextStyle(fontSize: 13.sp, color: Colors.grey[800], fontWeight: FontWeight.w600, fontFamily: 'Cairo')),
           ],
         ),
         subtitle: Padding(
           padding: EdgeInsets.only(top: 1.h),
-          child: Text('قيمة العهدة: ${order.finalAmount.toStringAsFixed(2)} ج.م', 
+          child: Text('قيمة العهدة: ${order.finalAmount.toStringAsFixed(2)} ج.م',
               style: TextStyle(color: borderColor, fontWeight: FontWeight.w800, fontSize: 13.sp)),
         ),
         children: [
@@ -166,44 +167,42 @@ class _OrderCardState extends State<OrderCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (order.returnRequested == true) ...[
-                   Container(
-                     width: double.infinity,
-                     padding: const EdgeInsets.all(12),
-                     decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(10)),
-                     child: Row(
-                       children: [
-                         const Icon(Icons.warning_amber_rounded, color: Colors.red),
-                         const SizedBox(width: 10),
-                         Expanded(
-                           child: Text("تنبيه: العميل رفض الاستلام، العهدة في طريق العودة.",
-                               style: TextStyle(color: Colors.red[900], fontWeight: FontWeight.bold, fontSize: 11.sp, fontFamily: 'Cairo')),
-                         ),
-                       ],
-                     ),
-                   ),
-                   SizedBox(height: 2.h),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(10)),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded, color: Colors.red),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text("تنبيه: العميل رفض الاستلام، العهدة في طريق العودة.",
+                              style: TextStyle(color: Colors.red[900], fontWeight: FontWeight.bold, fontSize: 11.sp, fontFamily: 'Cairo')),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 2.h),
                 ],
                 const Divider(),
                 _buildInfoRow(Icons.phone, 'تواصل الوجهة', order.customerPhone),
                 _buildInfoRow(Icons.location_on, 'موقع التسليم', order.customerAddress),
-                // ✅ تم إصلاح مشكلة toLocaleString ببديل أصلي متوافق مع الـ Build
                 _buildInfoRow(Icons.calendar_today, 'توقيت الإنشاء', order.orderDate?.toString().split('.')[0] ?? 'غير متوفر'),
                 
                 Padding(
                   padding: EdgeInsets.symmetric(vertical: 2.h),
-                  child: Text('تفاصيل محتويات العهدة:', 
+                  child: Text('تفاصيل محتويات العهدة:',
                       style: TextStyle(fontWeight: FontWeight.w900, color: const Color(0xFF4CAF50), fontSize: 13.sp, fontFamily: 'Cairo')),
                 ),
                 _buildItemsList(order),
                 
                 const Divider(height: 40),
-                Text(isLockedByRadar ? 'الحالة (بعهدة المندوب):' : 'إدارة حالة العهدة:', 
+                Text(isLockedByRadar ? 'الحالة (بعهدة المندوب):' : 'إدارة حالة العهدة:',
                     style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.sp, fontFamily: 'Cairo')),
                 SizedBox(height: 1.5.h),
                 
                 DropdownButtonFormField<String>(
                   value: _selectedStatus,
-                  // ✅ تم إصلاح مشكلة OrderStatusesHelpers
                   items: [
                     OrderStatuses.NEW_ORDER,
                     OrderStatuses.PROCESSING,
@@ -212,9 +211,8 @@ class _OrderCardState extends State<OrderCard> {
                     OrderStatuses.CANCELLED,
                   ].map((status) {
                     return DropdownMenuItem(
-                      value: status, 
-                      child: Text(getStatusDisplayName(status), style: TextStyle(fontFamily: 'Cairo', fontSize: 12.sp, fontWeight: FontWeight.bold))
-                    );
+                        value: status,
+                        child: Text(getStatusDisplayName(status), style: TextStyle(fontFamily: 'Cairo', fontSize: 12.sp, fontWeight: FontWeight.bold)));
                   }).toList(),
                   onChanged: isDisabled ? null : (newValue) => setState(() => _selectedStatus = newValue!),
                   decoration: InputDecoration(
@@ -257,9 +255,8 @@ class _OrderCardState extends State<OrderCard> {
                     ),
                   ],
                 ),
-                
                 SizedBox(height: 2.h),
-                
+
                 StreamBuilder<DocumentSnapshot>(
                   stream: (order.specialRequestId != null && order.specialRequestId!.isNotEmpty)
                       ? FirebaseFirestore.instance.collection('specialRequests').doc(order.specialRequestId).snapshots()
@@ -273,7 +270,6 @@ class _OrderCardState extends State<OrderCard> {
                         color: Colors.orange[800]!,
                       );
                     }
-
                     var radarData = snapshot.data!.data() as Map<String, dynamic>;
                     String radarStatus = radarData['status'] ?? 'pending';
 
@@ -318,9 +314,9 @@ class _OrderCardState extends State<OrderCard> {
       width: double.infinity,
       child: ElevatedButton.icon(
         onPressed: onPressed,
-        icon: isProcessing 
-          ? SizedBox(width: 22, height: 22, child: const CircularProgressIndicator(strokeWidth: 3, color: Colors.white))
-          : Icon(icon, size: 24.sp),
+        icon: isProcessing
+            ? SizedBox(width: 22, height: 22, child: const CircularProgressIndicator(strokeWidth: 3, color: Colors.white))
+            : Icon(icon, size: 24.sp),
         label: Text(label, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w900, fontFamily: 'Cairo')),
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
@@ -382,7 +378,6 @@ class _OrderCardState extends State<OrderCard> {
   }
 }
 
-// ✅ إضافة الدوال المساعدة خارج الكلاس لضمان عمل الـ Build
 String getStatusDisplayName(String status) {
   switch (status) {
     case OrderStatuses.NEW_ORDER: return 'طلب جديد';
@@ -393,3 +388,4 @@ String getStatusDisplayName(String status) {
     default: return status;
   }
 }
+
