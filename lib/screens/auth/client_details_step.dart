@@ -248,7 +248,11 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   Future<void> _updateAddressText(LatLng position) async {
     try {
       // ✅ تعديل localeIdentifier لضمان جلب العنوان بالعربية
-      final placemarks = await geo.placemarkFromCoordinates(position.latitude, position.longitude, localeIdentifier: 'ar_EG');
+      final placemarks = await geo.placemarkFromCoordinates(
+  position.latitude, 
+  position.longitude
+); // حذفنا localeIdentifier نهائياً
+
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
         String formattedAddress =
