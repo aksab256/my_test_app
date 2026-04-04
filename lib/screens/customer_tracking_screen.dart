@@ -25,6 +25,8 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
   String _estimatedTime = "";
   String _distanceRemaining = "";
   bool _isMapCreated = false;
+  bool _hasInitialCenteringDone = false; // لمنع تجمد الخريطة
+  final Set<Polyline> _polylines = {}; // لرسم الخط
 
   @override
   void initState() {
@@ -33,11 +35,9 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
   }
 
   Future<void> _loadCustomMarker() async {
-    // أيقونة المندوب (سيارة أو موتوسيكل) بلون مميز
     _driverIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
   }
 
-  // حساب المسافة والوقت (Haversine formula)
   void _calculateETA(LatLng driver, LatLng destination) {
     var p = 0.017453292519943295;
     var c = cos;
@@ -45,8 +45,6 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
         c(driver.latitude * p) * c(destination.latitude * p) *
             (1 - c((destination.longitude - driver.longitude) * p)) / 2;
     double distanceInKm = 12742 * asin(sqrt(a));
-    
-    // افتراض سرعة متوسطة 30 كم/ساعة في زحمة الإسكندرية
     int travelMinutes = ((distanceInKm / 30) * 60).round() + 2;
 
     if (mounted) {
@@ -55,6 +53,16 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
             ? "${(distanceInKm * 1000).toInt()} متر"
             : "${distanceInKm.toStringAsFixed(1)} كم";
         _estimatedTime = "$travelMinutes دقيقة";
+        
+        // تحديث الخط المرسوم
+        _polylines.clear();
+        _polylines.add(Polyline(
+          polylineId: const PolylineId("route"),
+          points: [driver, destination],
+          color: Colors.blue.withOpacity(0.7),
+          width: 5,
+          jointType: JointType.round,
+        ));
       });
     }
   }
@@ -75,13 +83,14 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
     return rotation;
   }
 
-  Future<void> _animateCameraToDriver(LatLng location) async {
-    if (!_isMapCreated) return;
+  Future<void> _animateCameraOnce(LatLng location) async {
+    if (!_isMapCreated || _hasInitialCenteringDone) return;
     try {
       final GoogleMapController controller = await _mapController.future;
-      controller.animateCamera(CameraUpdate.newLatLng(location));
+      controller.animateCamera(CameraUpdate.newLatLngZoom(location, 15));
+      _hasInitialCenteringDone = true; 
     } catch (e) {
-      debugPrint("Map Animation Error: $e");
+      debugPrint("Map Error: $e");
     }
   }
 
@@ -90,7 +99,6 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
     if (widget.orderId.isEmpty) return const Scaffold(body: Center(child: Text("طلب غير موجود")));
 
     return StreamBuilder<DocumentSnapshot>(
-      // المطابقة مع الـ Collection المذكورة في طلبك
       stream: FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).snapshots(),
       builder: (context, orderSnapshot) {
         if (!orderSnapshot.hasData || !orderSnapshot.data!.exists) {
@@ -101,7 +109,6 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
         String status = orderData['status'] ?? "pending";
         String? driverId = orderData['driverId'];
         
-        // جلب المواقع من GeoPoint (مطابق لبياناتك)
         GeoPoint pickup = orderData['pickupLocation'];
         GeoPoint dropoff = orderData['dropoffLocation'];
         LatLng pickupLatLng = LatLng(pickup.latitude, pickup.longitude);
@@ -117,12 +124,11 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
 
             if (driverSnapshot.hasData && driverSnapshot.data!.exists) {
               driverData = driverSnapshot.data!.data() as Map<String, dynamic>;
-              // التحقق من صيغة الموقع في تطبيق المندوب
-              if (driverData.containsKey('lat') && driverData.containsKey('lng')) {
-                driverLatLng = LatLng(driverData['lat'], driverData['lng']);
-              } else if (driverData.containsKey('location')) {
+              if (driverData.containsKey('location')) {
                 GeoPoint dLoc = driverData['location'];
                 driverLatLng = LatLng(dLoc.latitude, dLoc.longitude);
+              } else if (driverData.containsKey('lat')) {
+                driverLatLng = LatLng(driverData['lat'], driverData['lng']);
               }
 
               if (driverLatLng != null) {
@@ -130,9 +136,8 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                   _driverRotation = _calculateRotation(_lastDriverPosition!, driverLatLng!);
                 }
                 _lastDriverPosition = driverLatLng;
-                _animateCameraToDriver(driverLatLng!);
+                _animateCameraOnce(driverLatLng!);
 
-                // تحديد الوجهة بناءً على حالة الطلب
                 LatLng destination = (status == 'accepted' || status == 'at_pickup') ? pickupLatLng : dropoffLatLng;
                 
                 WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -146,10 +151,11 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
               child: Scaffold(
                 extendBodyBehindAppBar: true,
                 appBar: AppBar(
-                  backgroundColor: Colors.white.withOpacity(0.9),
+                  backgroundColor: Colors.white.withOpacity(0.8),
                   elevation: 0,
                   title: Text("تتبع رابية أحلى", style: TextStyle(fontFamily: 'Cairo', fontSize: 13.sp, fontWeight: FontWeight.bold)),
                   centerTitle: true,
+                  shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(bottom: Radius.circular(20))),
                 ),
                 body: Stack(
                   children: [
@@ -159,20 +165,21 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                         if (!_mapController.isCompleted) _mapController.complete(c);
                         setState(() => _isMapCreated = true);
                       },
+                      polylines: _polylines,
                       zoomControlsEnabled: false,
                       myLocationButtonEnabled: false,
+                      scrollGesturesEnabled: true, // تفعيل التحريك الحر
+                      rotateGesturesEnabled: true,
                       markers: {
                         Marker(
                           markerId: const MarkerId('pickup'),
                           position: pickupLatLng,
                           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-                          infoWindow: const InfoWindow(title: "موقع المتجر"),
                         ),
                         Marker(
                           markerId: const MarkerId('dropoff'),
                           position: dropoffLatLng,
                           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-                          infoWindow: const InfoWindow(title: "موقع التسليم"),
                         ),
                         if (driverLatLng != null)
                           Marker(
@@ -186,13 +193,13 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                       },
                     ),
 
-                    // كارت الوقت والمسافة (ETA)
-                    if (_estimatedTime.isNotEmpty && status != 'pending' && status != 'delivered')
+                    // الكارت العلوي المحسن في منطقة آمنة
+                    if (_estimatedTime.isNotEmpty && status != 'delivered')
                       Positioned(
-                        top: 10.h,
-                        left: 15,
-                        right: 15,
-                        child: _buildEtaCard(),
+                        top: MediaQuery.of(context).padding.top + 70, // أسفل الـ AppBar مباشرة
+                        left: 12,
+                        right: 12,
+                        child: _buildEnhancedEtaCard(),
                       ),
 
                     Align(
@@ -209,36 +216,40 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
     );
   }
 
-  Widget _buildEtaCard() {
+  Widget _buildEnhancedEtaCard() {
     return Container(
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))],
+        color: Colors.white.withOpacity(0.95),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10))],
+        border: Border.all(color: Colors.white, width: 2),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildInfoItem("الوقت المتوقع", _estimatedTime, Icons.access_time),
-          Container(width: 1, height: 30, color: Colors.grey[200]),
-          _buildInfoItem("المسافة المتبقية", _distanceRemaining, Icons.directions_bike),
-        ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 10),
+            child: Row(
+              children: [
+                Expanded(child: _buildInfoColumn("الوصول خلال", _estimatedTime, Icons.timer_outlined, Colors.blue)),
+                Container(width: 1, height: 40, color: Colors.grey[200]),
+                Expanded(child: _buildInfoColumn("المسافة", _distanceRemaining, Icons.straighten_outlined, Colors.orange)),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildInfoItem(String label, String value, IconData icon) {
+  Widget _buildInfoColumn(String title, String value, IconData icon, Color color) {
     return Column(
       children: [
-        Row(
-          children: [
-            Icon(icon, size: 14, color: Colors.blue),
-            const SizedBox(width: 5),
-            Text(label, style: TextStyle(fontFamily: 'Cairo', fontSize: 9.sp, color: Colors.grey[600])),
-          ],
-        ),
-        Text(value, style: TextStyle(fontFamily: 'Cairo', fontSize: 11.sp, fontWeight: FontWeight.bold, color: Colors.blue[900])),
+        Icon(icon, color: color, size: 20),
+        const SizedBox(height: 4),
+        Text(title, style: TextStyle(fontFamily: 'Cairo', fontSize: 8.sp, color: Colors.grey[600])),
+        Text(value, style: TextStyle(fontFamily: 'Cairo', fontSize: 11.sp, fontWeight: FontWeight.bold, color: Colors.black87)),
       ],
     );
   }
@@ -254,81 +265,81 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
       statusColor = Colors.blue;
     } else if (status == 'at_pickup') {
       progress = 0.6;
-      statusDesc = "المندوب يقوم باستلام الطلب الآن";
+      statusDesc = "المندوب يقوم باستلام الطلب";
       statusColor = Colors.indigo;
     } else if (status == 'picked_up') {
       progress = 0.8;
-      statusDesc = "الطلب في عهدة المندوب وفي الطريق إليك";
+      statusDesc = "الطلب في عهدة المندوب";
       statusColor = Colors.green;
     } else if (status == 'delivered') {
       progress = 1.0;
-      statusDesc = "تم تأكيد استلام الأمانات بنجاح";
+      statusDesc = "تم تأكيد استلام الأمانات";
       statusColor = Colors.teal;
     }
 
     return Container(
-      margin: const EdgeInsets.all(15),
-      padding: const EdgeInsets.all(18),
+      margin: const EdgeInsets.only(left: 15, right: 15, bottom: 25),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15)],
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 20)],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          LinearProgressIndicator(value: progress, backgroundColor: Colors.grey[100], color: statusColor, minHeight: 6),
+          LinearProgressIndicator(value: progress, backgroundColor: Colors.grey[100], color: statusColor, minHeight: 8),
           const SizedBox(height: 15),
 
-          // عرض كود التحقق (verificationCode) بشكل بارز للعميل
           if (status != 'delivered' && order.containsKey('verificationCode'))
-            Container(
-              margin: const EdgeInsets.only(bottom: 15),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.blue[100]!),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text("كود تأمين العهدة:", style: TextStyle(fontFamily: 'Cairo', fontSize: 10.sp)),
-                  Text(
-                    "${order['verificationCode']}",
-                    style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16.sp, letterSpacing: 2, color: Colors.blue[900]),
-                  ),
-                ],
-              ),
-            ),
+            _buildVerificationCard(order['verificationCode'].toString()),
 
-          Text(statusDesc, style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12.sp, color: statusColor)),
-          const Divider(height: 25),
+          Text(statusDesc, style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12.5.sp, color: statusColor)),
+          const Divider(height: 30),
           
           Row(
             children: [
-              CircleAvatar(
-                backgroundColor: Colors.grey[100],
-                child: Icon(Icons.person, color: Colors.blue[900]),
-              ),
-              const SizedBox(width: 12),
+              CircleAvatar(backgroundColor: Colors.blue[50], radius: 25, child: Icon(Icons.person, color: Colors.blue[900], size: 30)),
+              const SizedBox(width: 15),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(order['driverName'] ?? "جاري البحث...", style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
                     if (order.containsKey('insurance_points'))
-                      Text("نقاط تأمين: ${order['insurance_points']} ج.م", style: TextStyle(fontFamily: 'Cairo', fontSize: 9.sp, color: Colors.grey)),
+                      Text("تأمين العهدة: ${order['insurance_points']} ج.م", style: TextStyle(fontFamily: 'Cairo', fontSize: 9.sp, color: Colors.grey[600])),
                   ],
                 ),
               ),
               if (driver != null && driver.containsKey('phone'))
-                IconButton(
-                  onPressed: () => launchUrl(Uri.parse("tel:${driver['phone']}")),
-                  icon: const Icon(Icons.phone_in_talk, color: Colors.green),
+                Material(
+                  color: Colors.green[50],
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    onPressed: () => launchUrl(Uri.parse("tel:${driver['phone']}")),
+                    icon: const Icon(Icons.phone, color: Colors.green),
+                  ),
                 ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVerificationCard(String code) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 15),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 15),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [Colors.blue[900]!, Colors.blue[700]!]),
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text("كود تأمين العهدة", style: TextStyle(fontFamily: 'Cairo', color: Colors.white70, fontSize: 10.sp)),
+          Text(code, style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16.sp, color: Colors.white, letterSpacing: 2)),
         ],
       ),
     );
