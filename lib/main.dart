@@ -1,4 +1,3 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
@@ -11,7 +10,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-// ✅ تم حذف latlong2 نهائياً وتنظيف مكتبة جوجل مابس
+// ✅ استخدام جوجل مابس فقط وتجنب latlong2 لمنع التعارض
 import 'package:google_maps_flutter/google_maps_flutter.dart' as google_maps;
 
 import 'package:my_test_app/firebase_options.dart';
@@ -76,7 +75,7 @@ void main() async {
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
 
-  // ✅ رجعنا الدالة لأصلها تماماً (بدون settings:) كما طلبت
+  // ✅ هذه الدالة كما كانت في Commit 583a0ea تماماً
   await flutterLocalNotificationsPlugin.initialize(
     initializationSettings,
   );
@@ -191,7 +190,7 @@ class MyApp extends StatelessWidget {
               final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
               final rawLocation = args?['location'];
 
-              // ✅ تنظيف التحويل ليعتمد على Google Maps فقط
+              // ✅ تحويل الموقع ليعتمد حصرياً على Google Maps لضمان نجاح البناء
               google_maps.LatLng finalLocation;
               if (rawLocation is google_maps.LatLng) {
                 finalLocation = rawLocation;
@@ -209,7 +208,6 @@ class MyApp extends StatelessWidget {
               return CustomerTrackingScreen(orderId: orderId);
             },
           },
-          // ... بقية الملف كما هو تماماً في نسختك الأصلية
           onGenerateRoute: (settings) {
             if (settings.name == MarketplaceHomeScreen.routeName) {
               final args = settings.arguments as Map<String, dynamic>?;
@@ -275,7 +273,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// ... بقية كود AuthWrapper و PostRegistration كما هي في ملفك
 class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
   @override
