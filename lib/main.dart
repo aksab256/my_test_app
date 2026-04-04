@@ -11,11 +11,9 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-// ✅ المكتبة القديمة كما هي
-import 'package:latlong2/latlong.dart' as latlong;
-
-// ✅ إضافة مكتبة جوجل مابس باسم مستعار لمنع التعارض
-import 'package:google_maps_flutter/google_maps_flutter.dart' as google_maps;
+// ✅ تم حذف latlong2 نهائياً
+// ✅ استيراد مكتبة جوجل مابس بشكل مباشر
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import 'package:my_test_app/firebase_options.dart';
 import 'package:my_test_app/theme/app_theme.dart';
@@ -79,9 +77,8 @@ void main() async {
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
 
-  // ✅ تعديل "دالة الإشعارات" لضمان نجاح الـ Build
   await flutterLocalNotificationsPlugin.initialize(
-    settings: initializationSettings,
+    initializationSettings,
   );
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
@@ -190,19 +187,17 @@ class MyApp extends StatelessWidget {
             '/add-offer': (context) => const AddOfferScreen(),
             '/create-gift': (context) => const CreateGiftPromoScreen(currentSellerId: ''),
             '/delivery-areas': (context) => const DeliveryAreaScreen(currentSellerId: ''),
-
             '/abaatly-had': (context) {
               final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
               final rawLocation = args?['location'];
 
-              // تحويل اللوكيشن من latlong2 إلى نوع جوجل اللي الشاشة مستنياه حصرياً
-              google_maps.LatLng finalLocation;
-              if (rawLocation is latlong.LatLng) {
-                finalLocation = google_maps.LatLng(rawLocation.latitude, rawLocation.longitude);
-              } else if (rawLocation is google_maps.LatLng) {
+              // ✅ التعديل النهائي: الاعتماد على LatLng من مكتبة جوجل مابس فقط
+              LatLng finalLocation;
+              if (rawLocation is LatLng) {
                 finalLocation = rawLocation;
               } else {
-                finalLocation = const google_maps.LatLng(30.0444, 31.2357);
+                // إحداثيات افتراضية في حالة عدم توفر الموقع (القاهرة كمثال)
+                finalLocation = const LatLng(30.0444, 31.2357);
               }
 
               return AbaatlyHadProScreen(
@@ -210,7 +205,6 @@ class MyApp extends StatelessWidget {
                 isStoreOwner: args?['isStoreOwner'] ?? false,
               );
             },
-
             '/customerTracking': (context) {
               final orderId = ModalRoute.of(context)?.settings.arguments as String? ?? '';
               return CustomerTrackingScreen(orderId: orderId);
