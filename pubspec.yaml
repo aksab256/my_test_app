@@ -61,17 +61,12 @@ dependencies:
   cached_network_image: ^3.3.1
   image_picker: ^1.0.7
 
-  # Geocoding & maps
+  # Geocoding & maps (Google Maps Only)
   geocoding: ^4.0.0
-  flutter_map: ^7.0.2
-  latlong2: ^0.9.1
-  flutter_map_geojson: ^1.0.3
   flutter_local_notifications: ^21.0.0
   firebase_crashlytics: ^5.0.7
   firebase_analytics: ^12.1.2
   connectivity_plus: ^7.0.0
-  flutter_map_cache: ^1.5.2
-  dio_cache_interceptor_file_store: ^1.2.3
   google_maps_flutter: ^2.17.0
 
 dev_dependencies:
