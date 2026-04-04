@@ -92,41 +92,73 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
             ),
           ],
         ),
+        // تم الإبقاء على الزر العائم حسب طلبك السابق مع ربطه بالسلة
         floatingActionButton: _buildFloatingCart(context),
         
-        // بناء الشريط السفلي محلياً لضمان عدم الضرب أو التأثر بملفات أخرى
-        bottomNavigationBar: BottomNavigationBar(
-          currentIndex: 1, // السلة دائماً هي النشطة في هذه الصفحة
-          selectedItemColor: const Color(0xFF43A047),
-          unselectedItemColor: Colors.grey,
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedLabelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
-          unselectedLabelStyle: const TextStyle(fontSize: 10, fontFamily: 'Cairo'),
-          items: [
-            const BottomNavigationBarItem(icon: Icon(Icons.store), label: 'المتجر'),
-            BottomNavigationBarItem(
-              icon: Consumer<CartProvider>(
-                builder: (context, cart, child) => Badge(
-                  label: Text('${cart.cartTotalItems}'),
-                  isLabelVisible: cart.cartTotalItems > 0,
-                  child: const Icon(Icons.shopping_cart),
-                ),
+        // 🎯 تصميم الشريط السفلي المودرن (Floating & Minimalist)
+        bottomNavigationBar: Container(
+          margin: const EdgeInsets.fromLTRB(25, 0, 25, 20), // لجعله طائراً
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(35),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.12),
+                blurRadius: 25,
+                offset: const Offset(0, 10),
               ),
-              label: 'السلة',
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(35),
+            child: BottomNavigationBar(
+              currentIndex: 1, // السلة نشطة
+              selectedItemColor: const Color(0xFF43A047),
+              unselectedItemColor: Colors.grey[400],
+              type: BottomNavigationBarType.fixed,
+              backgroundColor: Colors.white,
+              elevation: 0,
+              showSelectedLabels: true,
+              showUnselectedLabels: false, // لمسة مودرن لإعطاء مساحة بصرية
+              selectedLabelStyle: const TextStyle(
+                fontSize: 11, 
+                fontWeight: FontWeight.bold, 
+                fontFamily: 'Cairo'
+              ),
+              items: [
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.storefront_outlined, size: 26),
+                  activeIcon: Icon(Icons.storefront_rounded, size: 28),
+                  label: 'المتجر',
+                ),
+                BottomNavigationBarItem(
+                  icon: Consumer<CartProvider>(
+                    builder: (context, cart, child) => Badge(
+                      label: Text('${cart.cartTotalItems}', style: const TextStyle(fontSize: 10)),
+                      isLabelVisible: cart.cartTotalItems > 0,
+                      backgroundColor: Colors.redAccent,
+                      child: const Icon(Icons.shopping_bag_outlined, size: 26),
+                    ),
+                  ),
+                  activeIcon: const Icon(Icons.shopping_bag_rounded, size: 28),
+                  label: 'السلة',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.person_outline_rounded, size: 26),
+                  activeIcon: Icon(Icons.person_rounded, size: 28),
+                  label: 'حسابي',
+                ),
+              ],
+              onTap: (index) {
+                if (index == 1) return;
+                if (index == 0) {
+                  Navigator.pushNamedAndRemoveUntil(context, '/consumerhome', (route) => false);
+                } else if (index == 2) {
+                  Navigator.pushNamed(context, '/myDetails');
+                }
+              },
             ),
-            const BottomNavigationBarItem(icon: Icon(Icons.person), label: 'حسابي'),
-          ],
-          onTap: (index) {
-            if (index == 1) return; // نحن بالفعل في صفحة المنتجات/السلة
-            
-            // المسارات المعتمدة في الـ Main عندك
-            if (index == 0) {
-              Navigator.pushNamedAndRemoveUntil(context, '/consumerhome', (route) => false);
-            } else if (index == 2) {
-              Navigator.pushNamed(context, '/myDetails');
-            }
-          },
+          ),
         ),
       ),
     );
@@ -140,6 +172,7 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
           alignment: Alignment.topRight,
           children: [
             FloatingActionButton(
+              heroTag: "product_list_fab",
               onPressed: () => Navigator.of(context).pushNamed('/cart'),
               backgroundColor: const Color(0xFF43A047),
               child: const Icon(Icons.shopping_cart, color: Colors.white),
