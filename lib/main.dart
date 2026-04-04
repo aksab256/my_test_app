@@ -1,4 +1,3 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
@@ -11,7 +10,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-// ✅ تم حذف latlong2 نهائياً لضمان نجاح البناء
+// ✅ تم حذف latlong2 واستبدالها بجوجل مابس فقط لمنع التعارض وتوقف البناء
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import 'package:my_test_app/firebase_options.dart';
@@ -76,7 +75,7 @@ void main() async {
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
 
-  // ✅ العودة لـ "الأصل" في تهيئة الإشعارات كما كانت بالضبط في الكود الأصلي
+  // ✅ العودة لنسخة الكود الأصلية تماماً بدون أي تعديلات في البارامترات
   await flutterLocalNotificationsPlugin.initialize(
     initializationSettings,
   );
@@ -191,11 +190,12 @@ class MyApp extends StatelessWidget {
               final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
               final rawLocation = args?['location'];
 
-              // ✅ تحويل الموقع ليعتمد حصرياً على Google Maps LatLng لمنع الخطأ في الـ Build
+              // ✅ التعامل مع الموقع باستخدام LatLng الخاص بـ Google Maps حصرياً لضمان نجاح الـ Build
               LatLng finalLocation;
               if (rawLocation is LatLng) {
                 finalLocation = rawLocation;
               } else {
+                // موقع افتراضي في حال عدم وجود بيانات
                 finalLocation = const LatLng(30.0444, 31.2357);
               }
 
