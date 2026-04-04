@@ -10,7 +10,7 @@ import 'package:my_test_app/screens/consumer/consumer_store_search_screen.dart';
 import 'package:my_test_app/screens/consumer/points_loyalty_screen.dart';
 import 'package:my_test_app/widgets/promo_slider_widget.dart';
 import 'package:my_test_app/widgets/chat_support_widget.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart'; // ✅ تم استبدال latlong2 بـ google_maps_flutter
 import 'package:sizer/sizer.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -149,7 +149,9 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
     final prefs = await SharedPreferences.getInstance();
     bool shown = prefs.getBool('welcome_anim_shown_v2') ?? false;
     if (!shown) {
-      Future.microtask(() { if (mounted) _showCelebrationOverlay(points); });
+      Future.microtask(() {
+        if (mounted) _showCelebrationOverlay(points);
+      });
       await prefs.setBool('welcome_anim_shown_v2', true);
     } else {
       _requestNotificationPermissions();
@@ -207,8 +209,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
                         style: TextStyle(color: darkGreenText, fontWeight: FontWeight.w900, fontSize: 17.sp)),
                   ],
                 );
-              }
-          ),
+              }),
           actions: [_buildNotificationIcon(user?.uid), _buildPointsStream(user?.uid), const SizedBox(width: 5)],
         ),
         body: SafeArea(
@@ -232,7 +233,6 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
             ),
           ),
         ),
-        // 🛡️ زر شـيرا بنبض ذكي وتصميم مخصص مع Fallback في حالة فشل الصورة
         floatingActionButton: ScaleTransition(
           scale: _pulseAnimation,
           child: FloatingActionButton(
@@ -242,8 +242,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
                   context: context,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
-                  builder: (context) => const ChatSupportWidget()
-              );
+                  builder: (context) => const ChatSupportWidget());
             },
             backgroundColor: Colors.transparent,
             elevation: 8,
@@ -267,12 +266,11 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
                   child: Image.asset(
                     'assets/images/shira_logo.png',
                     fit: BoxFit.contain,
-                    // 🛡️ إضافة معالج الخطأ لضمان عدم ظهور دائرة فارغة
                     errorBuilder: (context, error, stackTrace) {
                       return const Center(
                         child: Icon(
-                          Icons.auto_awesome, 
-                          color: Colors.white, 
+                          Icons.auto_awesome,
+                          color: Colors.white,
                           size: 30,
                         ),
                       );
@@ -283,9 +281,9 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
             ),
           ),
         ),
-        bottomNavigationBar: SafeArea(
+        bottomNavigationBar: const SafeArea(
           top: false,
-          child: const ConsumerFooterNav(cartCount: 0, activeIndex: 0),
+          child: ConsumerFooterNav(cartCount: 0, activeIndex: 0),
         ),
       ),
     );
@@ -301,8 +299,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
           decoration: BoxDecoration(
               gradient: LinearGradient(colors: [softGreen, const Color(0xFF43A047)]),
               borderRadius: BorderRadius.circular(45),
-              boxShadow: [BoxShadow(color: softGreen.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))]
-          ),
+              boxShadow: [BoxShadow(color: softGreen.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))]),
           child: Row(
             children: [
               const SizedBox(width: 20),
@@ -313,8 +310,10 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: const [
-                    Text("اكتشف المحلات القريبة", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
-                    Text("تفعيل رادار البحث الذكي", style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold)),
+                    Text("اكتشف المحلات القريبة",
+                        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
+                    Text("تفعيل رادار البحث الذكي",
+                        style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
@@ -345,7 +344,8 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: const [
                   Text("ابعتلي حد", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
-                  Text("مندوب توصيل خاص بك", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                  Text("مندوب توصيل خاص بك",
+                      style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -368,11 +368,26 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
   Widget _buildNotificationIcon(String? uid) {
     if (uid == null) return const SizedBox.shrink();
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('notifications').where('userId', isEqualTo: uid).orderBy('createdAt', descending: true).limit(10).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('notifications')
+          .where('userId', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .limit(10)
+          .snapshots(),
       builder: (context, snapshot) {
         int count = snapshot.hasData ? snapshot.data!.docs.length : 0;
         return PopupMenuButton<int>(
-          icon: Stack(children: [Icon(Icons.notifications_none, color: softGreen, size: 28), if (count > 0) Positioned(right: 0, top: 0, child: CircleAvatar(radius: 7, backgroundColor: Colors.red, child: Text('$count', style: const TextStyle(fontSize: 8, color: Colors.white))))]),
+          icon: Stack(children: [
+            Icon(Icons.notifications_none, color: softGreen, size: 28),
+            if (count > 0)
+              Positioned(
+                  right: 0,
+                  top: 0,
+                  child: CircleAvatar(
+                      radius: 7,
+                      backgroundColor: Colors.red,
+                      child: Text('$count', style: const TextStyle(fontSize: 8, color: Colors.white))))
+          ]),
           itemBuilder: (ctx) {
             if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
               return [const PopupMenuItem<int>(value: 0, child: Text("لا توجد إشعارات"))];
@@ -391,14 +406,32 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
 
   Widget _buildPointsStream(String? uid) => StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('consumers').doc(uid).snapshots(),
-      builder: (context, snapshot) => _buildPointsBadge(snapshot.hasData ? (snapshot.data!.data() as Map<String, dynamic>)['loyaltyPoints'] ?? 0 : 0)
-  );
+      builder: (context, snapshot) => _buildPointsBadge(
+          snapshot.hasData ? (snapshot.data!.data() as Map<String, dynamic>)['loyaltyPoints'] ?? 0 : 0));
 
-  Widget _buildPointsBadge(int points) => InkWell(onTap: () => Navigator.pushNamed(context, PointsLoyaltyScreen.routeName), child: Container(margin: const EdgeInsets.all(10), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(15)), child: Row(children: [const Icon(Icons.stars, color: Colors.orange, size: 20), const SizedBox(width: 5), Text(points.toString(), style: const TextStyle(fontWeight: FontWeight.bold))])));
+  Widget _buildPointsBadge(int points) => InkWell(
+      onTap: () => Navigator.pushNamed(context, PointsLoyaltyScreen.routeName),
+      child: Container(
+          margin: const EdgeInsets.all(10),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(15)),
+          child: Row(children: [
+            const Icon(Icons.stars, color: Colors.orange, size: 20),
+            const SizedBox(width: 5),
+            Text(points.toString(), style: const TextStyle(fontWeight: FontWeight.bold))
+          ])));
 
-  Widget _buildCategoriesSection() => FutureBuilder<List<ConsumerCategory>>(future: dataService.fetchMainCategories(), builder: (context, snapshot) => snapshot.connectionState == ConnectionState.waiting ? const LinearProgressIndicator() : ConsumerCategoriesBanner(categories: snapshot.data ?? []));
+  Widget _buildCategoriesSection() => FutureBuilder<List<ConsumerCategory>>(
+      future: dataService.fetchMainCategories(),
+      builder: (context, snapshot) => snapshot.connectionState == ConnectionState.waiting
+          ? const LinearProgressIndicator()
+          : ConsumerCategoriesBanner(categories: snapshot.data ?? []));
 
-  Widget _buildBannersSection() => FutureBuilder<List<ConsumerBanner>>(future: dataService.fetchPromoBanners(), builder: (context, snapshot) => snapshot.hasData ? PromoSliderWidget(banners: snapshot.data!, height: 160.0) : const SizedBox.shrink());
+  Widget _buildBannersSection() => FutureBuilder<List<ConsumerBanner>>(
+      future: dataService.fetchPromoBanners(),
+      builder: (context, snapshot) => snapshot.hasData
+          ? PromoSliderWidget(banners: snapshot.data!, height: 160.0)
+          : const SizedBox.shrink());
 }
 
 class _CelebrationWidget extends StatefulWidget {
@@ -414,12 +447,40 @@ class _CelebrationWidgetState extends State<_CelebrationWidget> with SingleTicke
   late AnimationController _controller;
   late Animation<double> _scale;
   @override
-  void initState() { super.initState(); _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 800)); _scale = CurvedAnimation(parent: _controller, curve: Curves.elasticOut); _controller.forward(); }
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    _scale = CurvedAnimation(parent: _controller, curve: Curves.elasticOut);
+    _controller.forward();
+  }
+
   @override
-  void dispose() { _controller.dispose(); super.dispose(); }
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Material(color: Colors.black45, child: Center(child: ScaleTransition(scale: _scale, child: Container(margin: const EdgeInsets.all(30), padding: const EdgeInsets.all(30), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30)), child: Column(mainAxisSize: MainAxisSize.min, children: [Text("🎉", style: TextStyle(fontSize: 40.sp)), const SizedBox(height: 20), Text("هدية ترحيبية!", style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.bold, color: Colors.orange)), const SizedBox(height: 10), Text("لقد حصلت على ${widget.points} نقطة", style: TextStyle(fontSize: 16.sp)), const SizedBox(height: 30), ElevatedButton(onPressed: widget.onDismiss, child: const Text("استمتع الآن"))])))));
+    return Material(
+        color: Colors.black45,
+        child: Center(
+            child: ScaleTransition(
+                scale: _scale,
+                child: Container(
+                    margin: const EdgeInsets.all(30),
+                    padding: const EdgeInsets.all(30),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30)),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Text("🎉", style: TextStyle(fontSize: 40.sp)),
+                      const SizedBox(height: 20),
+                      Text("هدية ترحيبية!",
+                          style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.bold, color: Colors.orange)),
+                      const SizedBox(height: 10),
+                      Text("لقد حصلت على ${widget.points} نقطة", style: TextStyle(fontSize: 16.sp)),
+                      const SizedBox(height: 30),
+                      ElevatedButton(onPressed: widget.onDismiss, child: const Text("استمتع الآن"))
+                    ])))));
   }
 }
 

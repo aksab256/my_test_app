@@ -51,12 +51,15 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   String? _selectedBusinessType;
   File? _logoPreview, _crPreview, _tcPreview;
 
-  // ملاحظة: يفضل وضع الـ API Key في ملف إعدادات منفصل
-  final String googleApiKey = "AIzaSyDkKyX-w0P1SBgOCmqjfZVMOGUiAiCbhLA"; 
+  final String googleApiKey = "AIzaSyDkKyX-w0P1SBgOCmqjfZVMOGUiAiCbhLA";
 
   final List<String> _businessTypes = [
-    "تجارة مواد غذائية", "تجارة مواد غذائية ومنظفات", "تجارة ملابس",
-    "تجارة اكسسورات", "تجارة اجهزة وادوات", "متنوع"
+    "تجارة مواد غذائية",
+    "تجارة مواد غذائية ومنظفات",
+    "تجارة ملابس",
+    "تجارة اكسسورات",
+    "تجارة اجهزة وادوات",
+    "متنوع"
   ];
 
   @override
@@ -69,8 +72,9 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   // ✅ البحث الذكي باستخدام Google Places
   Future<void> _searchAddress(String query, StateSetter setModalState) async {
     if (query.isEmpty) return;
-    final url = "https://maps.googleapis.com/maps/api/place/textsearch/json?query=${Uri.encodeComponent(query)}&key=$googleApiKey&language=ar&region=eg";
-    
+    final url =
+        "https://maps.googleapis.com/maps/api/place/textsearch/json?query=${Uri.encodeComponent(query)}&key=$googleApiKey&language=ar&region=eg";
+
     try {
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
@@ -78,7 +82,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         if (data['results'].isNotEmpty) {
           final location = data['results'][0]['geometry']['location'];
           final newPos = LatLng(location['lat'], location['lng']);
-          
+
           setModalState(() => _selectedPosition = newPos);
           _mapController?.animateCamera(CameraUpdate.newLatLngZoom(newPos, 16.5));
           _updateAddressText(newPos);
@@ -91,28 +95,32 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
 
   Future<bool> _showLocationDisclosure() async {
     return await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text("تحديد موقع النشاط", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-          content: const Text(
-            "يقوم تطبيق رابية أحلى بجمع بيانات الموقع الجغرافي لتحديد عنوان نشاطك التجاري بدقة على الخريطة، مما يسهل وصول المناديب والعملاء إليك.",
-            style: TextStyle(fontFamily: 'Cairo'),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("رفض", style: TextStyle(color: Colors.red, fontFamily: 'Cairo'))),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68)),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text("موافق", style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => Directionality(
+            textDirection: TextDirection.rtl,
+            child: AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text("تحديد موقع النشاط",
+                  style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+              content: const Text(
+                "يقوم تطبيق أكسب بجمع بيانات الموقع الجغرافي لتحديد عنوان نشاطك التجاري بدقة على الخريطة، مما يسهل وصول المناديب والعملاء إليك.",
+                style: TextStyle(fontFamily: 'Cairo'),
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text("رفض", style: TextStyle(color: Colors.red, fontFamily: 'Cairo'))),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68)),
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text("موافق", style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
-    ) ?? false;
+          ),
+        ) ??
+        false;
   }
 
   Future<void> _handleMapOpeningSequence() async {
@@ -123,7 +131,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         if (!userAgreed) return;
         permission = await Geolocator.requestPermission();
       }
-      
+
       if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
         _openMapPicker();
         Position pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
@@ -144,94 +152,111 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) {
-          return Container(
-            height: 92.h,
-            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
-            child: SafeArea(
-              child: Column(
-                children: [
-                  Container(margin: const EdgeInsets.symmetric(vertical: 10), width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.h),
-                    child: TextField(
-                      controller: _searchController,
-                      textInputAction: TextInputAction.search,
-                      onSubmitted: (val) => _searchAddress(val, setModalState),
-                      decoration: InputDecoration(
-                        hintText: "ابحث عن مخزنك، محلك، أو منطقتك...",
-                        hintStyle: TextStyle(fontFamily: 'Cairo', fontSize: 11.sp),
-                        prefixIcon: const Icon(Icons.search, color: Color(0xFF2D9E68)),
-                        suffixIcon: IconButton(icon: const Icon(Icons.gps_fixed, color: Colors.blue), onPressed: () => _handleMapOpeningSequence()),
-                        filled: true, fillColor: Colors.grey[100],
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+      builder: (context) => StatefulBuilder(builder: (context, setModalState) {
+        return Container(
+          height: 92.h,
+          decoration: const BoxDecoration(
+              color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+          child: SafeArea(
+            child: Column(
+              children: [
+                Container(
+                    margin: const EdgeInsets.symmetric(vertical: 10),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.h),
+                  child: TextField(
+                    controller: _searchController,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (val) => _searchAddress(val, setModalState),
+                    decoration: InputDecoration(
+                      hintText: "ابحث عن مخزنك، محلك، أو منطقتك...",
+                      hintStyle: TextStyle(fontFamily: 'Cairo', fontSize: 11.sp),
+                      prefixIcon: const Icon(Icons.search, color: Color(0xFF2D9E68)),
+                      suffixIcon: IconButton(
+                          icon: const Icon(Icons.gps_fixed, color: Colors.blue),
+                          onPressed: () => _handleMapOpeningSequence()),
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      GoogleMap(
+                        initialCameraPosition: CameraPosition(target: _selectedPosition, zoom: 16.5),
+                        onMapCreated: (controller) => _mapController = controller,
+                        onCameraMove: (position) {
+                          setModalState(() => _selectedPosition = position.target);
+                        },
+                        onCameraIdle: () {
+                          if (mounted) setState(() => _selectedPosition = _selectedPosition);
+                          _updateAddressText(_selectedPosition);
+                        },
+                        myLocationEnabled: true,
+                        myLocationButtonEnabled: false,
+                        mapToolbarEnabled: false,
                       ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        GoogleMap(
-                          initialCameraPosition: CameraPosition(target: _selectedPosition, zoom: 16.5),
-                          onMapCreated: (controller) => _mapController = controller,
-                          onCameraMove: (position) {
-                            setModalState(() => _selectedPosition = position.target);
+                      const Center(child: Icon(Icons.location_on, size: 45, color: Colors.red)),
+                      Positioned(
+                        bottom: 20,
+                        right: 20,
+                        child: FloatingActionButton(
+                          heroTag: "map_fab",
+                          mini: true,
+                          backgroundColor: Colors.white,
+                          onPressed: () async {
+                            Position pos = await Geolocator.getCurrentPosition();
+                            _mapController?.animateCamera(
+                                CameraUpdate.newLatLngZoom(LatLng(pos.latitude, pos.longitude), 16.5));
                           },
-                          onCameraIdle: () {
-                            if (mounted) setState(() => _selectedPosition = _selectedPosition);
-                            _updateAddressText(_selectedPosition);
-                          },
-                          myLocationEnabled: true,
-                          myLocationButtonEnabled: false,
-                          mapToolbarEnabled: false,
+                          child: const Icon(Icons.my_location, color: Colors.black54),
                         ),
-                        const Center(child: Icon(Icons.location_on, size: 45, color: Colors.red)),
-                        Positioned(
-                          bottom: 20, right: 20,
-                          child: FloatingActionButton(
-                            heroTag: "map_fab",
-                            mini: true, backgroundColor: Colors.white,
-                            onPressed: () async {
-                              Position pos = await Geolocator.getCurrentPosition();
-                              _mapController?.animateCamera(CameraUpdate.newLatLngZoom(LatLng(pos.latitude, pos.longitude), 16.5));
-                            },
-                            child: const Icon(Icons.my_location, color: Colors.black54),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  Container(
-                    padding: EdgeInsets.all(5.w),
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
-                      onPressed: () {
-                        setState(() => _locationPicked = true);
-                        widget.onLocationChanged(lat: _selectedPosition.latitude, lng: _selectedPosition.longitude);
-                        Navigator.pop(context);
-                      },
-                      child: const Text("تأكيد موقع النشاط", style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold)),
-                    ),
+                ),
+                Container(
+                  padding: EdgeInsets.all(5.w),
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2D9E68),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+                    onPressed: () {
+                      setState(() => _locationPicked = true);
+                      widget.onLocationChanged(lat: _selectedPosition.latitude, lng: _selectedPosition.longitude);
+                      Navigator.pop(context);
+                    },
+                    child: const Text("تأكيد موقع النشاط",
+                        style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          );
-        }
-      ),
+          ),
+        );
+      }),
     );
   }
 
   Future<void> _updateAddressText(LatLng position) async {
     try {
-      final placemarks = await geo.placemarkFromCoordinates(position.latitude, position.longitude, localeIdentifier: 'ar');
+      // ✅ تعديل localeIdentifier لضمان جلب العنوان بالعربية
+      final placemarks = await geo.placemarkFromCoordinates(position.latitude, position.longitude, localeIdentifier: 'ar_EG');
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
-        String formattedAddress = "${place.street ?? ''}, ${place.subLocality ?? ''}, ${place.locality ?? ''}".replaceAll(", ,", ",");
+        String formattedAddress =
+            "${place.street ?? ''}, ${place.subLocality ?? ''}, ${place.locality ?? ''}".replaceAll(", ,", ",");
         if (mounted && widget.controllers.containsKey('address')) {
-          setState(() { widget.controllers['address']!.text = formattedAddress; });
+          setState(() {
+            widget.controllers['address']!.text = formattedAddress;
+          });
         }
       }
     } catch (e) {
@@ -239,13 +264,12 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     }
   }
 
-  // --- بقية الدوال (رفع الصور، الحقول، إلخ) طبق الأصل بدون اختصار ---
-
   Future<void> _uploadFileToCloudinary(File file, String field) async {
     if (!mounted) return;
     setState(() => _isUploading = true);
     try {
-      var request = http.MultipartRequest('POST', Uri.parse('https://api.cloudinary.com/v1_1/dgmmx6jbu/image/upload'));
+      var request =
+          http.MultipartRequest('POST', Uri.parse('https://api.cloudinary.com/v1_1/dgmmx6jbu/image/upload'));
       request.fields['upload_preset'] = "commerce";
       request.files.add(await http.MultipartFile.fromPath('file', file.path));
       var response = await request.send();
@@ -266,24 +290,26 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       PermissionStatus status = await Permission.photos.status;
       if (status.isDenied) {
         bool proceed = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => Directionality(
-            textDirection: TextDirection.rtl,
-            child: AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-              title: const Text("رفع صور النشاط", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-              content: const Text("يتطلب رفع الشعار الوصول إلى معرض الصور لتأكيد هوية نشاطك."),
-              actions: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68)),
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text("موافق", style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => Directionality(
+                textDirection: TextDirection.rtl,
+                child: AlertDialog(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  title: const Text("رفع صور النشاط",
+                      style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                  content: const Text("يتطلب رفع الشعار الوصول إلى معرض الصور لتأكيد هوية نشاطك."),
+                  actions: [
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68)),
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text("موافق", style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-        ) ?? false;
+              ),
+            ) ??
+            false;
         if (!proceed) return;
         status = await Permission.photos.request();
       }
@@ -321,21 +347,28 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('إكمال بيانات الحساب', style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68), fontFamily: 'Cairo'), textAlign: TextAlign.center),
+              Text('إكمال بيانات الحساب',
+                  style: TextStyle(
+                      fontSize: 18.sp,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF2D9E68),
+                      fontFamily: 'Cairo'),
+                  textAlign: TextAlign.center),
               SizedBox(height: 3.h),
               _buildSectionHeader('المعلومات الأساسية', Icons.badge_rounded),
               _buildInputField(
-                'fullname',
-                widget.selectedUserType == 'seller' ? 'الاسم الكامل للمسؤول *' :
-                (widget.selectedUserType == 'consumer' ? 'الاسم الكامل *' : 'اسم المحل / السوبر ماركت *'),
-                Icons.person_rounded
-              ),
+                  'fullname',
+                  widget.selectedUserType == 'seller'
+                      ? 'الاسم الكامل للمسؤول *'
+                      : (widget.selectedUserType == 'consumer' ? 'الاسم الكامل *' : 'اسم المحل / السوبر ماركت *'),
+                  Icons.person_rounded),
               if (widget.selectedUserType != 'consumer')
                 _buildInputField('ownerName', 'اسم صاحب النشاط (اختياري)', Icons.person_outline_rounded),
               _buildInputField('phone', 'رقم الهاتف', Icons.phone_android_rounded, keyboardType: TextInputType.phone),
               _buildSectionHeader('الموقع الجغرافي للنشاط', Icons.map_rounded),
               _buildLocationPickerButton(),
-              _buildInputField('address', 'عنوان النشاط (حدد من الخريطة)', Icons.location_on_rounded, isReadOnly: true, onTap: _handleMapOpeningSequence),
+              _buildInputField('address', 'عنوان النشاط (حدد من الخريطة)', Icons.location_on_rounded,
+                  isReadOnly: true, onTap: _handleMapOpeningSequence),
               _buildSectionHeader('الأمان', Icons.security_rounded),
               _buildInputField('password', 'كلمة المرور', Icons.lock_open_rounded, isPassword: true),
               _buildInputField('confirmPassword', 'تأكيد كلمة المرور', Icons.lock_rounded, isPassword: true),
@@ -343,7 +376,10 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
               SizedBox(height: 2.h),
               _buildTermsCheckbox(),
               _buildSubmitButton(),
-              TextButton(onPressed: widget.onGoBack, child: Text('العودة لتعديل نوع الحساب', style: TextStyle(color: Colors.grey.shade400, fontSize: 11.sp, fontFamily: 'Cairo'))),
+              TextButton(
+                  onPressed: widget.onGoBack,
+                  child: Text('العودة لتعديل نوع الحساب',
+                      style: TextStyle(color: Colors.grey.shade400, fontSize: 11.sp, fontFamily: 'Cairo'))),
               SizedBox(height: 5.h),
             ],
           ),
@@ -356,19 +392,30 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     return InkWell(
       onTap: _handleMapOpeningSequence,
       child: Container(
-        padding: const EdgeInsets.all(18), margin: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(color: _locationPicked ? const Color(0xFFF0F7F3) : Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: _locationPicked ? const Color(0xFF2D9E68) : Colors.grey.shade300, width: 2)),
+        padding: const EdgeInsets.all(18),
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+            color: _locationPicked ? const Color(0xFFF0F7F3) : Colors.white,
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+                color: _locationPicked ? const Color(0xFF2D9E68) : Colors.grey.shade300, width: 2)),
         child: Row(children: [
           Icon(Icons.map_rounded, color: _locationPicked ? const Color(0xFF2D9E68) : Colors.grey),
           const SizedBox(width: 15),
-          Expanded(child: Text(_locationPicked ? "تم تحديد الموقع بنجاح ✅" : "اضغط لتحديد موقع النشاط على الخريطة *", style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold))),
+          Expanded(
+              child: Text(_locationPicked ? "تم تحديد الموقع بنجاح ✅" : "اضغط لتحديد موقع النشاط على الخريطة *",
+                  style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold))),
           const Icon(Icons.open_in_new_rounded, size: 18, color: Colors.grey),
         ]),
       ),
     );
   }
 
-  Widget _buildInputField(String key, String label, IconData icon, {bool isPassword = false, bool isReadOnly = false, VoidCallback? onTap, TextInputType keyboardType = TextInputType.text}) {
+  Widget _buildInputField(String key, String label, IconData icon,
+      {bool isPassword = false,
+      bool isReadOnly = false,
+      VoidCallback? onTap,
+      TextInputType keyboardType = TextInputType.text}) {
     return Padding(
       padding: EdgeInsets.only(bottom: 1.5.h),
       child: TextFormField(
@@ -386,12 +433,19 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
           return null;
         },
         decoration: InputDecoration(
-          labelText: label, labelStyle: const TextStyle(fontFamily: 'Cairo'),
+          labelText: label,
+          labelStyle: const TextStyle(fontFamily: 'Cairo'),
           prefixIcon: Icon(icon, color: const Color(0xFF2D9E68)),
-          suffixIcon: isPassword ? IconButton(icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => _obscurePassword = !_obscurePassword)) : null,
-          filled: true, fillColor: isReadOnly ? Colors.grey.shade50 : Colors.white,
+          suffixIcon: isPassword
+              ? IconButton(
+                  icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword))
+              : null,
+          filled: true,
+          fillColor: isReadOnly ? Colors.grey.shade50 : Colors.white,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: const BorderSide(color: Color(0xFFF0F0F0))),
+          enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15), borderSide: const BorderSide(color: Color(0xFFF0F0F0))),
         ),
       ),
     );
@@ -399,7 +453,8 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
 
   Widget _buildSellerSpecificFields() {
     return Container(
-      padding: EdgeInsets.all(4.w), decoration: BoxDecoration(color: const Color(0xFFF0F7F3), borderRadius: BorderRadius.circular(20)),
+      padding: EdgeInsets.all(4.w),
+      decoration: BoxDecoration(color: const Color(0xFFF0F7F3), borderRadius: BorderRadius.circular(20)),
       child: Column(children: [
         _buildInputField('merchantName', 'اسم النشاط التجاري *', Icons.storefront_rounded),
         _buildBusinessTypeDropdown(),
@@ -412,15 +467,26 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
 
   Widget _buildBusinessTypeDropdown() {
     return Container(
-      margin: EdgeInsets.only(bottom: 2.h), padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey.shade300)),
+      margin: EdgeInsets.only(bottom: 2.h),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: Colors.grey.shade300)),
       child: DropdownButtonFormField<String>(
         value: _selectedBusinessType,
         validator: (value) => (value == null || value.isEmpty) ? "يرجى تحديد نوع النشاط" : null,
         decoration: const InputDecoration(border: InputBorder.none, hintText: "نوع النشاط التجاري *", hintStyle: TextStyle(fontFamily: 'Cairo')),
-        items: _businessTypes.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontFamily: 'Cairo')))).toList(),
+        items: _businessTypes
+            .map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontFamily: 'Cairo'))))
+            .toList(),
         onChanged: (val) {
-          if (mounted) { setState(() { _selectedBusinessType = val; widget.controllers['businessType']?.text = val ?? ""; }); }
+          if (mounted) {
+            setState(() {
+              _selectedBusinessType = val;
+              widget.controllers['businessType']?.text = val ?? "";
+            });
+          }
         },
       ),
     );
@@ -430,12 +496,19 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     return GestureDetector(
       onTap: () => _pickFile(field),
       child: Container(
-        margin: EdgeInsets.only(bottom: 1.5.h), padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: file != null ? Colors.green : Colors.grey.shade200, width: 1.5)),
+        margin: EdgeInsets.only(bottom: 1.5.h),
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: file != null ? Colors.green : Colors.grey.shade200, width: 1.5)),
         child: Row(children: [
-          Icon(file != null ? Icons.check_circle : Icons.upload_file, color: file != null ? Colors.green : Colors.grey, size: 28),
+          Icon(file != null ? Icons.check_circle : Icons.upload_file,
+              color: file != null ? Colors.green : Colors.grey, size: 28),
           const SizedBox(width: 15),
-          Expanded(child: Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'Cairo'))),
+          Expanded(
+              child: Text(label,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'Cairo'))),
         ]),
       ),
     );
@@ -444,20 +517,37 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 1.5.h),
-      child: Row(children: [Icon(icon, size: 20, color: const Color(0xFF2D9E68)), const SizedBox(width: 8), Text(title, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo'))]),
+      child: Row(children: [
+        Icon(icon, size: 20, color: const Color(0xFF2D9E68)),
+        const SizedBox(width: 8),
+        Text(title, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo'))
+      ]),
     );
   }
 
   Widget _buildTermsCheckbox() {
     return CheckboxListTile(
-      value: _termsAgreed, onChanged: (v) => setState(() => _termsAgreed = v ?? false),
+      value: _termsAgreed,
+      onChanged: (v) => setState(() => _termsAgreed = v ?? false),
       activeColor: const Color(0xFF2D9E68),
       title: InkWell(
         onTap: () async {
           final url = Uri.parse('https://aksab.shop/');
           if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
         },
-        child: RichText(text: TextSpan(style: TextStyle(fontSize: 10.sp, fontFamily: 'Cairo', color: Colors.black), children: const [TextSpan(text: "أوافق على "), TextSpan(text: "سياسة الخصوصية وشروط الاستخدام", style: TextStyle(color: Color(0xFF2D9E68), fontWeight: FontWeight.bold, decoration: TextDecoration.underline))])),
+        child: RichText(
+          text: TextSpan(
+              style: TextStyle(fontSize: 10.sp, fontFamily: 'Cairo', color: Colors.black),
+              children: const [
+                TextSpan(text: "أوافق على "),
+                TextSpan(
+                    text: "سياسة الخصوصية وشروط الاستخدام",
+                    style: TextStyle(
+                        color: Color(0xFF2D9E68),
+                        fontWeight: FontWeight.bold,
+                        decoration: TextDecoration.underline))
+              ]),
+        ),
       ),
       controlAffinity: ListTileControlAffinity.leading,
     );
@@ -467,18 +557,32 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: (widget.isSaving || !_termsAgreed || _isUploading) ? null : () async {
-          if (!_locationPicked) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("يرجى تحديد موقع النشاط أولاً", style: TextStyle(fontFamily: 'Cairo'))));
-            return;
-          }
-          if (_formKey.currentState?.validate() ?? false) {
-            try { await facebookAppEvents.logCompletedRegistration(registrationMethod: widget.selectedUserType); } catch (e) { debugPrint("FB Error: $e"); }
-            widget.onRegister();
-          }
-        },
-        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2D9E68), padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
-        child: (widget.isSaving || _isUploading) ? const CircularProgressIndicator(color: Colors.white) : const Text('إتمام التسجيل والبدء', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+        onPressed: (widget.isSaving || !_termsAgreed || _isUploading)
+            ? null
+            : () async {
+                if (!_locationPicked) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text("يرجى تحديد موقع النشاط أولاً", style: TextStyle(fontFamily: 'Cairo'))));
+                  return;
+                }
+                if (_formKey.currentState?.validate() ?? false) {
+                  try {
+                    await facebookAppEvents.logCompletedRegistration(registrationMethod: widget.selectedUserType);
+                  } catch (e) {
+                    debugPrint("FB Error: $e");
+                  }
+                  widget.onRegister();
+                }
+              },
+        style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF2D9E68),
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+        child: (widget.isSaving || _isUploading)
+            ? const CircularProgressIndicator(color: Colors.white)
+            : const Text('إتمام التسجيل والبدء',
+                style: TextStyle(
+                    color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
       ),
     );
   }
