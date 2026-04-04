@@ -10,7 +10,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-// ✅ استخدام جوجل مابس فقط وتجنب latlong2 لمنع التعارض
+// ✅ استخدام مكتبة جوجل مابس فقط لمنع التعارض مع latlong2
 import 'package:google_maps_flutter/google_maps_flutter.dart' as google_maps;
 
 import 'package:my_test_app/firebase_options.dart';
@@ -75,9 +75,9 @@ void main() async {
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
 
-  // ✅ هذه الدالة كما كانت في Commit 583a0ea تماماً
+  // ✅ النسخة الأصلية من الـ Commit المستقر تماماً كما ظهرت عندك
   await flutterLocalNotificationsPlugin.initialize(
-    initializationSettings,
+    settings: initializationSettings,
   );
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
@@ -190,7 +190,7 @@ class MyApp extends StatelessWidget {
               final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
               final rawLocation = args?['location'];
 
-              // ✅ تحويل الموقع ليعتمد حصرياً على Google Maps لضمان نجاح البناء
+              // ✅ التعامل مع الموقع باستخدام Google Maps حصرياً
               google_maps.LatLng finalLocation;
               if (rawLocation is google_maps.LatLng) {
                 finalLocation = rawLocation;
