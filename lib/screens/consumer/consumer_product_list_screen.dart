@@ -1,4 +1,3 @@
-// lib/screens/consumer/consumer_product_list_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
@@ -53,20 +52,20 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
+        extendBody: true, // مهم جداً لانسيابية الشريط العائم
         backgroundColor: Colors.grey[50],
         appBar: BuyerProductHeader(
           title: _pageTitle,
           isLoading: _isLoading,
         ),
         body: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ManufacturersBanner(
               subCategoryId: widget.subCategoryId,
               onManufacturerSelected: (id) {
                 if (id == 'ALL') {
                   Navigator.of(context).pop();
-                } else if (id != null) {
+                } else {
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (context) => ConsumerProductListScreen(
@@ -79,112 +78,81 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
                 }
               },
             ),
-            // ✅ تم تصحيح الخطأ هنا بإزالة const أو استبدال اللون
-            Divider(height: 1.0, color: Colors.grey[300]), 
+            Divider(height: 1.0, color: Colors.grey[300]),
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: ProductListGrid(
-                  subCategoryId: widget.subCategoryId,
-                  pageTitle: _pageTitle,
-                  manufacturerId: widget.manufacturerId,
-                ),
+              child: ProductListGrid(
+                subCategoryId: widget.subCategoryId,
+                pageTitle: _pageTitle,
+                manufacturerId: widget.manufacturerId,
               ),
             ),
           ],
         ),
-        floatingActionButton: _buildFloatingCart(context),
-        
-        bottomNavigationBar: Container(
-          margin: const EdgeInsets.fromLTRB(25, 0, 25, 20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(35),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.12),
-                blurRadius: 25,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(35),
-            child: BottomNavigationBar(
-              currentIndex: 1, 
-              selectedItemColor: const Color(0xFF43A047),
-              unselectedItemColor: Colors.grey[400],
-              type: BottomNavigationBarType.fixed,
-              backgroundColor: Colors.white,
-              elevation: 0,
-              showSelectedLabels: true,
-              showUnselectedLabels: false, 
-              selectedLabelStyle: const TextStyle(
-                fontSize: 11, 
-                fontWeight: FontWeight.bold, 
-                fontFamily: 'Cairo'
-              ),
-              items: [
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.storefront_outlined, size: 26),
-                  activeIcon: Icon(Icons.storefront_rounded, size: 28),
-                  label: 'المتجر',
-                ),
-                BottomNavigationBarItem(
-                  icon: Consumer<CartProvider>(
-                    builder: (context, cart, child) => Badge(
-                      label: Text('${cart.cartTotalItems}', style: const TextStyle(fontSize: 10)),
-                      isLabelVisible: cart.cartTotalItems > 0,
-                      backgroundColor: Colors.redAccent,
-                      child: const Icon(Icons.shopping_bag_outlined, size: 26),
-                    ),
-                  ),
-                  activeIcon: const Icon(Icons.shopping_bag_rounded, size: 28),
-                  label: 'السلة',
-                ),
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.person_outline_rounded, size: 26),
-                  activeIcon: Icon(Icons.person_rounded, size: 28),
-                  label: 'حسابي',
-                ),
-              ],
-              onTap: (index) {
-                if (index == 1) return;
-                if (index == 0) {
-                  Navigator.pushNamedAndRemoveUntil(context, '/consumerhome', (route) => false);
-                } else if (index == 2) {
-                  Navigator.pushNamed(context, '/myDetails');
-                }
-              },
-            ),
-          ),
-        ),
+        floatingActionButton: _buildModernFAB(context),
+        bottomNavigationBar: _buildModernBottomNav(context),
       ),
     );
   }
 
-  Widget _buildFloatingCart(BuildContext context) {
+  // 🎯 بناء الشريط السفلي يدوياً لضمان السرعة والرسم الصحيح
+  Widget _buildModernBottomNav(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      height: 65,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 8)),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _navItem(context, Icons.storefront_rounded, 'المتجر', 0, '/consumerhome'),
+          _navItem(context, Icons.shopping_bag_rounded, 'السلة', 1, '/cart', isCart: true),
+          _navItem(context, Icons.person_rounded, 'حسابي', 2, '/myDetails'),
+        ],
+      ),
+    );
+  }
+
+  Widget _navItem(BuildContext context, IconData icon, String label, int index, String route, {bool isCart = false}) {
+    bool isActive = index == 1; // السلة نشطة هنا
+    return InkWell(
+      onTap: () => index == 1 ? null : Navigator.pushNamed(context, route),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          isCart 
+            ? Consumer<CartProvider>(
+                builder: (context, cart, _) => Badge(
+                  label: Text('${cart.cartTotalItems}', style: const TextStyle(fontSize: 10)),
+                  isLabelVisible: cart.cartTotalItems > 0,
+                  backgroundColor: Colors.redAccent,
+                  child: Icon(icon, color: const Color(0xFF43A047), size: 28),
+                ),
+              )
+            : Icon(icon, color: isActive ? const Color(0xFF43A047) : Colors.grey[400], size: 26),
+          Text(label, style: TextStyle(
+            fontSize: 10, 
+            fontFamily: 'Cairo', 
+            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+            color: isActive ? const Color(0xFF43A047) : Colors.grey[600]
+          )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernFAB(BuildContext context) {
     return Consumer<CartProvider>(
-      builder: (context, cartProvider, child) {
-        final cartCount = cartProvider.cartTotalItems;
-        return Stack(
-          alignment: Alignment.topRight,
-          children: [
-            FloatingActionButton(
-              heroTag: "product_list_fab",
-              onPressed: () => Navigator.of(context).pushNamed('/cart'),
-              backgroundColor: const Color(0xFF43A047),
-              child: const Icon(Icons.shopping_cart, color: Colors.white),
-            ),
-            if (cartCount > 0)
-              CircleAvatar(
-                radius: 10,
-                backgroundColor: Colors.red,
-                child: Text('$cartCount', style: const TextStyle(color: Colors.white, fontSize: 10)),
-              ),
-          ],
-        );
-      },
+      builder: (context, cart, _) => FloatingActionButton(
+        heroTag: "fab_aksab_prod", // تاجي فريد لمنع التعليق
+        onPressed: () => Navigator.pushNamed(context, '/cart'),
+        backgroundColor: const Color(0xFF43A047),
+        child: const Icon(Icons.shopping_cart, color: Colors.white),
+      ),
     );
   }
 }
