@@ -79,7 +79,8 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
                 }
               },
             ),
-            const Divider(height: 1.0, color: Colors.grey[300]),
+            // ✅ تم تصحيح الخطأ هنا بإزالة const أو استبدال اللون
+            Divider(height: 1.0, color: Colors.grey[300]), 
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -92,12 +93,10 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
             ),
           ],
         ),
-        // تم الإبقاء على الزر العائم حسب طلبك السابق مع ربطه بالسلة
         floatingActionButton: _buildFloatingCart(context),
         
-        // 🎯 تصميم الشريط السفلي المودرن (Floating & Minimalist)
         bottomNavigationBar: Container(
-          margin: const EdgeInsets.fromLTRB(25, 0, 25, 20), // لجعله طائراً
+          margin: const EdgeInsets.fromLTRB(25, 0, 25, 20),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(35),
@@ -112,14 +111,14 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(35),
             child: BottomNavigationBar(
-              currentIndex: 1, // السلة نشطة
+              currentIndex: 1, 
               selectedItemColor: const Color(0xFF43A047),
               unselectedItemColor: Colors.grey[400],
               type: BottomNavigationBarType.fixed,
               backgroundColor: Colors.white,
               elevation: 0,
               showSelectedLabels: true,
-              showUnselectedLabels: false, // لمسة مودرن لإعطاء مساحة بصرية
+              showUnselectedLabels: false, 
               selectedLabelStyle: const TextStyle(
                 fontSize: 11, 
                 fontWeight: FontWeight.bold, 
