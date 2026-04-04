@@ -6,7 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'dart:math' show cos, sqrt, asin;
-import 'package:flutter/services.dart';
 
 class CustomerTrackingScreen extends StatefulWidget {
   static const routeName = '/customerTracking';
@@ -20,11 +19,9 @@ class CustomerTrackingScreen extends StatefulWidget {
 
 class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
   final Completer<GoogleMapController> _mapController = Completer<GoogleMapController>();
-  
   BitmapDescriptor? _driverIcon;
   double _driverRotation = 0;
   LatLng? _lastDriverPosition;
-  final Set<Polyline> _polylines = {};
   String _estimatedTime = "";
   String _distanceRemaining = "";
   bool _isMapCreated = false;
@@ -36,18 +33,20 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
   }
 
   Future<void> _loadCustomMarker() async {
-    // محاولة تحميل أيقونة مخصصة أو استخدام الافتراضية بلون مميز
+    // أيقونة المندوب (سيارة أو موتوسيكل) بلون مميز
     _driverIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
   }
 
+  // حساب المسافة والوقت (Haversine formula)
   void _calculateETA(LatLng driver, LatLng destination) {
     var p = 0.017453292519943295;
     var c = cos;
     var a = 0.5 - c((destination.latitude - driver.latitude) * p) / 2 +
         c(driver.latitude * p) * c(destination.latitude * p) *
             (1 - c((destination.longitude - driver.longitude) * p)) / 2;
-    
     double distanceInKm = 12742 * asin(sqrt(a));
+    
+    // افتراض سرعة متوسطة 30 كم/ساعة في زحمة الإسكندرية
     int travelMinutes = ((distanceInKm / 30) * 60).round() + 2;
 
     if (mounted) {
@@ -91,6 +90,7 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
     if (widget.orderId.isEmpty) return const Scaffold(body: Center(child: Text("طلب غير موجود")));
 
     return StreamBuilder<DocumentSnapshot>(
+      // المطابقة مع الـ Collection المذكورة في طلبك
       stream: FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).snapshots(),
       builder: (context, orderSnapshot) {
         if (!orderSnapshot.hasData || !orderSnapshot.data!.exists) {
@@ -100,14 +100,16 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
         var orderData = orderSnapshot.data!.data() as Map<String, dynamic>;
         String status = orderData['status'] ?? "pending";
         String? driverId = orderData['driverId'];
+        
+        // جلب المواقع من GeoPoint (مطابق لبياناتك)
         GeoPoint pickup = orderData['pickupLocation'];
         GeoPoint dropoff = orderData['dropoffLocation'];
         LatLng pickupLatLng = LatLng(pickup.latitude, pickup.longitude);
         LatLng dropoffLatLng = LatLng(dropoff.latitude, dropoff.longitude);
 
         return StreamBuilder<DocumentSnapshot>(
-          stream: (driverId != null && driverId.isNotEmpty) 
-              ? FirebaseFirestore.instance.collection('freeDrivers').doc(driverId).snapshots() 
+          stream: (driverId != null && driverId.isNotEmpty)
+              ? FirebaseFirestore.instance.collection('freeDrivers').doc(driverId).snapshots()
               : const Stream.empty(),
           builder: (context, driverSnapshot) {
             LatLng? driverLatLng;
@@ -115,6 +117,7 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
 
             if (driverSnapshot.hasData && driverSnapshot.data!.exists) {
               driverData = driverSnapshot.data!.data() as Map<String, dynamic>;
+              // التحقق من صيغة الموقع في تطبيق المندوب
               if (driverData.containsKey('lat') && driverData.containsKey('lng')) {
                 driverLatLng = LatLng(driverData['lat'], driverData['lng']);
               } else if (driverData.containsKey('location')) {
@@ -123,17 +126,15 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
               }
 
               if (driverLatLng != null) {
-                // تحديث الدوران والبيانات خلف الكواليس
                 if (_lastDriverPosition != null && _lastDriverPosition != driverLatLng) {
                   _driverRotation = _calculateRotation(_lastDriverPosition!, driverLatLng!);
                 }
                 _lastDriverPosition = driverLatLng;
-                
-                // تحريك الكاميرا بأمان
                 _animateCameraToDriver(driverLatLng!);
-                
-                // حساب المسافة للهدف القادم
+
+                // تحديد الوجهة بناءً على حالة الطلب
                 LatLng destination = (status == 'accepted' || status == 'at_pickup') ? pickupLatLng : dropoffLatLng;
+                
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (mounted) _calculateETA(driverLatLng!, destination);
                 });
@@ -147,7 +148,7 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                 appBar: AppBar(
                   backgroundColor: Colors.white.withOpacity(0.9),
                   elevation: 0,
-                  title: Text("تتبع الرحلة", style: TextStyle(fontFamily: 'Cairo', fontSize: 14.sp, fontWeight: FontWeight.bold)),
+                  title: Text("تتبع رابية أحلى", style: TextStyle(fontFamily: 'Cairo', fontSize: 13.sp, fontWeight: FontWeight.bold)),
                   centerTitle: true,
                 ),
                 body: Stack(
@@ -161,8 +162,18 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                       zoomControlsEnabled: false,
                       myLocationButtonEnabled: false,
                       markers: {
-                        Marker(markerId: const MarkerId('pickup'), position: pickupLatLng, icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen), infoWindow: const InfoWindow(title: "موقع الاستلام")),
-                        Marker(markerId: const MarkerId('dropoff'), position: dropoffLatLng, icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed), infoWindow: const InfoWindow(title: "موقع التسليم")),
+                        Marker(
+                          markerId: const MarkerId('pickup'),
+                          position: pickupLatLng,
+                          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+                          infoWindow: const InfoWindow(title: "موقع المتجر"),
+                        ),
+                        Marker(
+                          markerId: const MarkerId('dropoff'),
+                          position: dropoffLatLng,
+                          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                          infoWindow: const InfoWindow(title: "موقع التسليم"),
+                        ),
                         if (driverLatLng != null)
                           Marker(
                             markerId: const MarkerId('driver'),
@@ -174,13 +185,13 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                           ),
                       },
                     ),
-                    
-                    // كارت الوقت والمسافة
-                    if (_estimatedTime.isNotEmpty && status != 'pending')
+
+                    // كارت الوقت والمسافة (ETA)
+                    if (_estimatedTime.isNotEmpty && status != 'pending' && status != 'delivered')
                       Positioned(
-                        top: 12.h,
-                        left: 20,
-                        right: 20,
+                        top: 10.h,
+                        left: 15,
+                        right: 15,
                         child: _buildEtaCard(),
                       ),
 
@@ -200,58 +211,125 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
 
   Widget _buildEtaCard() {
     return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)]),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))],
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildInfoItem("يصل خلال", _estimatedTime),
+          _buildInfoItem("الوقت المتوقع", _estimatedTime, Icons.access_time),
           Container(width: 1, height: 30, color: Colors.grey[200]),
-          _buildInfoItem("المسافة", _distanceRemaining),
+          _buildInfoItem("المسافة المتبقية", _distanceRemaining, Icons.directions_bike),
         ],
       ),
     );
   }
 
-  Widget _buildInfoItem(String label, String value) {
+  Widget _buildInfoItem(String label, String value, IconData icon) {
     return Column(
       children: [
-        Text(label, style: TextStyle(fontFamily: 'Cairo', fontSize: 10.sp, color: Colors.grey)),
-        Text(value, style: TextStyle(fontFamily: 'Cairo', fontSize: 12.sp, fontWeight: FontWeight.bold, color: Colors.blue[900])),
+        Row(
+          children: [
+            Icon(icon, size: 14, color: Colors.blue),
+            const SizedBox(width: 5),
+            Text(label, style: TextStyle(fontFamily: 'Cairo', fontSize: 9.sp, color: Colors.grey[600])),
+          ],
+        ),
+        Text(value, style: TextStyle(fontFamily: 'Cairo', fontSize: 11.sp, fontWeight: FontWeight.bold, color: Colors.blue[900])),
       ],
     );
   }
 
   Widget _buildBottomPanel(String status, Map<String, dynamic> order, Map<String, dynamic>? driver) {
     double progress = 0.1;
-    String statusDesc = "بانتظار المندوب...";
-    if (status == 'accepted') { progress = 0.4; statusDesc = "المندوب في طريقه للمحل"; }
-    else if (status == 'at_pickup') { progress = 0.6; statusDesc = "المندوب وصل للاستلام"; }
-    else if (status == 'picked_up') { progress = 0.8; statusDesc = "الطلب في الطريق إليك"; }
+    String statusDesc = "بانتظار قبول المندوب...";
+    Color statusColor = Colors.orange;
 
-    return SafeArea(
-      child: Container(
-        margin: const EdgeInsets.all(15),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(25), boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)]),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            LinearProgressIndicator(value: progress, backgroundColor: Colors.grey[200], color: Colors.blue),
-            const SizedBox(height: 15),
-            Text(statusDesc, style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13.sp)),
-            const Divider(),
-            Row(
-              children: [
-                const CircleAvatar(child: Icon(Icons.person)),
-                const SizedBox(width: 15),
-                Expanded(child: Text(driver?['fullname'] ?? "جاري البحث...", style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold))),
-                if (driver != null)
-                  IconButton(onPressed: () => launchUrl(Uri.parse("tel:${driver['phone']}")), icon: const Icon(Icons.phone, color: Colors.green)),
-              ],
+    if (status == 'accepted') {
+      progress = 0.4;
+      statusDesc = "المندوب في طريقه للمحل";
+      statusColor = Colors.blue;
+    } else if (status == 'at_pickup') {
+      progress = 0.6;
+      statusDesc = "المندوب يقوم باستلام الطلب الآن";
+      statusColor = Colors.indigo;
+    } else if (status == 'picked_up') {
+      progress = 0.8;
+      statusDesc = "الطلب في عهدة المندوب وفي الطريق إليك";
+      statusColor = Colors.green;
+    } else if (status == 'delivered') {
+      progress = 1.0;
+      statusDesc = "تم تأكيد استلام الأمانات بنجاح";
+      statusColor = Colors.teal;
+    }
+
+    return Container(
+      margin: const EdgeInsets.all(15),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15)],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          LinearProgressIndicator(value: progress, backgroundColor: Colors.grey[100], color: statusColor, minHeight: 6),
+          const SizedBox(height: 15),
+
+          // عرض كود التحقق (verificationCode) بشكل بارز للعميل
+          if (status != 'delivered' && order.containsKey('verificationCode'))
+            Container(
+              margin: const EdgeInsets.only(bottom: 15),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue[100]!),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("كود تأمين العهدة:", style: TextStyle(fontFamily: 'Cairo', fontSize: 10.sp)),
+                  Text(
+                    "${order['verificationCode']}",
+                    style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16.sp, letterSpacing: 2, color: Colors.blue[900]),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+
+          Text(statusDesc, style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12.sp, color: statusColor)),
+          const Divider(height: 25),
+          
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: Colors.grey[100],
+                child: Icon(Icons.person, color: Colors.blue[900]),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(order['driverName'] ?? "جاري البحث...", style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                    if (order.containsKey('insurance_points'))
+                      Text("نقاط تأمين: ${order['insurance_points']} ج.م", style: TextStyle(fontFamily: 'Cairo', fontSize: 9.sp, color: Colors.grey)),
+                  ],
+                ),
+              ),
+              if (driver != null && driver.containsKey('phone'))
+                IconButton(
+                  onPressed: () => launchUrl(Uri.parse("tel:${driver['phone']}")),
+                  icon: const Icon(Icons.phone_in_talk, color: Colors.green),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
