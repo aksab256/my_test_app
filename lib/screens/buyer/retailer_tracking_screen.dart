@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart'; 
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sizer/sizer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 import 'dart:ui' as ui;
+import 'dart:math' show cos, sqrt, asin; // للحسابات الرياضية للمسافة
 import 'package:flutter/services.dart';
 
 class RetailerTrackingScreen extends StatefulWidget {
@@ -21,11 +22,13 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
   final Completer<GoogleMapController> _mapController = Completer<GoogleMapController>();
   bool _isMapReady = false;
 
-  // --- إضافات التتبع الاحترافي ---
+  // --- إضافات التتبع الاحترافي والوقت ---
   BitmapDescriptor? _driverIcon;
-  double _driverRotation = 0; 
+  double _driverRotation = 0;
   LatLng? _lastDriverPosition;
-  Set<Polyline> _polylines = {}; 
+  Set<Polyline> _polylines = {};
+  String _estimatedTime = ""; 
+  String _distanceRemaining = "";
 
   @override
   void initState() {
@@ -40,7 +43,26 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
     _driverIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
   }
 
-  // دالة حساب الدوران المتوافقة (النسخة الآمنة)
+  // حساب المسافة والوقت التقريبي (Haversine Formula)
+  void _calculateETA(LatLng driver, LatLng destination) {
+    var p = 0.017453292519943295;
+    var c = cos;
+    var a = 0.5 - c((destination.latitude - driver.latitude) * p) / 2 +
+        c(driver.latitude * p) * c(destination.latitude * p) *
+            (1 - c((destination.longitude - driver.longitude) * p)) / 2;
+    
+    double distanceInKm = 12742 * asin(sqrt(a));
+    int travelMinutes = ((distanceInKm / 30) * 60).round() + 2;
+
+    if (!mounted) return;
+    setState(() {
+      _distanceRemaining = distanceInKm < 1 
+          ? "${(distanceInKm * 1000).toInt()} متر" 
+          : "${distanceInKm.toStringAsFixed(1)} كم";
+      _estimatedTime = "$travelMinutes دقيقة";
+    });
+  }
+
   double _calculateRotation(LatLng start, LatLng end) {
     double latDiff = (end.latitude - start.latitude).abs();
     double lngDiff = (end.longitude - start.longitude).abs();
@@ -72,7 +94,6 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
     });
   }
 
-  // --- [منطق الإلغاء - مطابق تماماً للأصل] ---
   Future<void> _handleRetailerCancel(BuildContext context, String currentStatus, String? originalOrderId) async {
     bool isAccepted = currentStatus != 'pending';
     bool confirm = await showDialog(
@@ -96,8 +117,7 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
               ],
             ),
           ),
-        ) ??
-        false;
+        ) ?? false;
 
     if (!confirm) return;
 
@@ -107,17 +127,11 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
         'cancelledAt': FieldValue.serverTimestamp(),
         'cancelledBy': 'retailer'
       });
-
       if (originalOrderId != null && originalOrderId.isNotEmpty) {
-        await FirebaseFirestore.instance.collection('consumerorders').doc(originalOrderId).update({
-          'specialRequestId': FieldValue.delete(),
-        });
+        await FirebaseFirestore.instance.collection('consumerorders').doc(originalOrderId).update({'specialRequestId': FieldValue.delete()});
       }
-
       if (context.mounted) Navigator.of(context).pop();
-    } catch (e) {
-      debugPrint("Cancel Error: $e");
-    }
+    } catch (e) { debugPrint("Cancel Error: $e"); }
   }
 
   @override
@@ -127,10 +141,7 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).snapshots(),
       builder: (context, orderSnapshot) {
-        if (!orderSnapshot.hasData || !orderSnapshot.data!.exists) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
-
+        if (!orderSnapshot.hasData || !orderSnapshot.data!.exists) return const Scaffold(body: Center(child: CircularProgressIndicator()));
         var orderData = orderSnapshot.data!.data() as Map<String, dynamic>;
         String status = orderData['status'] ?? "pending";
         String? originalOrderId = orderData['originalOrderId'];
@@ -139,9 +150,7 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
         String verificationCode = isReturning ? (orderData['returnVerificationCode'] ?? "----") : (orderData['verificationCode'] ?? "----");
 
         if (status.contains('cancelled_by') || status == 'delivered') {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (context.mounted) Navigator.of(context).pop();
-          });
+          WidgetsBinding.instance.addPostFrameCallback((_) { if (context.mounted) Navigator.of(context).pop(); });
         }
 
         String? driverId = orderData['driverId'];
@@ -151,9 +160,7 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
         LatLng dropoffLatLng = LatLng(dropoff.latitude, dropoff.longitude);
 
         return StreamBuilder<DocumentSnapshot>(
-          stream: (driverId != null && driverId.isNotEmpty)
-              ? FirebaseFirestore.instance.collection('freeDrivers').doc(driverId).snapshots()
-              : const Stream.empty(),
+          stream: (driverId != null && driverId.isNotEmpty) ? FirebaseFirestore.instance.collection('freeDrivers').doc(driverId).snapshots() : const Stream.empty(),
           builder: (context, driverSnapshot) {
             LatLng? driverLatLng;
             Map<String, dynamic>? driverData;
@@ -174,10 +181,9 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
                   }
                   _lastDriverPosition = driverLatLng;
                   _animateCameraToDriver(driverLatLng!);
-                  
-                  // تحديث المسار (Polyline)
                   LatLng destination = (status == 'accepted' || status == 'at_pickup' || isReturning) ? pickupLatLng : dropoffLatLng;
                   _updatePolyline(driverLatLng!, destination);
+                  _calculateETA(driverLatLng!, destination);
                 }
               }
             }
@@ -221,6 +227,26 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
                           ),
                       },
                     ) else const Center(child: CircularProgressIndicator()),
+
+                    if (_estimatedTime.isNotEmpty && status != 'pending')
+                      Positioned(
+                        top: 12.h,
+                        left: 20,
+                        right: 20,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
+                          decoration: BoxDecoration(color: Colors.white.withOpacity(0.9), borderRadius: BorderRadius.circular(15), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)]),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              Column(children: [Text("الوصول خلال", style: TextStyle(fontSize: 10.sp, fontFamily: 'Cairo', color: Colors.grey)), Text(_estimatedTime, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.bold, color: Colors.indigo))]),
+                              Container(width: 1, height: 30, color: Colors.grey[300]),
+                              Column(children: [Text("المسافة", style: TextStyle(fontSize: 10.sp, fontFamily: 'Cairo', color: Colors.grey)), Text(_distanceRemaining, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.bold, color: Colors.indigo))]),
+                            ],
+                          ),
+                        ),
+                      ),
+
                     Align(alignment: Alignment.bottomCenter, child: SafeArea(child: _buildRetailerBottomPanel(context, status, orderData, driverData, originalOrderId, verificationCode, isReturning))),
                   ],
                 ),
