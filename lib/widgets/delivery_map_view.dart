@@ -1,20 +1,12 @@
 // lib/widgets/delivery_map_view.dart
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
-import 'package:flutter_map_geojson/flutter_map_geojson.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 
-// 🛑 إعدادات Mapbox الجديدة
-const String MAPBOX_ACCESS_TOKEN = 'pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw';
-const String MAPBOX_STYLE_ID = 'mapbox/streets-v12'; 
-
-// الرابط الخاص بـ Mapbox Tiles
-const String TILE_URL = 'https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}';
-
-const LatLng MAP_CENTER = LatLng(30.9, 28.5);
-const double MAP_ZOOM = 5.5;
+// الإحداثيات الافتراضية (مركز الإسكندرية وما حولها بناءً على الكود القديم)
+const LatLng MAP_CENTER = LatLng(31.2001, 29.9187);
+const double MAP_ZOOM = 10.0;
 const String GEOJSON_FILE_PATH = 'assets/OSMB-bc319d822a17aa9ad1089fc05e7d4e752460f877.geojson';
 
 class DeliveryMapView extends StatefulWidget {
@@ -35,12 +27,11 @@ class DeliveryMapView extends StatefulWidget {
 
 class _DeliveryMapViewState extends State<DeliveryMapView> {
   List<String> _selectedAreaNames = [];
-  List<Polygon> _polygons = [];
-  final MapController _mapController = MapController();
+  Set<Polygon> _gMapsPolygons = {};
+  GoogleMapController? _mapController;
   Map<String, dynamic>? _geoJsonData;
   bool _isLoading = true;
   String? _loadingError;
-  bool _isMapReady = false; // 🛡️ علامة أمان لضمان جاهزية الخريطة
 
   @override
   void initState() {
@@ -67,8 +58,7 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
     setState(() {
       _isLoading = false;
       if (_geoJsonData != null) {
-        // تحديث المضلعات بدون تحريك الكاميرا فوراً لأن الخريطة لم تُبنى بعد
-        _updatePolygonsOnly(_selectedAreaNames);
+        _parseGeoJsonToGooglePolygons(_selectedAreaNames);
       }
     });
   }
@@ -90,58 +80,90 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
     _updateMapAndPolygons(newSelection);
   }
 
-  // 🛡️ دالة لتحديث المضلعات فقط دون لمس الـ Controller (تُستخدم قبل جاهزية الخريطة)
-  void _updatePolygonsOnly(List<String> areaNames) {
+  // تحويل بيانات GeoJSON إلى مضلعات متوافقة مع Google Maps
+  void _parseGeoJsonToGooglePolygons(List<String> areaNames) {
     if (_geoJsonData == null || areaNames.isEmpty) {
-      setState(() => _polygons = []);
+      setState(() => _gMapsPolygons = {});
       return;
     }
 
+    Set<Polygon> newPolygons = {};
     try {
-      final selectedFeatures = (_geoJsonData!['features'] as List)
-          .where((f) => areaNames.contains(f['properties']['name']))
-          .toList();
+      final features = _geoJsonData!['features'] as List;
+      for (var feature in features) {
+        final String? name = feature['properties']['name'];
+        if (name != null && areaNames.contains(name)) {
+          final geometry = feature['geometry'];
+          if (geometry['type'] == 'Polygon') {
+            final List coords = geometry['coordinates'][0];
+            List<LatLng> polygonPoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
 
-      if (selectedFeatures.isEmpty) {
-        setState(() => _polygons = []);
-        return;
+            newPolygons.add(
+              Polygon(
+                polygonId: PolygonId(name),
+                points: polygonPoints,
+                fillColor: const Color(0xff28a745).withOpacity(0.3),
+                strokeColor: const Color(0xff28a745),
+                strokeWidth: 2,
+              ),
+            );
+          } else if (geometry['type'] == 'MultiPolygon') {
+            final List multiCoords = geometry['coordinates'];
+            for (int i = 0; i < multiCoords.length; i++) {
+              final List coords = multiCoords[i][0];
+              List<LatLng> polygonPoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+
+              newPolygons.add(
+                Polygon(
+                  polygonId: PolygonId("${name}_$i"),
+                  points: polygonPoints,
+                  fillColor: const Color(0xff28a745).withOpacity(0.3),
+                  strokeColor: const Color(0xff28a745),
+                  strokeWidth: 2,
+                ),
+              );
+            }
+          }
+        }
       }
-
-      final geoJsonParser = GeoJsonParser(
-        defaultPolygonBorderColor: const Color(0xff28a745),
-        defaultPolygonFillColor: const Color(0xff28a745).withOpacity(0.5),
-      );
-
-      geoJsonParser.parseGeoJson({
-        'type': 'FeatureCollection',
-        'features': selectedFeatures
-      });
-
-      setState(() {
-        _polygons = geoJsonParser.polygons;
-      });
+      setState(() => _gMapsPolygons = newPolygons);
     } catch (e) {
-      debugPrint('Error parsing GeoJson: $e');
+      debugPrint('Error parsing GeoJson for Google Maps: $e');
     }
   }
 
-  // 🛡️ الدالة الكاملة التي تحرك الكاميرا بأمان
   void _updateMapAndPolygons(List<String> areaNames) {
-    _updatePolygonsOnly(areaNames);
+    _parseGeoJsonToGooglePolygons(areaNames);
 
-    // التأكد من أن الخريطة جاهزة والمضلعات موجودة قبل تحريك الكاميرا
-    if (_isMapReady && _polygons.isNotEmpty) {
-      try {
-        final allPoints = _polygons.expand((p) => p.points).toList();
-        if (allPoints.isNotEmpty) {
-          final bounds = LatLngBounds.fromPoints(allPoints);
-          _mapController.fitCamera(
-            CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)),
-          );
-        }
-      } catch (e) {
-        debugPrint('MapController not yet attached: $e');
+    if (_mapController != null && _gMapsPolygons.isNotEmpty) {
+      _fitMapToPolygons();
+    }
+  }
+
+  void _fitMapToPolygons() {
+    if (_gMapsPolygons.isEmpty || _mapController == null) return;
+
+    double? minLat, maxLat, minLng, maxLng;
+
+    for (var polygon in _gMapsPolygons) {
+      for (var point in polygon.points) {
+        if (minLat == null || point.latitude < minLat) minLat = point.latitude;
+        if (maxLat == null || point.latitude > maxLat) maxLat = point.latitude;
+        if (minLng == null || point.longitude < minLng) minLng = point.longitude;
+        if (maxLng == null || point.longitude > maxLng) maxLng = point.longitude;
       }
+    }
+
+    if (minLat != null && maxLat != null && minLng != null && maxLng != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngBounds(
+          LatLngBounds(
+            southwest: LatLng(minLat, minLng),
+            northeast: LatLng(maxLat, maxLng),
+          ),
+          50.0,
+        ),
+      );
     }
   }
 
@@ -185,10 +207,9 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
             child: DropdownButtonFormField<String>(
               value: null,
               decoration: InputDecoration(
-                border: const OutlineInputBorder(), 
-                hintText: hintText,
-                hintStyle: const TextStyle(fontSize: 14)
-              ),
+                  border: const OutlineInputBorder(),
+                  hintText: hintText,
+                  hintStyle: const TextStyle(fontSize: 14)),
               items: const [],
               onChanged: (_) {},
             ),
@@ -203,34 +224,21 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: MAP_CENTER,
-                initialZoom: MAP_ZOOM,
-                // 🛡️ استدعاء عند اكتمال بناء الخريطة
-                onMapReady: () {
-                  setState(() => _isMapReady = true);
-                  if (_selectedAreaNames.isNotEmpty) {
-                    _updateMapAndPolygons(_selectedAreaNames);
-                  }
-                },
+            child: GoogleMap(
+              initialCameraPosition: const CameraPosition(
+                target: MAP_CENTER,
+                zoom: MAP_ZOOM,
               ),
-              children: [
-                TileLayer(
-                  urlTemplate: TILE_URL,
-                  additionalOptions: {
-                    'accessToken': MAPBOX_ACCESS_TOKEN,
-                    'id': MAPBOX_STYLE_ID,
-                  },
-                  userAgentPackageName: 'com.example.app',
-                  maxZoom: 19,
-                ),
-                PolygonLayer(
-                  polygons: _polygons,
-                  polygonCulling: true,
-                ),
-              ],
+              onMapCreated: (controller) {
+                _mapController = controller;
+                if (_selectedAreaNames.isNotEmpty) {
+                  _fitMapToPolygons();
+                }
+              },
+              polygons: _gMapsPolygons,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: true,
+              mapType: MapType.normal,
             ),
           ),
         ),
@@ -273,8 +281,11 @@ class _MultiSelectAreaDialogState extends State<MultiSelectAreaDialog> {
               title: Text(item, textAlign: TextAlign.right),
               onChanged: (isChecked) {
                 setState(() {
-                  if (isChecked == true) _selectedItems.add(item);
-                  else _selectedItems.remove(item);
+                  if (isChecked == true) {
+                    _selectedItems.add(item);
+                  } else {
+                    _selectedItems.remove(item);
+                  }
                 });
               },
             );
@@ -283,9 +294,8 @@ class _MultiSelectAreaDialogState extends State<MultiSelectAreaDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context), 
-          child: const Text('إلغاء')
-        ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إلغاء')),
         ElevatedButton(
           style: ElevatedButton.styleFrom(backgroundColor: const Color(0xff28a745)),
           onPressed: () => Navigator.pop(context, _selectedItems),
@@ -295,3 +305,4 @@ class _MultiSelectAreaDialogState extends State<MultiSelectAreaDialog> {
     );
   }
 }
+
