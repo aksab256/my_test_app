@@ -5,7 +5,7 @@ import 'package:sizer/sizer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 import 'dart:ui' as ui;
-import 'dart:math' show cos, sqrt, asin; // للحسابات الرياضية للمسافة
+import 'dart:math' show cos, sqrt, asin;
 import 'package:flutter/services.dart';
 
 class CustomerTrackingScreen extends StatefulWidget {
@@ -20,30 +20,26 @@ class CustomerTrackingScreen extends StatefulWidget {
 
 class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
   final Completer<GoogleMapController> _mapController = Completer<GoogleMapController>();
-  bool _isMapReady = false;
-
-  // --- إضافات التتبع والمسار والوقت ---
+  
   BitmapDescriptor? _driverIcon;
   double _driverRotation = 0;
   LatLng? _lastDriverPosition;
-  Set<Polyline> _polylines = {}; 
-  String _estimatedTime = ""; // الوقت المتوقع
-  String _distanceRemaining = ""; // المسافة المتبقية
+  final Set<Polyline> _polylines = {};
+  String _estimatedTime = "";
+  String _distanceRemaining = "";
+  bool _isMapCreated = false;
 
   @override
   void initState() {
     super.initState();
     _loadCustomMarker();
-    Future.delayed(Duration.zero, () {
-      if (mounted) setState(() => _isMapReady = true);
-    });
   }
 
   Future<void> _loadCustomMarker() async {
+    // محاولة تحميل أيقونة مخصصة أو استخدام الافتراضية بلون مميز
     _driverIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
   }
 
-  // حساب المسافة والوقت التقريبي (Haversine Formula)
   void _calculateETA(LatLng driver, LatLng destination) {
     var p = 0.017453292519943295;
     var c = cos;
@@ -51,17 +47,17 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
         c(driver.latitude * p) * c(destination.latitude * p) *
             (1 - c((destination.longitude - driver.longitude) * p)) / 2;
     
-    double distanceInKm = 12742 * asin(sqrt(a)); // المسافة بالكيلومتر
-    
-    // تقدير الوقت: متوسط سرعة الموتوسيكل في الزحام 30 كم/ساعة + 2 دقيقة انتظار
+    double distanceInKm = 12742 * asin(sqrt(a));
     int travelMinutes = ((distanceInKm / 30) * 60).round() + 2;
 
-    setState(() {
-      _distanceRemaining = distanceInKm < 1 
-          ? "${(distanceInKm * 1000).toInt()} متر" 
-          : "${distanceInKm.toStringAsFixed(1)} كم";
-      _estimatedTime = "$travelMinutes دقيقة";
-    });
+    if (mounted) {
+      setState(() {
+        _distanceRemaining = distanceInKm < 1
+            ? "${(distanceInKm * 1000).toInt()} متر"
+            : "${distanceInKm.toStringAsFixed(1)} كم";
+        _estimatedTime = "$travelMinutes دقيقة";
+      });
+    }
   }
 
   double _calculateRotation(LatLng start, LatLng end) {
@@ -80,103 +76,14 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
     return rotation;
   }
 
-  void _updatePolyline(LatLng driver, LatLng destination) {
-    if (!mounted) return;
-    setState(() {
-      _polylines.add(
-        Polyline(
-          polylineId: const PolylineId("route"),
-          points: [driver, destination],
-          color: Colors.blue.withOpacity(0.7),
-          width: 5,
-          jointType: JointType.round,
-          startCap: Cap.roundCap,
-          endCap: Cap.roundCap,
-        ),
-      );
-    });
-  }
-
-  void _showRatingDialog(BuildContext context, String driverId) {
-    double selectedRating = 5;
-    TextEditingController commentController = TextEditingController();
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setState) => Directionality(
-          textDirection: TextDirection.rtl,
-          child: AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Text("تقييم تجربة التوصيل", textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text("لقد تم تسليم طلبك بنجاح! قيم المندوب للمساعدة في تحسين الخدمة.", style: TextStyle(fontFamily: 'Cairo')),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(5, (index) {
-                    return IconButton(
-                      icon: Icon(index < selectedRating ? Icons.star_rounded : Icons.star_outline_rounded, color: Colors.amber, size: 35),
-                      onPressed: () => setState(() => selectedRating = index + 1.0),
-                    );
-                  }),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: commentController,
-                  decoration: InputDecoration(hintText: "ملاحظاتك (اختياري)...", border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), filled: true, fillColor: Colors.grey[50]),
-                  maxLines: 2,
-                ),
-              ],
-            ),
-            actions: [
-              Center(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF43A047), padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
-                  onPressed: () async {
-                    await FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).update({'rating': selectedRating, 'customerComment': commentController.text, 'status': 'delivered'});
-                    if (driverId.isNotEmpty) {
-                      await FirebaseFirestore.instance.collection('freeDrivers').doc(driverId).update({'totalStars': FieldValue.increment(selectedRating), 'reviewsCount': FieldValue.increment(1)});
-                    }
-                    if (context.mounted) Navigator.of(context).popUntil((route) => route.isFirst);
-                  },
-                  child: const Text("تأكيد التقييم", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _handleSmartCancel(BuildContext context, String currentStatus) async {
-    bool isAccepted = currentStatus != 'pending';
-    String targetStatus = isAccepted ? 'cancelled_by_user_after_accept' : 'cancelled_by_user_before_accept';
-    if (isAccepted) {
-      bool confirm = await showDialog(
-        context: context,
-        builder: (ctx) => Directionality(
-          textDirection: TextDirection.rtl,
-          child: AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Text("تنبيه هام", style: TextStyle(fontFamily: 'Cairo')),
-            content: const Text("المندوب في طريقه إليك الآن. إلغاء الطلب الآن سيؤدي لخصم تعويض للمندوب من نقاطك. هل تريد الاستمرار؟", style: TextStyle(fontFamily: 'Cairo')),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("تراجع", style: TextStyle(fontFamily: 'Cairo'))),
-              TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("تأكيد وإلغاء", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontFamily: 'Cairo'))),
-            ],
-          ),
-        ),
-      ) ?? false;
-      if (!confirm) return;
-    }
+  Future<void> _animateCameraToDriver(LatLng location) async {
+    if (!_isMapCreated) return;
     try {
-      await FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).update({'status': targetStatus, 'cancelledAt': FieldValue.serverTimestamp(), 'cancelledBy': 'customer'});
-      if (context.mounted) Navigator.of(context).popUntil((route) => route.isFirst);
-    } catch (e) { debugPrint("Cancel Error: $e"); }
+      final GoogleMapController controller = await _mapController.future;
+      controller.animateCamera(CameraUpdate.newLatLng(location));
+    } catch (e) {
+      debugPrint("Map Animation Error: $e");
+    }
   }
 
   @override
@@ -186,18 +93,12 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).snapshots(),
       builder: (context, orderSnapshot) {
-        if (!orderSnapshot.hasData || !orderSnapshot.data!.exists) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        if (!orderSnapshot.hasData || !orderSnapshot.data!.exists) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+
         var orderData = orderSnapshot.data!.data() as Map<String, dynamic>;
         String status = orderData['status'] ?? "pending";
-        bool isRated = orderData.containsKey('rating');
-
-        if (status.contains('cancelled') || status == 'no_drivers_available' || (status == 'delivered' && isRated)) {
-          WidgetsBinding.instance.addPostFrameCallback((_) { if (context.mounted) Navigator.of(context).popUntil((route) => route.isFirst); });
-        }
-        if (status == 'delivered' && !isRated) {
-          WidgetsBinding.instance.addPostFrameCallback((_) { _showRatingDialog(context, orderData['driverId'] ?? ""); });
-        }
-
         String? driverId = orderData['driverId'];
         GeoPoint pickup = orderData['pickupLocation'];
         GeoPoint dropoff = orderData['dropoffLocation'];
@@ -205,30 +106,37 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
         LatLng dropoffLatLng = LatLng(dropoff.latitude, dropoff.longitude);
 
         return StreamBuilder<DocumentSnapshot>(
-          stream: (driverId != null && driverId.isNotEmpty) ? FirebaseFirestore.instance.collection('freeDrivers').doc(driverId).snapshots() : const Stream.empty(),
+          stream: (driverId != null && driverId.isNotEmpty) 
+              ? FirebaseFirestore.instance.collection('freeDrivers').doc(driverId).snapshots() 
+              : const Stream.empty(),
           builder: (context, driverSnapshot) {
             LatLng? driverLatLng;
             Map<String, dynamic>? driverData;
+
             if (driverSnapshot.hasData && driverSnapshot.data!.exists) {
               driverData = driverSnapshot.data!.data() as Map<String, dynamic>;
-              if (driverData != null) {
-                if (driverData.containsKey('lat') && driverData.containsKey('lng')) {
-                  driverLatLng = LatLng(driverData['lat'], driverData['lng']);
-                } else if (driverData.containsKey('location')) {
-                  GeoPoint dLoc = driverData['location'];
-                  driverLatLng = LatLng(dLoc.latitude, dLoc.longitude);
-                }
+              if (driverData.containsKey('lat') && driverData.containsKey('lng')) {
+                driverLatLng = LatLng(driverData['lat'], driverData['lng']);
+              } else if (driverData.containsKey('location')) {
+                GeoPoint dLoc = driverData['location'];
+                driverLatLng = LatLng(dLoc.latitude, dLoc.longitude);
+              }
 
-                if (driverLatLng != null) {
-                  if (_lastDriverPosition != null && _lastDriverPosition != driverLatLng) {
-                    _driverRotation = _calculateRotation(_lastDriverPosition!, driverLatLng!);
-                  }
-                  _lastDriverPosition = driverLatLng;
-                  _animateCameraToDriver(driverLatLng!);
-                  LatLng destination = (status == 'accepted' || status == 'at_pickup') ? pickupLatLng : dropoffLatLng;
-                  _updatePolyline(driverLatLng!, destination);
-                  _calculateETA(driverLatLng!, destination); // تحديث الوقت والمسافة
+              if (driverLatLng != null) {
+                // تحديث الدوران والبيانات خلف الكواليس
+                if (_lastDriverPosition != null && _lastDriverPosition != driverLatLng) {
+                  _driverRotation = _calculateRotation(_lastDriverPosition!, driverLatLng!);
                 }
+                _lastDriverPosition = driverLatLng;
+                
+                // تحريك الكاميرا بأمان
+                _animateCameraToDriver(driverLatLng!);
+                
+                // حساب المسافة للهدف القادم
+                LatLng destination = (status == 'accepted' || status == 'at_pickup') ? pickupLatLng : dropoffLatLng;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _calculateETA(driverLatLng!, destination);
+                });
               }
             }
 
@@ -239,48 +147,47 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                 appBar: AppBar(
                   backgroundColor: Colors.white.withOpacity(0.9),
                   elevation: 0,
-                  iconTheme: const IconThemeData(color: Colors.black),
-                  title: Text("تتبع الرحلة اللحظي", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16.sp, color: Colors.black, fontFamily: 'Cairo')),
+                  title: Text("تتبع الرحلة", style: TextStyle(fontFamily: 'Cairo', fontSize: 14.sp, fontWeight: FontWeight.bold)),
                   centerTitle: true,
                 ),
                 body: Stack(
                   children: [
-                    if (_isMapReady)
-                      GoogleMap(
-                        initialCameraPosition: CameraPosition(target: driverLatLng ?? pickupLatLng, zoom: 15, tilt: 45),
-                        onMapCreated: (c) => _mapController.complete(c),
-                        zoomControlsEnabled: false,
-                        myLocationButtonEnabled: false,
-                        polylines: _polylines,
-                        markers: {
-                          Marker(markerId: const MarkerId('pickup'), position: pickupLatLng, icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen)),
-                          Marker(markerId: const MarkerId('dropoff'), position: dropoffLatLng, icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed)),
-                          if (driverLatLng != null)
-                            Marker(markerId: const MarkerId('driver'), position: driverLatLng!, rotation: _driverRotation, anchor: const Offset(0.5, 0.5), icon: _driverIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure), flat: true),
-                        },
-                      ) else const Center(child: CircularProgressIndicator()),
+                    GoogleMap(
+                      initialCameraPosition: CameraPosition(target: pickupLatLng, zoom: 15),
+                      onMapCreated: (c) {
+                        if (!_mapController.isCompleted) _mapController.complete(c);
+                        setState(() => _isMapCreated = true);
+                      },
+                      zoomControlsEnabled: false,
+                      myLocationButtonEnabled: false,
+                      markers: {
+                        Marker(markerId: const MarkerId('pickup'), position: pickupLatLng, icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen), infoWindow: const InfoWindow(title: "موقع الاستلام")),
+                        Marker(markerId: const MarkerId('dropoff'), position: dropoffLatLng, icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed), infoWindow: const InfoWindow(title: "موقع التسليم")),
+                        if (driverLatLng != null)
+                          Marker(
+                            markerId: const MarkerId('driver'),
+                            position: driverLatLng!,
+                            rotation: _driverRotation,
+                            icon: _driverIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+                            anchor: const Offset(0.5, 0.5),
+                            flat: true,
+                          ),
+                      },
+                    ),
                     
-                    // طبقة شفافة لعرض الوقت والمسافة فوق الخريطة
+                    // كارت الوقت والمسافة
                     if (_estimatedTime.isNotEmpty && status != 'pending')
                       Positioned(
                         top: 12.h,
                         left: 20,
                         right: 20,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
-                          decoration: BoxDecoration(color: Colors.white.withOpacity(0.9), borderRadius: BorderRadius.circular(15), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)]),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: [
-                              Column(children: [Text("يصل خلال", style: TextStyle(fontSize: 10.sp, fontFamily: 'Cairo', color: Colors.grey)), Text(_estimatedTime, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.bold, color: Colors.blue))]),
-                              Container(width: 1, height: 30, color: Colors.grey[300]),
-                              Column(children: [Text("المسافة", style: TextStyle(fontSize: 10.sp, fontFamily: 'Cairo', color: Colors.grey)), Text(_distanceRemaining, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.bold, color: Colors.blue))]),
-                            ],
-                          ),
-                        ),
+                        child: _buildEtaCard(),
                       ),
 
-                    Align(alignment: Alignment.bottomCenter, child: SafeArea(child: _buildUnifiedBottomPanel(context, status, orderData, driverData, orderData['verificationCode'] ?? "----"))),
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: _buildBottomPanel(status, orderData, driverData),
+                    ),
                   ],
                 ),
               ),
@@ -291,42 +198,60 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
     );
   }
 
-  Future<void> _animateCameraToDriver(LatLng location) async {
-    final GoogleMapController controller = await _mapController.future;
-    controller.animateCamera(CameraUpdate.newCameraPosition(CameraPosition(target: location, zoom: 15.5, tilt: 45)));
+  Widget _buildEtaCard() {
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)]),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildInfoItem("يصل خلال", _estimatedTime),
+          Container(width: 1, height: 30, color: Colors.grey[200]),
+          _buildInfoItem("المسافة", _distanceRemaining),
+        ],
+      ),
+    );
   }
 
-  Widget _buildUnifiedBottomPanel(BuildContext context, String status, Map<String, dynamic> order, Map<String, dynamic>? driver, String code) {
+  Widget _buildInfoItem(String label, String value) {
+    return Column(
+      children: [
+        Text(label, style: TextStyle(fontFamily: 'Cairo', fontSize: 10.sp, color: Colors.grey)),
+        Text(value, style: TextStyle(fontFamily: 'Cairo', fontSize: 12.sp, fontWeight: FontWeight.bold, color: Colors.blue[900])),
+      ],
+    );
+  }
+
+  Widget _buildBottomPanel(String status, Map<String, dynamic> order, Map<String, dynamic>? driver) {
     double progress = 0.1;
-    String statusDesc = "بانتظار قبول مندوب...";
-    Color mainColor = Colors.orange;
-    if (status == 'accepted') { progress = 0.4; statusDesc = "المندوب وافق وفي طريقه للمحل"; mainColor = Colors.blue; }
-    else if (status == 'at_pickup') { progress = 0.6; statusDesc = "المندوب وصل لموقع الاستلام"; mainColor = Colors.indigo; }
-    else if (status == 'picked_up') { progress = 0.8; statusDesc = "المندوب استلم الطلب وهو في الطريق إليك"; mainColor = Colors.green; }
-    return Container(
-      margin: const EdgeInsets.fromLTRB(10, 0, 10, 15),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(25), boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 15)]),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(children: [Expanded(child: LinearProgressIndicator(value: progress, minHeight: 6, backgroundColor: Colors.grey[200], color: mainColor)), const SizedBox(width: 10), Text("${(progress * 100).toInt()}%", style: const TextStyle(fontWeight: FontWeight.bold))]),
-          const SizedBox(height: 12),
-          Text(statusDesc, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.sp, color: mainColor, fontFamily: 'Cairo')),
-          const Divider(height: 25),
-          if (status == 'accepted' || status == 'at_pickup' || status == 'picked_up')
-            Container(margin: const EdgeInsets.only(bottom: 15), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.amber[50], borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.amber)), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.security, color: Colors.amber), const SizedBox(width: 10), const Text("كود التسليم: ", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')), Text(code, style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.red[900]))])),
-          Row(
-            children: [
-              CircleAvatar(radius: 25, backgroundColor: Colors.blue[50], child: const Icon(Icons.person, color: Colors.blue)),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(driver != null ? driver['fullname'] : "بحث عن مندوب...", style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')), const Text("موثق من رابية أحلى", style: TextStyle(fontSize: 10, color: Colors.grey, fontFamily: 'Cairo'))])),
-              if (driver != null) IconButton(onPressed: () async => await launchUrl(Uri.parse("tel:${driver['phone']}")), icon: const Icon(Icons.phone_in_talk, color: Colors.green, size: 30)),
-            ],
-          ),
-          if (status == 'pending' || status == 'accepted' || status == 'at_pickup')
-            Padding(padding: const EdgeInsets.only(top: 10), child: TextButton(onPressed: () => _handleSmartCancel(context, status), child: const Text("إلغاء الطلب", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontFamily: 'Cairo')))),
-        ],
+    String statusDesc = "بانتظار المندوب...";
+    if (status == 'accepted') { progress = 0.4; statusDesc = "المندوب في طريقه للمحل"; }
+    else if (status == 'at_pickup') { progress = 0.6; statusDesc = "المندوب وصل للاستلام"; }
+    else if (status == 'picked_up') { progress = 0.8; statusDesc = "الطلب في الطريق إليك"; }
+
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.all(15),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(25), boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            LinearProgressIndicator(value: progress, backgroundColor: Colors.grey[200], color: Colors.blue),
+            const SizedBox(height: 15),
+            Text(statusDesc, style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13.sp)),
+            const Divider(),
+            Row(
+              children: [
+                const CircleAvatar(child: Icon(Icons.person)),
+                const SizedBox(width: 15),
+                Expanded(child: Text(driver?['fullname'] ?? "جاري البحث...", style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold))),
+                if (driver != null)
+                  IconButton(onPressed: () => launchUrl(Uri.parse("tel:${driver['phone']}")), icon: const Icon(Icons.phone, color: Colors.green)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
