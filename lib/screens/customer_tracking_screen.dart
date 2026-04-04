@@ -42,11 +42,26 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
   }
 
   // حساب زاوية الدوران بناءً على الإحداثيات
+    // حساب زاوية الدوران - نسخة متوافقة مع كل إصدارات فلاتر
   double _calculateRotation(LatLng start, LatLng end) {
-    double latDiff = end.latitude - start.latitude;
-    double lngDiff = end.longitude - start.longitude;
-    return (57.2957795 * (ui.Offset(lngDiff, latDiff).direction)); 
+    double latDiff = (end.latitude - start.latitude).abs();
+    double lngDiff = (end.longitude - start.longitude).abs();
+
+    double rotation = 0;
+
+    if (start.latitude < end.latitude && start.longitude < end.longitude) {
+      rotation = (57.2957795 * (ui.Offset(lngDiff, latDiff).direction));
+    } else if (start.latitude >= end.latitude && start.longitude < end.longitude) {
+      rotation = 90 + (57.2957795 * (ui.Offset(latDiff, lngDiff).direction));
+    } else if (start.latitude >= end.latitude && start.longitude >= end.longitude) {
+      rotation = 180 + (57.2957795 * (ui.Offset(lngDiff, latDiff).direction));
+    } else if (start.latitude < end.latitude && start.longitude >= end.longitude) {
+      rotation = 270 + (57.2957795 * (ui.Offset(latDiff, lngDiff).direction));
+    }
+    
+    return rotation;
   }
+
 
   // رسم خط مستقيم بسيط أو مسار (Polyline) بين نقطتين
   void _updatePolyline(LatLng driver, LatLng destination) {
