@@ -1,3 +1,4 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
@@ -10,8 +11,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-// ✅ تم حذف latlong2 واستبدالها بجوجل مابس فقط لمنع التعارض وتوقف البناء
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+// ✅ تم حذف latlong2 نهائياً وتنظيف مكتبة جوجل مابس
+import 'package:google_maps_flutter/google_maps_flutter.dart' as google_maps;
 
 import 'package:my_test_app/firebase_options.dart';
 import 'package:my_test_app/theme/app_theme.dart';
@@ -75,7 +76,7 @@ void main() async {
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
 
-  // ✅ العودة لنسخة الكود الأصلية تماماً بدون أي تعديلات في البارامترات
+  // ✅ رجعنا الدالة لأصلها تماماً (بدون settings:) كما طلبت
   await flutterLocalNotificationsPlugin.initialize(
     initializationSettings,
   );
@@ -190,13 +191,12 @@ class MyApp extends StatelessWidget {
               final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
               final rawLocation = args?['location'];
 
-              // ✅ التعامل مع الموقع باستخدام LatLng الخاص بـ Google Maps حصرياً لضمان نجاح الـ Build
-              LatLng finalLocation;
-              if (rawLocation is LatLng) {
+              // ✅ تنظيف التحويل ليعتمد على Google Maps فقط
+              google_maps.LatLng finalLocation;
+              if (rawLocation is google_maps.LatLng) {
                 finalLocation = rawLocation;
               } else {
-                // موقع افتراضي في حال عدم وجود بيانات
-                finalLocation = const LatLng(30.0444, 31.2357);
+                finalLocation = const google_maps.LatLng(30.0444, 31.2357);
               }
 
               return AbaatlyHadProScreen(
@@ -209,6 +209,7 @@ class MyApp extends StatelessWidget {
               return CustomerTrackingScreen(orderId: orderId);
             },
           },
+          // ... بقية الملف كما هو تماماً في نسختك الأصلية
           onGenerateRoute: (settings) {
             if (settings.name == MarketplaceHomeScreen.routeName) {
               final args = settings.arguments as Map<String, dynamic>?;
@@ -274,6 +275,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
+// ... بقية كود AuthWrapper و PostRegistration كما هي في ملفك
 class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
   @override
