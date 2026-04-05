@@ -130,35 +130,43 @@ class _MerchantPointBalanceScreenState extends State<MerchantPointBalanceScreen>
   }
 
   Widget _buildLogTile(Map<String, dynamic> log) {
-    final amount = log['amount'] ?? 0;
-    final isPositive = amount >= 0;
-    final timestamp = (log['timestamp'] as Timestamp?)?.toDate();
-    final dateStr = timestamp != null ? DateFormat('yyyy-MM-dd HH:mm').format(timestamp) : '---';
+  // 1. استلام القيمة
+  final amount = log['amount'] ?? 0;
+  // 2. تعديل المسمى ليطابق السيرفر (description بدلاً من details)
+  final title = log['description'] ?? log['details'] ?? 'تحديث سجل العهدة';
+  // 3. تحديد نوع العملية من الـ type اللي بنبعته من السيرفر
+  final bool isPayout = log['type'] == 'payout_confirmed';
+  
+  final timestamp = (log['timestamp'] as Timestamp?)?.toDate();
+  final dateStr = timestamp != null ? DateFormat('yyyy-MM-dd HH:mm').format(timestamp) : '---';
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: isPositive ? Colors.green[50] : Colors.red[50],
-          child: Icon(
-            isPositive ? Icons.add_chart : Icons.remove_moderator,
-            color: isPositive ? Colors.green : Colors.red,
-          ),
-        ),
-        title: Text(log['details'] ?? 'عملية لوجستية', style: const TextStyle(fontFamily: 'Cairo', fontSize: 13)),
-        subtitle: Text(dateStr, style: const TextStyle(fontSize: 11)),
-        trailing: Text(
-          '${isPositive ? "+" : ""}$amount',
-          style: TextStyle(
-            color: isPositive ? Colors.green[700] : Colors.red[700],
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
+  return Card(
+    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    child: ListTile(
+      leading: CircleAvatar(
+        // لو سداد أمانات نخلي اللون أخضر مريح للعين
+        backgroundColor: isPayout ? Colors.green[50] : Colors.blueGrey[50],
+        child: Icon(
+          isPayout ? Icons.check_circle_outline : Icons.inventory_2_outlined,
+          color: isPayout ? Colors.green : Colors.blueGrey,
         ),
       ),
-    );
-  }
+      title: Text(title, style: const TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.bold)),
+      subtitle: Text(dateStr, style: const TextStyle(fontSize: 11)),
+      trailing: Text(
+        // عرض القيمة المطلقة عشان التاجر ميتلخبطش في السالب والموجب في السداد
+        '${amount.toStringAsFixed(1)} ج.م',
+        style: TextStyle(
+          color: isPayout ? Colors.green[700] : Colors.red[700],
+          fontWeight: FontWeight.bold,
+          fontSize: 16,
+        ),
+      ),
+    ),
+  );
+}
+
 
   Widget _buildLoadMoreButton(int currentCount) {
     // لو عدد السجلات أقل من المسموح به حالياً، مش محتاجين زرار "المزيد"
