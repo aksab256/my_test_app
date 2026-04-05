@@ -3,8 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:my_test_app/widgets/buyer_product_card.dart';
 import 'package:my_test_app/providers/product_offers_provider.dart';
-import 'package:my_test_app/providers/buyer_data_provider.dart'; // 🎯 استيراد موفر بيانات المشتري
-import 'package:sizer/sizer.dart';
+import 'package:my_test_app/providers/buyer_data_provider.dart';
 
 class ProductListGrid extends StatelessWidget {
   final String subCategoryId;
@@ -20,100 +19,67 @@ class ProductListGrid extends StatelessWidget {
     this.onProductTap,
   });
 
+  // 🎯 تحسين: جعل الـ Stream ثابت ولا يتغير مع كل Build
   Stream<QuerySnapshot> _getProductsStream() {
-    final FirebaseFirestore db = FirebaseFirestore.instance;
-    Query productsQuery = db.collection('products')
-      .where('subId', isEqualTo: subCategoryId)
-      .where('status', isEqualTo: 'active')
-      .orderBy('order', descending: false);
-    
+    Query query = FirebaseFirestore.instance.collection('products')
+        .where('subId', isEqualTo: subCategoryId)
+        .where('status', isEqualTo: 'active')
+        .orderBy('order', descending: false);
+
     if (manufacturerId != null) {
-      productsQuery = productsQuery.where('manufacturerId', isEqualTo: manufacturerId);
+      query = query.where('manufacturerId', isEqualTo: manufacturerId);
     }
-    return productsQuery.snapshots();
+    return query.snapshots();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (subCategoryId.isEmpty) {
-      return const Center(child: Text('خطأ: لم يتم تحديد القسم الفرعي لعرض المنتجات.'));
-    }
-    
-    final colorScheme = Theme.of(context).colorScheme;
-    const double finalAspectRatio = 0.52; 
+    if (subCategoryId.isEmpty) return const Center(child: Text('خطأ في القسم'));
 
-    // 🎯 الخطوة 1: استخراج قائمة المناطق المكتشفة للمستخدم من الـ BuyerDataProvider
-    // ملاحظة: هنا نفترض أنك قمت بمعالجة الـ GeoJSON وتخزين النتائج في قائمة تسمى 'detectedAreasNames' 
-    // أو ما شابه داخل الـ Provider الخاص بك.
-    final buyerProvider = context.watch<BuyerDataProvider>();
-    
-    // هنا نجهز القائمة (إذا كانت فارغة، سيعرض الـ Provider العروض العامة فقط)
-    // يمكنك استبدال ['القاهرة'] بالدالة التي تحسب المنطقة من الإحداثيات (lat/lng)
-    List<String> userAreas = []; 
-    if (buyerProvider.userAddress != null) {
-      userAreas.add(buyerProvider.userAddress!); 
-    }
+    // 🎯 استخدم select بدلاً من watch عشان الـ Grid ميعملش Rebuild لو بيانات تانية اتغيرت
+    final userAddress = context.select<BuyerDataProvider, String?>((p) => p.userAddress);
+    List<String> userAreas = userAddress != null ? [userAddress] : [];
 
     return StreamBuilder<QuerySnapshot>(
       stream: _getProductsStream(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-            child: CircularProgressIndicator(color: colorScheme.primary) 
-          );
+          return const Center(child: CircularProgressIndicator(color: Color(0xFF43A047)));
         }
-        if (snapshot.hasError) {
-          return Center(child: Text('حدث خطأ في تحميل المنتجات: ${snapshot.error}'));
-        }
+        
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Text(
-                manufacturerId != null
-                    ? 'لا توجد منتجات لهذه الشركة المصنعة في قسم "$pageTitle".'
-                    : 'لا توجد منتجات متاحة حاليًا في قسم "$pageTitle".',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontFamily: 'Tajawal'),
-              ),
-            ),
-          );
+          return Center(child: Text('لا توجد منتجات في "$pageTitle"'));
         }
 
         final products = snapshot.data!.docs;
-        
+
         return GridView.builder(
-          padding: const EdgeInsets.all(12.0),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 100), // مسافة للشريط السفلي
           itemCount: products.length,
+          physics: const BouncingScrollPhysics(), // سكرول أنعم
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: finalAspectRatio,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 0.55, // تحسين النسبة لشكل أرشق
           ),
           itemBuilder: (context, index) {
             final productDoc = products[index];
-            final productId = productDoc.id;
             final productData = productDoc.data() as Map<String, dynamic>;
 
-            // 🎯 الخطوة 2: تمرير المناطق المكتشفة للمنتج عند إنشاء الـ Provider
+            // 🎯 السر هنا: استخدام key فريد لكل منتج عشان فلاتر ميعيدش رسمه لو مش محتاج
             return ChangeNotifierProvider<ProductOffersProvider>(
+              key: ValueKey('prod_${productDoc.id}'), 
               create: (_) => ProductOffersProvider(
-                productId: productId,
-                userDetectedAreas: userAreas, // ⬅️ التعديل الجوهري هنا
+                productId: productDoc.id,
+                userDetectedAreas: userAreas,
               ),
               child: BuyerProductCard(
-                productId: productId,
+                productId: productDoc.id,
                 productData: productData,
-                onTap: (selectedProductId, selectedOfferId) {
-                  Navigator.of(context).pushNamed(
-                    '/productDetails',
-                    arguments: {
-                      'productId': selectedProductId,
-                      'offerId': selectedOfferId,
-                    },
-                  );
-                  onProductTap?.call(selectedProductId, selectedOfferId);
+                onTap: (pid, oid) {
+                  Navigator.of(context).pushNamed('/productDetails', arguments: {'productId': pid, 'offerId': oid});
+                  onProductTap?.call(pid, oid);
                 },
               ),
             );
@@ -123,3 +89,4 @@ class ProductListGrid extends StatelessWidget {
     );
   }
 }
+
