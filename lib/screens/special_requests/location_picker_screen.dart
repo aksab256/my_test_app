@@ -9,6 +9,7 @@ import 'dart:convert'; // لإدارة بيانات JSON
 import 'package:http/http.dart' as http; // البديل المتوافق مع إصدارك
 import 'package:sizer/sizer.dart';
 import '../../services/delivery_service.dart';
+import '../../services/user_session.dart';
 
 enum PickerStep { pickup, dropoff, confirm }
 
@@ -228,39 +229,54 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   }
 
   Future<void> _finalizeAndUpload() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      
-      // التزام كامل بالمسميات الأصلية في Firebase لضمان التوافق
-      await FirebaseFirestore.instance.collection('specialRequests').add({
-        'userId': user?.uid ?? 'anonymous',
-        'pickupLocation': GeoPoint(_pickupLocation!.latitude, _pickupLocation!.longitude),
-        'pickupAddress': _pickupAddress,
-        'dropoffLocation': GeoPoint(_dropoffLocation!.latitude, _dropoffLocation!.longitude),
-        'dropoffAddress': _dropoffAddress,
-        'totalPrice': _pricingDetails['totalPrice'],
-        'driverNet': _pricingDetails['driverNet'],
-        'commissionAmount': _pricingDetails['commissionAmount'], 
-        'vehicleType': _selectedVehicle,
-        'details': _detailsController.text, // الوصف الإجباري بحد أقصى 80 حرف
-        'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-        'verificationCode': (1000 + (DateTime.now().millisecond % 9000)).toString(),
-      });
+  if (!_formKey.currentState!.validate()) return;
+  setState(() => _isLoading = true);
 
-      if (mounted) {
-        Navigator.pop(context); // إغلاق المودال
-        Navigator.pop(context); // العودة للشاشة الرئيسية
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.green, content: Text("🚀 طلبك قيد التنفيذ", style: TextStyle(fontFamily: 'Cairo'))));
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+
+    await FirebaseFirestore.instance.collection('specialRequests').add({
+      'userId': user?.uid ?? 'anonymous',
+      
+      // ✅ الربط الصحيح مع UserSession:
+      'userName': UserSession.merchantName ?? "مستخدم أكسب", 
+      'userPhone': UserSession.phoneNumber ?? "", // استخدمنا phoneNumber اللي في الملف عندك
+      
+      // كررناهم في حقول الكاش عشان المندوب يقرأ من مكان واحد
+      'customerName': UserSession.merchantName ?? "مستخدم أكسب", 
+      'customerPhone': UserSession.phoneNumber ?? "",
+
+      'pickupLocation': GeoPoint(_pickupLocation!.latitude, _pickupLocation!.longitude),
+      'pickupAddress': _pickupAddress,
+      'dropoffLocation': GeoPoint(_dropoffLocation!.latitude, _dropoffLocation!.longitude),
+      'dropoffAddress': _dropoffAddress,
+      'totalPrice': _pricingDetails['totalPrice'],
+      'driverNet': _pricingDetails['driverNet'],
+      'commissionAmount': _pricingDetails['commissionAmount'],
+      'vehicleType': _selectedVehicle,
+      'details': _detailsController.text,
+      'status': 'pending',
+      'requestSource': 'consumer', 
+      'createdAt': FieldValue.serverTimestamp(),
+      'verificationCode': (1000 + (DateTime.now().millisecond % 9000)).toString(),
+      'insurance_points': 0, 
+      'moneyLocked': true, // عشان يظهر للمندوب فوراً
+    });
+
+    if (mounted) {
+      Navigator.pop(context); 
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          backgroundColor: Colors.green, 
+          content: Text("🚀 طلبك قيد التنفيذ", style: TextStyle(fontFamily: 'Cairo'))));
     }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
   }
+}
+
 
   @override
   Widget build(BuildContext context) {
