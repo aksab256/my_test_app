@@ -12,6 +12,7 @@ class ConsumerProductListScreen extends StatefulWidget {
   final String subCategoryId;  // مطابقة للي بيبعته الماين
   final String? ownerId;
   final String? subCategoryName;
+  final String? manufacturerId;
 
   static const routeName = '/product-list';
 
@@ -21,6 +22,7 @@ class ConsumerProductListScreen extends StatefulWidget {
     required this.subCategoryId,
     this.ownerId,
     this.subCategoryName,
+    this.manufacturerId,
   });
 
   @override
