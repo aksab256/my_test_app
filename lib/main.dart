@@ -228,17 +228,14 @@ class MyApp extends StatelessWidget {
                 ),
               );
             }
-            if (settings.name == ConsumerProductListScreen.routeName) {
-  final args = settings.arguments as Map<String, dynamic>?;
+            // التعديل الصحيح في main.dart
+if (settings.name == ConsumerProductListScreen.routeName) {
+  // شيلنا الـ arguments من هنا لأن الصفحة هتقرأها بنفسها من الـ ModalRoute
   return MaterialPageRoute(
-    builder: (context) => ConsumerProductListScreen(
-      ownerId: args?['ownerId'] ?? '',
-      mainCategoryId: args?['mainId'] ?? '', // تم التغيير لـ mainCategoryId
-      subCategoryId: args?['subId'] ?? '',   // تم التغيير لـ subCategoryId
-      subCategoryName: args?['subCategoryName'] ?? 'المنتجات',
-    ),
+    builder: (context) => const ConsumerProductListScreen(), 
   );
 }
+
 
             if (settings.name == '/productDetails') {
               final args = settings.arguments as Map<String, dynamic>?;
