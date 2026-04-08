@@ -230,11 +230,12 @@ class MyApp extends StatelessWidget {
             }
             // التعديل الصحيح في main.dart
 if (settings.name == ConsumerProductListScreen.routeName) {
-  // شيلنا الـ arguments من هنا لأن الصفحة هتقرأها بنفسها من الـ ModalRoute
   return MaterialPageRoute(
+    settings: settings, // ✅ السطر ده هو اللي هينقل ownerId و subId للصفحة
     builder: (context) => const ConsumerProductListScreen(), 
   );
 }
+
 
 
             if (settings.name == '/productDetails') {
