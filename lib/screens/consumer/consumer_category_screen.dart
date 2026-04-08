@@ -4,7 +4,7 @@ import 'package:my_test_app/screens/consumer/consumer_widgets.dart';
 import 'package:sizer/sizer.dart';
 
 // استيراد الصفحة الجديدة (تأكد من صحة المسار لديك)
-import 'package:my_test_app/screens/consumer/consumer_product_list_screen.dart';
+import 'package:my_test_app/screens/consumer/ConsumerProductListScreen.dart';
 
 class ConsumerCategoryScreen extends StatefulWidget {
   final String mainCategoryId;

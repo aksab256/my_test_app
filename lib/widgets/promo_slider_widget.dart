@@ -7,7 +7,7 @@ import '../screens/consumer/consumer_data_models.dart';
 
 // المسارات الصحيحة لنسخة المستهلك (Consumer) لضمان ظهور الشريط السفلي الأخضر
 import '../screens/consumer/consumer_category_screen.dart'; 
-import '../screens/consumer/consumer_product_list_screen.dart'; 
+import '../screens/consumer/ConsumerProductListScreen.dart'; 
 import '../screens/consumer/MarketplaceHomeScreen.dart'; 
 
 class PromoSliderWidget extends StatefulWidget {
