@@ -8,8 +8,8 @@ import 'package:my_test_app/widgets/buyer_product_header.dart';
 import '../../theme/app_theme.dart';
 
 class ConsumerProductListScreen extends StatefulWidget {
-  final String mainId; // مطابقة للي بيبعته الماين
-  final String subId;  // مطابقة للي بيبعته الماين
+  final String mainCategoryId; // مطابقة للي بيبعته الماين
+  final String subCategoryId;  // مطابقة للي بيبعته الماين
   final String? ownerId;
   final String? subCategoryName;
 
@@ -17,8 +17,8 @@ class ConsumerProductListScreen extends StatefulWidget {
 
   const ConsumerProductListScreen({
     super.key,
-    required this.mainId,
-    required this.subId,
+    required this.mainCategoryId,
+    required this.subCategoryId,
     this.ownerId,
     this.subCategoryName,
   });
@@ -46,7 +46,7 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
         body: Column(
           children: [
             ManufacturersBanner(
-              subCategoryId: widget.subId,
+              subCategoryId: widget.subCategoryId,
               onManufacturerSelected: (id) {
                 if (id == 'ALL') Navigator.of(context).pop();
               },
@@ -63,7 +63,7 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
 
   Widget _buildProductGrid() {
     Query query = _db.collection('products')
-        .where('subCategoryId', isEqualTo: widget.subId)
+        .where('subCategoryId', isEqualTo: widget.subCategoryId)
         .where('status', isEqualTo: 'active');
 
     return StreamBuilder<QuerySnapshot>(
