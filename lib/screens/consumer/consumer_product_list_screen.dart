@@ -203,7 +203,7 @@ class _ProductCard extends StatelessWidget {
                   ),
                 ),
                 if (product['discount'] != null)
-                  Position(
+                  Positioned(
                     right: 10, top: 10,
                     child: Container(
                       padding: const EdgeInsets.all(5),
