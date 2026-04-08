@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
 import 'package:my_test_app/widgets/buyer_product_header.dart';
+import 'package:my_test_app/screens/consumer/consumer_widgets.dart'; // عشان الشريط السفلي
 import '../../theme/app_theme.dart';
 
 class ConsumerProductListScreen extends StatefulWidget {
@@ -19,7 +21,7 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 🎯 تأمين استلام البيانات لمنع الشاشة الرصاصي
+    // 🎯 استلام وتأمين البيانات
     final dynamic rawArgs = ModalRoute.of(context)?.settings.arguments;
     final Map<String, dynamic> args = (rawArgs is Map<String, dynamic>) ? rawArgs : {};
 
@@ -27,23 +29,27 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
     final String subId = args['subId'] ?? '';
     final String title = args['subCategoryName'] ?? 'المنتجات';
 
-    // لو مفيش بيانات، بنعرض رسالة بدل ما الشاشة تضرب
-    if (ownerId.isEmpty && subId.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(title: const Text("المنتجات")),
-        body: const Center(child: Text("برجاء اختيار قسم لعرض منتجاته")),
-      );
-    }
-
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFFBFDFF),
+        backgroundColor: const Color(0xFFF5F7F9), // لون خلفية التطبيقات الهادئ
         appBar: BuyerProductHeader(
           title: title,
           isLoading: false,
         ),
-        body: _buildProductGrid(ownerId, subId),
+        // 💡 إضافة الـ Body مع SafeArea لضمان عدم التداخل مع الحواف
+        body: SafeArea(
+          child: _buildProductGrid(ownerId, subId),
+        ),
+        
+        // 🎯 إضافة الشريط السفلي عشان الصفحة تحسس المستخدم إنه لسه جوه التطبيق
+        bottomNavigationBar: Consumer<CartProvider>(
+          builder: (context, cart, _) => ConsumerFooterNav(
+            cartCount: cart.itemCount,
+            activeIndex: -1, // عشان ميبقاش فيه زرار منور لأننا في صفحة فرعية
+          ),
+        ),
+        
         floatingActionButton: _buildFloatingCart(),
         floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       ),
@@ -52,7 +58,6 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
 
   Widget _buildProductGrid(String ownerId, String subId) {
     return StreamBuilder<QuerySnapshot>(
-      // نجلب عروض التاجر النشطة
       stream: _db.collection('marketOffer')
           .where('ownerId', isEqualTo: ownerId)
           .where('status', isEqualTo: 'active')
@@ -63,18 +68,18 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text("لا توجد منتجات متاحة لهذا التاجر"));
+          return _buildEmptyState();
         }
 
         final offers = snapshot.data!.docs;
 
         return GridView.builder(
-          padding: EdgeInsets.fromLTRB(3.w, 2.h, 3.w, 15.h),
+          padding: EdgeInsets.fromLTRB(4.w, 2.h, 4.w, 12.h),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            childAspectRatio: 0.62,
-            crossAxisSpacing: 3.w,
-            mainAxisSpacing: 3.w,
+            childAspectRatio: 0.72, // ضبط التوازن بين الطول والعرض
+            crossAxisSpacing: 4.w,
+            mainAxisSpacing: 4.w,
           ),
           itemCount: offers.length,
           itemBuilder: (context, index) {
@@ -86,23 +91,31 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
               future: _db.collection('products').doc(pId).get(),
               builder: (context, prodSnap) {
                 if (!prodSnap.hasData || !prodSnap.data!.exists) return const SizedBox.shrink();
-
                 final prodData = prodSnap.data!.data() as Map<String, dynamic>;
 
-                // الفلترة لضمان عرض منتجات القسم المختار فقط
                 if (subId.isNotEmpty && prodData['subId'] != subId) {
                   return const SizedBox.shrink();
                 }
 
-                return _ProductCard(
-                  offer: offerData,
-                  productData: prodData,
-                );
+                return _ProductCard(offer: offerData, productData: prodData);
               },
             );
           },
         );
       },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inventory_2_outlined, size: 60, color: Colors.grey[400]),
+          const SizedBox(height: 16),
+          Text("لا توجد منتجات حالياً", style: TextStyle(color: Colors.grey[600], fontSize: 16)),
+        ],
+      ),
     );
   }
 
@@ -113,9 +126,10 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
         return FloatingActionButton.extended(
           onPressed: () => Navigator.pushNamed(context, '/cart'),
           backgroundColor: AppTheme.primaryGreen,
-          label: Text("سلة المشتريات (${cart.itemCount})",
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          icon: const Icon(Icons.shopping_basket, color: Colors.white),
+          elevation: 4,
+          label: Text("إتمام الطلب (${cart.itemCount})",
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+          icon: const Icon(Icons.shopping_basket_outlined, color: Colors.white),
         );
       },
     );
@@ -133,7 +147,6 @@ class _ProductCard extends StatelessWidget {
     final cart = Provider.of<CartProvider>(context);
     final units = offer['units'] as List? ?? [];
     final firstUnit = units.isNotEmpty ? units[0] : {'unitName': 'وحدة', 'price': 0};
-
     final double price = (firstUnit['price'] as num).toDouble();
     final String pName = productData['name'] ?? 'منتج';
     final List imgs = productData['imageUrls'] as List? ?? [];
@@ -150,55 +163,92 @@ class _ProductCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)],
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
           Expanded(
-            flex: 4,
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: imgs.isNotEmpty
-                  ? Image.network(imgs[0], fit: BoxFit.contain)
-                  : const Icon(Icons.image, color: Colors.grey, size: 40),
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: imgs.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: imgs[0],
+                        fit: BoxFit.contain,
+                        placeholder: (context, url) => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      )
+                    : Icon(Icons.image_not_supported_outlined, color: Colors.grey[300], size: 40),
+              ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text(pName,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              pName,
+              maxLines: 2,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, height: 1.2),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          Text("${firstUnit['unitName']} - $price ج.م",
-              style: TextStyle(color: AppTheme.primaryGreen, fontSize: 10, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(
+            "$price ج.م",
+            style: TextStyle(color: AppTheme.primaryGreen, fontWeight: FontWeight.w900, fontSize: 14),
+          ),
+          Text(
+            firstUnit['unitName'],
+            style: TextStyle(color: Colors.grey[500], fontSize: 10),
+          ),
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: quantity == 0
-                ? ElevatedButton(
-                    onPressed: () => _addToCart(cart, firstUnit, pName, imgs.isNotEmpty ? imgs[0] : ''),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryGreen,
-                      minimumSize: const Size(double.infinity, 35),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ? InkWell(
+                    onTap: () => _addToCart(cart, firstUnit, pName, imgs.isNotEmpty ? imgs[0] : ''),
+                    child: Container(
+                      height: 35,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryGreen,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Center(
+                        child: Text("إضافة", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
                     ),
-                    child: const Text("إضافة", style: TextStyle(color: Colors.white)),
                   )
                 : Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      IconButton(
-                          icon: const Icon(Icons.add_circle, color: Colors.green),
-                          onPressed: () => cart.changeQty(cartItem, 1, 'consumer')),
+                      _qtyBtn(Icons.add, () => cart.changeQty(cartItem, 1, 'consumer'), Colors.green),
                       Text("$quantity", style: const TextStyle(fontWeight: FontWeight.bold)),
-                      IconButton(
-                          icon: const Icon(Icons.remove_circle, color: Colors.red),
-                          onPressed: () => cart.changeQty(cartItem, -1, 'consumer')),
+                      _qtyBtn(Icons.remove, () => cart.changeQty(cartItem, -1, 'consumer'), Colors.red),
                     ],
                   ),
           )
         ],
+      ),
+    );
+  }
+
+  Widget _qtyBtn(IconData icon, VoidCallback tap, Color color) {
+    return InkWell(
+      onTap: tap,
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          border: Border.all(color: color.withOpacity(0.5)),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Icon(icon, size: 18, color: color),
       ),
     );
   }
