@@ -1,4 +1,3 @@
-// lib/screens/consumer/MarketplaceHomeScreen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
@@ -27,7 +26,10 @@ class MarketplaceHomeScreen extends StatefulWidget {
 
 class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
   final MarketplaceDataService _dataService = MarketplaceDataService();
+  
+  // Futures لضمان عدم تكرار جلب البيانات مع كل Rebuild
   late Future<List<CategoryModel>> _categoriesFuture;
+  late Future<QuerySnapshot> _bannersFuture;
   
   final PageController _bannerPageController = PageController();
   Timer? _bannerTimer;
@@ -36,8 +38,13 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
   @override
   void initState() {
     super.initState();
+    // جلب البيانات مرة واحدة فقط عند بدء الشاشة
     _categoriesFuture = _dataService.fetchCategoriesByOffers(widget.currentStoreId);
-    
+    _bannersFuture = FirebaseFirestore.instance
+        .collection('consumerBanners')
+        .where('status', isEqualTo: 'active')
+        .get();
+
     // سلايدر تلقائي احترافي
     _bannerTimer = Timer.periodic(const Duration(seconds: 5), (Timer timer) {
       if (_bannerPageController.hasClients) {
@@ -60,50 +67,31 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final buyerProvider = Provider.of<BuyerDataProvider>(context);
+    // استخدام listen: false للبيانات التي لا تتغير باستمرار لتقليل الضغط
+    final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
     final cartProvider = Provider.of<CartProvider>(context);
     final welcomeName = buyerProvider.userName ?? 'عميلنا العزيز';
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFFBFDFF), // خلفية أهدأ قليلاً
+        backgroundColor: const Color(0xFFFBFDFF),
         appBar: _buildCleanAppBar(welcomeName),
         body: CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
-            // 1. السلايدر المتحرك
+            // 1. السلايدر المتحرك (FutureBuilder بدلاً من Stream)
             SliverToBoxAdapter(child: _buildAutoBannerSlider()),
 
-            // 2. عنوان الأقسام بتصميم مميز
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.only(right: 6.w, left: 6.w, top: 4.h, bottom: 2.h),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "الأقسام الرئيسية",
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900, 
-                        color: const Color(0xFF1A1D1E),
-                        letterSpacing: 0.5
-                      ),
-                    ),
-                    Icon(Icons.grid_view_rounded, color: AppTheme.primaryGreen.withOpacity(0.5), size: 22),
-                  ],
-                ),
-              ),
-            ),
+            // 2. عنوان الأقسام
+            SliverToBoxAdapter(child: _buildSectionTitle()),
 
-            // 3. شبكة الأقسام
+            // 3. شبكة الأقسام (تم تحسينها لفصل الـ Widgets)
             _buildPremiumCategoriesGrid(),
 
             const SliverToBoxAdapter(child: SizedBox(height: 140)),
           ],
         ),
-        // تم تحديث الـ BottomNav ليتوافق مع مسارات ملف الـ Widget الأصلي
         bottomNavigationBar: _buildModernBottomNav(cartProvider),
       ),
     );
@@ -139,14 +127,13 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text("أهلاً بك،", 
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w600)),
+                Text("أهلاً بك،",
+                    style: TextStyle(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w600)),
                 Text(name,
-                  style: const TextStyle(fontSize: 19, color: Color(0xFF1A1D1E), fontWeight: FontWeight.w900)),
+                    style: const TextStyle(fontSize: 19, color: Color(0xFF1A1D1E), fontWeight: FontWeight.w900)),
               ],
             ),
             const Spacer(),
-            // عرض اسم المتجر بتصميم يشبه الـ Chip
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
@@ -154,10 +141,10 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
                   colors: [AppTheme.primaryGreen.withOpacity(0.15), AppTheme.primaryGreen.withOpacity(0.05)],
                 ),
                 borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: AppTheme.primaryGreen.withOpacity(0.1))
+                border: Border.all(color: AppTheme.primaryGreen.withOpacity(0.1)),
               ),
               child: Text(widget.currentStoreName,
-                style: TextStyle(fontSize: 12, color: AppTheme.primaryGreen, fontWeight: FontWeight.w900)),
+                  style: TextStyle(fontSize: 12, color: AppTheme.primaryGreen, fontWeight: FontWeight.w900)),
             )
           ],
         ),
@@ -165,13 +152,34 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
     );
   }
 
+  Widget _buildSectionTitle() {
+    return Padding(
+      padding: EdgeInsets.only(right: 6.w, left: 6.w, top: 4.h, bottom: 2.h),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            "الأقسام الرئيسية",
+            style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF1A1D1E),
+                letterSpacing: 0.5),
+          ),
+          Icon(Icons.grid_view_rounded, color: AppTheme.primaryGreen.withOpacity(0.5), size: 22),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAutoBannerSlider() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('consumerBanners')
-          .where('status', isEqualTo: 'active')
-          .snapshots(),
+    return FutureBuilder<QuerySnapshot>(
+      future: _bannersFuture,
       builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return SizedBox(height: 23.h); // مساحة فارغة بدلاً من التحميل المستمر
+        }
+        
         if (!snapshot.hasData) return const SizedBox.shrink();
 
         final banners = snapshot.data!.docs.where((doc) {
@@ -188,30 +196,27 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
             controller: _bannerPageController,
             itemBuilder: (context, index) {
               final data = banners[index % banners.length].data() as Map<String, dynamic>;
-              return AnimatedBuilder(
-                animation: _bannerPageController,
-                builder: (context, child) {
-                  return Container(
-                    margin: EdgeInsets.symmetric(horizontal: 3.w, vertical: 1.h),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(25),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.primaryGreen.withOpacity(0.15),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        )
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(25),
-                      child: Image.network(
-                        data['imageUrl'], 
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  );
-                },
+              return Container(
+                margin: EdgeInsets.symmetric(horizontal: 3.w, vertical: 1.h),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(25),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.primaryGreen.withOpacity(0.15),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    )
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(25),
+                  child: Image.network(
+                    data['imageUrl'],
+                    fit: BoxFit.cover,
+                    // تحسين جودة الذاكرة عن طريق تحديد عرض الكاش
+                    cacheWidth: 800,
+                  ),
+                ),
               );
             },
           ),
@@ -227,7 +232,9 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SliverToBoxAdapter(child: Center(child: CircularProgressIndicator()));
         }
+        
         final categories = snapshot.data ?? [];
+        
         return SliverPadding(
           padding: EdgeInsets.symmetric(horizontal: 5.w),
           sliver: SliverGrid(
@@ -239,51 +246,9 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
             ),
             delegate: SliverChildBuilderDelegate(
               (context, index) {
-                final cat = categories[index];
-                return GestureDetector(
-                  onTap: () => Navigator.of(context).pushNamed('/subcategories', arguments: {
-                    'mainId': cat.id,
-                    'ownerId': widget.currentStoreId,
-                    'mainCategoryName': cat.name,
-                  }),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(28),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF1A1D1E).withOpacity(0.04), 
-                          blurRadius: 20, 
-                          offset: const Offset(0, 8)
-                        )
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: Container(
-                            margin: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(22),
-                              image: DecorationImage(
-                                image: NetworkImage(cat.imageUrl),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 1,
-                          child: Center(
-                            child: Text(cat.name,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: Color(0xFF1A1D1E))),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                return _CategoryCard(
+                  cat: categories[index],
+                  currentStoreId: widget.currentStoreId,
                 );
               },
               childCount: categories.length,
@@ -297,12 +262,11 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
   Widget _buildModernBottomNav(CartProvider cart) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 30, offset: const Offset(0, -10))
-        ]
-      ),
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 30, offset: const Offset(0, -10))
+          ]),
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
         child: BottomNavigationBar(
@@ -330,21 +294,18 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
           ],
           onTap: (index) {
             if (index == 0) {
-              // العودة للرئيسية (رادار المحلات)
               Navigator.pushNamed(context, '/consumerhome');
               return;
             }
-            
-            // 🎯 تم تعديل المسارات هنا لتطابق مسارات الـ Widget الأصلي الخاص بك
             switch (index) {
               case 1:
                 Navigator.pushNamed(context, '/cart');
                 break;
               case 2:
-                Navigator.pushNamed(context, '/consumer-purchases'); // المسار الأصلي لطلباتي
+                Navigator.pushNamed(context, '/consumer-purchases');
                 break;
               case 3:
-                Navigator.pushNamed(context, '/myDetails'); // المسار الأصلي لحسابي
+                Navigator.pushNamed(context, '/myDetails');
                 break;
             }
           },
@@ -353,3 +314,67 @@ class _MarketplaceHomeScreenState extends State<MarketplaceHomeScreen> {
     );
   }
 }
+
+/// ويدجت منفصل للكارت لتقليل عمليات الرسم (Repaint) وتحسين الـ Scroll
+class _CategoryCard extends StatelessWidget {
+  final CategoryModel cat;
+  final String currentStoreId;
+
+  const _CategoryCard({required this.cat, required this.currentStoreId});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).pushNamed('/subcategories', arguments: {
+        'mainId': cat.id,
+        'ownerId': currentStoreId,
+        'mainCategoryName': cat.name,
+      }),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+                color: const Color(0xFF1A1D1E).withOpacity(0.04),
+                blurRadius: 20,
+                offset: const Offset(0, 8))
+          ],
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              flex: 3,
+              child: Container(
+                margin: const EdgeInsets.all(8),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(22),
+                  child: Image.network(
+                    cat.imageUrl,
+                    fit: BoxFit.cover,
+                    // تحديد حجم الكاش ليناسب المربع الصغير (يوفر رام هائلة)
+                    cacheWidth: 350,
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 1,
+              child: Center(
+                child: Text(
+                  cat.name,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                      color: Color(0xFF1A1D1E)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

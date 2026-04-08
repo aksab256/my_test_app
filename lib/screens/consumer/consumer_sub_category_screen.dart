@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:async'; // ضروري للـ Timer
+import 'dart:async';
 import '../../models/category_model.dart';
 import '../../services/marketplace_data_service.dart';
 import '../../theme/app_theme.dart';
@@ -28,9 +28,9 @@ class ConsumerSubCategoryScreen extends StatefulWidget {
 
 class _ConsumerSubCategoryScreenState extends State<ConsumerSubCategoryScreen> {
   late Future<List<CategoryModel>> _subCategoriesFuture;
+  late Future<QuerySnapshot> _bannersFuture; // تحويل السلايدر لـ Future لتقليل الجهد
   final MarketplaceDataService _dataService = MarketplaceDataService();
-  
-  // متغيرات السلايدر اليدوي
+
   final PageController _pageController = PageController();
   int _currentPage = 0;
   Timer? _timer;
@@ -38,12 +38,17 @@ class _ConsumerSubCategoryScreenState extends State<ConsumerSubCategoryScreen> {
   @override
   void initState() {
     super.initState();
+    // جلب البيانات مرة واحدة فقط
     _subCategoriesFuture = _dataService.fetchSubCategoriesByOffers(
       widget.mainCategoryId,
       widget.ownerId,
     );
     
-    // إعداد المؤقت للتحريك التلقائي
+    _bannersFuture = FirebaseFirestore.instance
+        .collection('consumerBanners')
+        .where('status', isEqualTo: 'active')
+        .get();
+
     _timer = Timer.periodic(const Duration(seconds: 4), (Timer timer) {
       if (_pageController.hasClients) {
         _currentPage++;
@@ -71,25 +76,11 @@ class _ConsumerSubCategoryScreenState extends State<ConsumerSubCategoryScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xFFF8F9FA),
-        appBar: AppBar(
-          elevation: 0,
-          backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF2D3142),
-          centerTitle: true,
-          toolbarHeight: 8.h,
-          title: Text(
-            widget.mainCategoryName,
-            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
-          ),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, size: 22),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ),
+        appBar: _buildAppBar(),
         body: CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
-            // 1. شريط الترحيب (مرحبا بك فقط بمقاس 19)
+            // 1. شريط الترحيب
             SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(4.w, 4.w, 4.w, 0),
@@ -104,95 +95,11 @@ class _ConsumerSubCategoryScreenState extends State<ConsumerSubCategoryScreen> {
               ),
             ),
 
-            // 2. البانر المتحرك التلقائي (PageView)
-            SliverToBoxAdapter(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('consumerBanners')
-                    .where('status', isEqualTo: 'active')
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const SizedBox.shrink();
+            // 2. البانر المتحرك (تحسين الأداء)
+            SliverToBoxAdapter(child: _buildBannerSlider()),
 
-                  // فلترة البانرات بناءً على الـ ownerId أو العامة
-                  final filteredDocs = snapshot.data!.docs.where((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    return data['ownerId'] == widget.ownerId || data['targetAudience'] == 'general';
-                  }).toList();
-
-                  if (filteredDocs.isEmpty) return const SizedBox.shrink();
-
-                  return Container(
-                    height: 22.h,
-                    margin: EdgeInsets.symmetric(vertical: 2.h),
-                    child: PageView.builder(
-                      controller: _pageController,
-                      itemBuilder: (context, index) {
-                        // استخدام modulo لجعل السلايدر لا ينتهي (Infinite loop)
-                        final data = filteredDocs[index % filteredDocs.length].data() as Map<String, dynamic>;
-                        return Container(
-                          margin: EdgeInsets.symmetric(horizontal: 4.w),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                Image.network(data['imageUrl'], fit: BoxFit.cover),
-                                Container(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [Colors.black.withOpacity(0.5), Colors.transparent],
-                                      begin: Alignment.bottomCenter,
-                                    ),
-                                  ),
-                                  alignment: Alignment.bottomRight,
-                                  padding: EdgeInsets.all(4.w),
-                                  child: Text(
-                                    data['name'] ?? "",
-                                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            // 3. شبكة الأقسام الفرعية (الكروت)
-            FutureBuilder<List<CategoryModel>>(
-              future: _subCategoriesFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const SliverFillRemaining(child: Center(child: CircularProgressIndicator()));
-                }
-                final subCategories = snapshot.data ?? [];
-
-                return SliverPadding(
-                  padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
-                  sliver: SliverGrid(
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 0.8,
-                      crossAxisSpacing: 4.w,
-                      mainAxisSpacing: 4.w,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) => _buildPremiumCategoryCard(context, subCategories[index]),
-                      childCount: subCategories.length,
-                    ),
-                  ),
-                );
-              },
-            ),
+            // 3. شبكة الأقسام الفرعية
+            _buildSubCategoriesGrid(),
           ],
         ),
         bottomNavigationBar: _buildModernBottomNav(context, cartProvider),
@@ -200,51 +107,114 @@ class _ConsumerSubCategoryScreenState extends State<ConsumerSubCategoryScreen> {
     );
   }
 
-  // الكارت المعدل (الصورة تملاه بالكامل وحذف أي "عرض الكل")
-  Widget _buildPremiumCategoryCard(BuildContext context, CategoryModel category) {
-    return GestureDetector(
-      onTap: () => Navigator.of(context).pushNamed(
-        ConsumerProductListScreen.routeName,
-        arguments: {
-          'mainId': widget.mainCategoryId,
-          'subId': category.id,
-          'ownerId': widget.ownerId,
-          'subCategoryName': category.name,
-        },
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      elevation: 0,
+      backgroundColor: Colors.white,
+      foregroundColor: const Color(0xFF2D3142),
+      centerTitle: true,
+      toolbarHeight: 8.h,
+      title: Text(
+        widget.mainCategoryName,
+        style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)],
-        ),
-        child: Column(
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                child: Image.network(
-                  category.imageUrl,
-                  width: double.infinity,
-                  fit: BoxFit.cover, // تم الضبط لملء المساحة
-                ),
-              ),
-            ),
-            Padding(
-              padding: EdgeInsets.symmetric(vertical: 1.5.h, horizontal: 2.w),
-              child: Text(
-                category.name,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 19, // المقاس المطلوب
-                  color: Color(0xFF2D3142),
-                ),
-              ),
-            ),
-          ],
-        ),
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new, size: 22),
+        onPressed: () => Navigator.of(context).pop(),
       ),
+    );
+  }
+
+  Widget _buildBannerSlider() {
+    return FutureBuilder<QuerySnapshot>(
+      future: _bannersFuture,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return SizedBox(height: 22.h);
+
+        final filteredDocs = snapshot.data!.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return data['ownerId'] == widget.ownerId || data['targetAudience'] == 'general';
+        }).toList();
+
+        if (filteredDocs.isEmpty) return const SizedBox.shrink();
+
+        return Container(
+          height: 22.h,
+          margin: EdgeInsets.symmetric(vertical: 2.h),
+          child: PageView.builder(
+            controller: _pageController,
+            itemBuilder: (context, index) {
+              final data = filteredDocs[index % filteredDocs.length].data() as Map<String, dynamic>;
+              return Container(
+                margin: EdgeInsets.symmetric(horizontal: 4.w),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.network(
+                        data['imageUrl'], 
+                        fit: BoxFit.cover,
+                        cacheWidth: 800, // كاش للبانر
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.black.withOpacity(0.5), Colors.transparent],
+                            begin: Alignment.bottomCenter,
+                          ),
+                        ),
+                        alignment: Alignment.bottomRight,
+                        padding: EdgeInsets.all(4.w),
+                        child: Text(
+                          data['name'] ?? "",
+                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSubCategoriesGrid() {
+    return FutureBuilder<List<CategoryModel>>(
+      future: _subCategoriesFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SliverFillRemaining(child: Center(child: CircularProgressIndicator()));
+        }
+        final subCategories = snapshot.data ?? [];
+
+        return SliverPadding(
+          padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
+          sliver: SliverGrid(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 0.8,
+              crossAxisSpacing: 4.w,
+              mainAxisSpacing: 4.w,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, index) => _SubCategoryCard(
+                category: subCategories[index],
+                mainCategoryId: widget.mainCategoryId,
+                ownerId: widget.ownerId,
+              ),
+              childCount: subCategories.length,
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -275,6 +245,70 @@ class _ConsumerSubCategoryScreenState extends State<ConsumerSubCategoryScreen> {
           if (index == 2) Navigator.pushNamed(context, '/points-loyalty');
           if (index == 3) Navigator.pushNamed(context, '/orders');
         },
+      ),
+    );
+  }
+}
+
+/// ويدجت منفصل للكارت لضمان سلاسة الـ Scroll
+class _SubCategoryCard extends StatelessWidget {
+  final CategoryModel category;
+  final String mainCategoryId;
+  final String ownerId;
+
+  const _SubCategoryCard({
+    required this.category,
+    required this.mainCategoryId,
+    required this.ownerId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).pushNamed(
+        ConsumerProductListScreen.routeName,
+        arguments: {
+          'mainId': mainCategoryId,
+          'subId': category.id,
+          'ownerId': ownerId,
+          'subCategoryName': category.name,
+        },
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10)],
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                child: Image.network(
+                  category.imageUrl,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  cacheWidth: 400, // تحسين الرام
+                ),
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: 1.5.h, horizontal: 2.w),
+              child: Text(
+                category.name,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17, // مقاس متناسق
+                  color: Color(0xFF2D3142),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
