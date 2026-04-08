@@ -8,7 +8,6 @@ import '../../theme/app_theme.dart';
 
 class ConsumerProductListScreen extends StatefulWidget {
   static const routeName = '/product-list';
-
   const ConsumerProductListScreen({super.key});
 
   @override
@@ -20,12 +19,21 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 🎯 استلام البيانات من الـ Navigator Arguments
-    final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-    
+    // 🎯 تأمين استلام البيانات لمنع الشاشة الرصاصي
+    final dynamic rawArgs = ModalRoute.of(context)?.settings.arguments;
+    final Map<String, dynamic> args = (rawArgs is Map<String, dynamic>) ? rawArgs : {};
+
     final String ownerId = args['ownerId'] ?? '';
     final String subId = args['subId'] ?? '';
     final String title = args['subCategoryName'] ?? 'المنتجات';
+
+    // لو مفيش بيانات، بنعرض رسالة بدل ما الشاشة تضرب
+    if (ownerId.isEmpty && subId.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: const Text("المنتجات")),
+        body: const Center(child: Text("برجاء اختيار قسم لعرض منتجاته")),
+      );
+    }
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -44,7 +52,7 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
 
   Widget _buildProductGrid(String ownerId, String subId) {
     return StreamBuilder<QuerySnapshot>(
-      // 1. نجلب عروض التاجر النشطة فقط
+      // نجلب عروض التاجر النشطة
       stream: _db.collection('marketOffer')
           .where('ownerId', isEqualTo: ownerId)
           .where('status', isEqualTo: 'active')
@@ -53,9 +61,9 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        
+
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text("لا توجد منتجات متاحة لهذا القسم"));
+          return const Center(child: Text("لا توجد منتجات متاحة لهذا التاجر"));
         }
 
         final offers = snapshot.data!.docs;
@@ -74,16 +82,17 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
             offerData['offerId'] = offers[index].id;
             final pId = offerData['productId'] ?? '';
 
-            // 2. نجلب بيانات المنتج الأصلي للتحقق من القسم الفرعي (subId)
             return FutureBuilder<DocumentSnapshot>(
               future: _db.collection('products').doc(pId).get(),
               builder: (context, prodSnap) {
                 if (!prodSnap.hasData || !prodSnap.data!.exists) return const SizedBox.shrink();
 
                 final prodData = prodSnap.data!.data() as Map<String, dynamic>;
-                
-                // 3. الفلترة اليدوية لضمان عرض منتجات القسم المختار فقط
-                if (prodData['subId'] != subId) return const SizedBox.shrink();
+
+                // الفلترة لضمان عرض منتجات القسم المختار فقط
+                if (subId.isNotEmpty && prodData['subId'] != subId) {
+                  return const SizedBox.shrink();
+                }
 
                 return _ProductCard(
                   offer: offerData,
@@ -104,8 +113,8 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
         return FloatingActionButton.extended(
           onPressed: () => Navigator.pushNamed(context, '/cart'),
           backgroundColor: AppTheme.primaryGreen,
-          label: Text("سلة المشتريات (${cart.itemCount})", 
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          label: Text("سلة المشتريات (${cart.itemCount})",
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           icon: const Icon(Icons.shopping_basket, color: Colors.white),
         );
       },
@@ -124,12 +133,11 @@ class _ProductCard extends StatelessWidget {
     final cart = Provider.of<CartProvider>(context);
     final units = offer['units'] as List? ?? [];
     final firstUnit = units.isNotEmpty ? units[0] : {'unitName': 'وحدة', 'price': 0};
-    
+
     final double price = (firstUnit['price'] as num).toDouble();
     final String pName = productData['name'] ?? 'منتج';
     final List imgs = productData['imageUrls'] as List? ?? [];
 
-    // إدارة حالة الكمية في السلة
     int quantity = 0;
     var cartItem;
     try {
@@ -151,38 +159,44 @@ class _ProductCard extends StatelessWidget {
             flex: 4,
             child: Padding(
               padding: const EdgeInsets.all(8.0),
-              child: imgs.isNotEmpty 
-                ? Image.network(imgs[0], fit: BoxFit.contain)
-                : const Icon(Icons.image, color: Colors.grey, size: 40),
+              child: imgs.isNotEmpty
+                  ? Image.network(imgs[0], fit: BoxFit.contain)
+                  : const Icon(Icons.image, color: Colors.grey, size: 40),
             ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text(pName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
+            child: Text(pName,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
           ),
-          Text("${firstUnit['unitName']} - $price ج.م", 
-            style: TextStyle(color: AppTheme.primaryGreen, fontSize: 10, fontWeight: FontWeight.bold)),
-          
+          Text("${firstUnit['unitName']} - $price ج.م",
+              style: TextStyle(color: AppTheme.primaryGreen, fontSize: 10, fontWeight: FontWeight.bold)),
           Padding(
             padding: const EdgeInsets.all(8.0),
-            child: quantity == 0 
-              ? ElevatedButton(
-                  onPressed: () => _addToCart(cart, firstUnit, pName, imgs.isNotEmpty ? imgs[0] : ''),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryGreen,
-                    minimumSize: const Size(double.infinity, 35),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            child: quantity == 0
+                ? ElevatedButton(
+                    onPressed: () => _addToCart(cart, firstUnit, pName, imgs.isNotEmpty ? imgs[0] : ''),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryGreen,
+                      minimumSize: const Size(double.infinity, 35),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text("إضافة", style: TextStyle(color: Colors.white)),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      IconButton(
+                          icon: const Icon(Icons.add_circle, color: Colors.green),
+                          onPressed: () => cart.changeQty(cartItem, 1, 'consumer')),
+                      Text("$quantity", style: const TextStyle(fontWeight: FontWeight.bold)),
+                      IconButton(
+                          icon: const Icon(Icons.remove_circle, color: Colors.red),
+                          onPressed: () => cart.changeQty(cartItem, -1, 'consumer')),
+                    ],
                   ),
-                  child: const Text("إضافة", style: TextStyle(color: Colors.white)),
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    IconButton(icon: const Icon(Icons.add_circle, color: Colors.green), onPressed: () => cart.changeQty(cartItem, 1, 'consumer')),
-                    Text("$quantity", style: const TextStyle(fontWeight: FontWeight.bold)),
-                    IconButton(icon: const Icon(Icons.remove_circle, color: Colors.red), onPressed: () => cart.changeQty(cartItem, -1, 'consumer')),
-                  ],
-                ),
           )
         ],
       ),
@@ -199,7 +213,7 @@ class _ProductCard extends StatelessWidget {
       price: (unit['price'] as num).toDouble(),
       unit: unit['unitName'],
       unitIndex: 0,
-      imageUrl: img, 
+      imageUrl: img,
       userRole: 'consumer',
     );
   }
