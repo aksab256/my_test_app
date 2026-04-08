@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'consumer_data_models.dart';
-import 'package:my_test_app/screens/consumer/consumer_category_screen.dart'; 
+// ✅ تم حذف استيراد consumer_category_screen.dart الممسوح
 
 // 1. الشريط الجانبي (Side Menu) - نسخة مؤمنة بـ SafeArea
 class ConsumerSideMenu extends StatelessWidget {
@@ -17,7 +17,6 @@ class ConsumerSideMenu extends StatelessWidget {
       textDirection: TextDirection.rtl,
       child: Drawer(
         child: SafeArea(
-          // 🛡️ SafeArea هنا تضمن عدم تداخل الهيدر مع الكاميرا الأمامية أو الحواف العلوية
           top: true,
           bottom: true,
           child: Column(
@@ -31,7 +30,7 @@ class ConsumerSideMenu extends StatelessWidget {
                     name = data['fullname'] ?? "مستخدِم كسبان";
                   }
                   return UserAccountsDrawerHeader(
-                    margin: EdgeInsets.zero, // لإزالة المسافات الزائدة مع SafeArea
+                    margin: EdgeInsets.zero,
                     decoration: const BoxDecoration(color: Color(0xFF43A047)),
                     currentAccountPicture: const CircleAvatar(
                       backgroundColor: Colors.white,
@@ -62,7 +61,7 @@ class ConsumerSideMenu extends StatelessWidget {
                   if (context.mounted) Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
                 },
               ),
-              const SizedBox(height: 10), // مسافة أمان إضافية في الأسفل
+              const SizedBox(height: 10),
             ],
           ),
         ),
@@ -71,7 +70,7 @@ class ConsumerSideMenu extends StatelessWidget {
   }
 }
 
-// 2. شريط التنقل السفلي (Footer Nav) - نسخة مؤمنة بـ SafeArea للحواف السفلية
+// 2. شريط التنقل السفلي (Footer Nav) - نسخة مؤمنة بـ SafeArea
 class ConsumerFooterNav extends StatelessWidget {
   final int cartCount;
   final int activeIndex;
@@ -80,25 +79,22 @@ class ConsumerFooterNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-
-    // 🛡️ تغليف بـ Container ثم SafeArea لضمان بقاء الشريط فوق شريط السحب في الهواتف الحديثة
     return Container(
-      color: Colors.white, 
+      color: Colors.white,
       child: SafeArea(
-        top: false, // لا نحتاج حماية علوية للشريط السفلي
+        top: false,
         child: BottomNavigationBar(
           currentIndex: activeIndex == -1 ? 0 : activeIndex,
           selectedItemColor: const Color(0xFF43A047),
           unselectedItemColor: Colors.grey,
           type: BottomNavigationBarType.fixed,
           backgroundColor: Colors.white,
-          elevation: 0, // الإيليفيشن يتم من الحاوية الخارجية
+          elevation: 0,
           selectedLabelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
           unselectedLabelStyle: const TextStyle(fontSize: 10, fontFamily: 'Cairo'),
           items: [
             const BottomNavigationBarItem(icon: Icon(Icons.store), label: 'المتجر'),
             const BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'طلباتي'),
-            
             BottomNavigationBarItem(
               icon: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
@@ -109,11 +105,9 @@ class ConsumerFooterNav extends StatelessWidget {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Icon(Icons.radar, color: Colors.grey, size: 28);
                   }
-
                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                     return const Icon(Icons.radar, color: Colors.grey, size: 28);
                   }
-
                   var docs = snapshot.data!.docs.toList();
                   docs.sort((a, b) {
                     Timestamp t1 = a['createdAt'] ?? Timestamp.now();
@@ -124,16 +118,14 @@ class ConsumerFooterNav extends StatelessWidget {
                   final lastOrder = docs.first.data() as Map<String, dynamic>;
                   final String status = (lastOrder['status'] ?? 'pending').toString().toLowerCase().trim();
                   final bool isRated = lastOrder.containsKey('rating');
-                  
-                  final bool isFinished = status.contains('cancel') || 
-                                         status.contains('no_drivers') || 
-                                         status.contains('timeout') ||
-                                         status == 'none' ||
-                                         isRated;
+                  final bool isFinished = status.contains('cancel') ||
+                      status.contains('no_drivers') ||
+                      status.contains('timeout') ||
+                      status == 'none' ||
+                      isRated;
 
                   Color iconColor = Colors.grey;
                   IconData iconData = Icons.radar;
-
                   if (!isFinished && status != 'delivered') {
                     if (status == 'pending') {
                       iconColor = Colors.orange;
@@ -156,14 +148,15 @@ class ConsumerFooterNav extends StatelessWidget {
                       Icon(iconData, color: iconColor, size: 28),
                       if (!isFinished && status != 'delivered' && status != '')
                         Positioned(
-                          top: -2, right: -2,
+                          top: -2,
+                          right: -2,
                           child: Container(
-                            width: 10, height: 10,
+                            width: 10,
+                            height: 10,
                             decoration: BoxDecoration(
-                              color: Colors.red, 
-                              shape: BoxShape.circle, 
-                              border: Border.all(color: Colors.white, width: 1.5)
-                            ),
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 1.5)),
                           ),
                         ),
                     ],
@@ -172,7 +165,6 @@ class ConsumerFooterNav extends StatelessWidget {
               ),
               label: 'تتبع الطلب',
             ),
-
             BottomNavigationBarItem(
               icon: Badge(
                 label: Text(cartCount.toString()),
@@ -185,8 +177,7 @@ class ConsumerFooterNav extends StatelessWidget {
           ],
           onTap: (index) async {
             if (index == activeIndex) return;
-
-            if (index == 2) { 
+            if (index == 2) {
               try {
                 final snap = await FirebaseFirestore.instance
                     .collection('specialRequests')
@@ -200,7 +191,6 @@ class ConsumerFooterNav extends StatelessWidget {
                     Timestamp t2 = b['createdAt'] ?? Timestamp.now();
                     return t2.compareTo(t1);
                   });
-
                   final lastOrder = docs.first.data() as Map<String, dynamic>;
                   final String status = (lastOrder['status'] ?? 'pending').toString().toLowerCase().trim();
                   final bool isRated = lastOrder.containsKey('rating');
@@ -209,7 +199,7 @@ class ConsumerFooterNav extends StatelessWidget {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text("لا توجد طلبات نشطة حالياً لمتابعتها"), 
+                          content: Text("لا توجد طلبات نشطة حالياً لمتابعتها"),
                           backgroundColor: Colors.black87,
                           behavior: SnackBarBehavior.floating,
                           duration: Duration(seconds: 2),
@@ -218,7 +208,6 @@ class ConsumerFooterNav extends StatelessWidget {
                     }
                     return;
                   }
-
                   if (context.mounted) {
                     Navigator.pushNamed(context, '/customerTracking', arguments: docs.first.id);
                   }
@@ -238,7 +227,6 @@ class ConsumerFooterNav extends StatelessWidget {
               }
               return;
             }
-
             final routes = ['/consumerhome', '/consumer-purchases', '', '/cart', '/myDetails'];
             if (index < routes.length && routes[index].isNotEmpty) {
               Navigator.pushNamed(context, routes[index]);
@@ -283,14 +271,15 @@ class ConsumerCategoriesBanner extends StatelessWidget {
           final category = categories[index];
           return GestureDetector(
             onTap: () {
-              Navigator.push(
+              // 🎯 تم التعديل لاستخدام pushNamed المتوافق مع ConsumerSubCategoryScreen
+              Navigator.pushNamed(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => ConsumerCategoryScreen(
-                    mainCategoryId: category.id,
-                    categoryName: category.name,
-                  ),
-                ),
+                '/subcategories',
+                arguments: {
+                  'mainId': category.id,
+                  'ownerId': '', // سيتم تعبئته في الصفحة التالية أو يترك فارغاً حسب الحاجة
+                  'mainCategoryName': category.name,
+                },
               );
             },
             child: Padding(
@@ -298,7 +287,7 @@ class ConsumerCategoriesBanner extends StatelessWidget {
               child: Column(
                 children: [
                   CircleAvatar(
-                    radius: 30, 
+                    radius: 30,
                     backgroundImage: NetworkImage(category.imageUrl),
                     backgroundColor: Colors.grey[200],
                   ),
@@ -313,3 +302,4 @@ class ConsumerCategoriesBanner extends StatelessWidget {
     );
   }
 }
+

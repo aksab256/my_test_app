@@ -1,23 +1,19 @@
-// lib/widgets/promo_slider_widget.dart
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../screens/consumer/consumer_data_models.dart';
-
-// المسارات الصحيحة لنسخة المستهلك (Consumer) لضمان ظهور الشريط السفلي الأخضر
-import '../screens/consumer/consumer_category_screen.dart'; 
-import '../screens/consumer/ConsumerProductListScreen.dart'; 
-import '../screens/consumer/MarketplaceHomeScreen.dart'; 
+// ✅ تم حذف الملف الممسوح واستبداله باللازم
+import '../screens/consumer/ConsumerProductListScreen.dart';
+import '../screens/consumer/MarketplaceHomeScreen.dart';
 
 class PromoSliderWidget extends StatefulWidget {
   final List<ConsumerBanner> banners;
   final double height;
-  final String? currentOwnerId; 
+  final String? currentOwnerId;
 
   const PromoSliderWidget({
-    super.key, 
-    required this.banners, 
+    super.key,
+    required this.banners,
     this.height = 160,
     this.currentOwnerId,
   });
@@ -44,9 +40,9 @@ class _PromoSliderWidgetState extends State<PromoSliderWidget> {
         _currentPage = (_currentPage + 1) % widget.banners.length;
         if (_pageController.hasClients) {
           _pageController.animateToPage(
-            _currentPage, 
-            duration: const Duration(milliseconds: 800), 
-            curve: Curves.easeInOut
+            _currentPage,
+            duration: const Duration(milliseconds: 800),
+            curve: Curves.easeInOut,
           );
         }
       }
@@ -54,8 +50,7 @@ class _PromoSliderWidgetState extends State<PromoSliderWidget> {
   }
 
   void _handleNavigation(ConsumerBanner banner) {
-    // 🎯 الأولوية لـ linkType لأنه الحقل المليء بالبيانات في الفايربيز عندك
-    final String type = banner.linkType ?? banner.targetType ?? banner.link ?? ''; 
+    final String type = banner.linkType ?? banner.targetType ?? banner.link ?? '';
     final String targetId = banner.targetId ?? '';
     final String name = banner.name ?? 'عرض خاص';
 
@@ -64,46 +59,45 @@ class _PromoSliderWidgetState extends State<PromoSliderWidget> {
       return;
     }
 
-    switch (type.toUpperCase()) { 
+    switch (type.toUpperCase()) {
       case 'CATEGORY':
-        Navigator.push(
+        // 🎯 التوجيه لصفحة الأقسام الفرعية بنظام الـ Named Routes
+        Navigator.pushNamed(
           context,
-          MaterialPageRoute(
-            builder: (context) => ConsumerCategoryScreen(
-              mainCategoryId: targetId,
-              categoryName: name,
-            ),
-          ),
+          '/subcategories',
+          arguments: {
+            'mainId': targetId,
+            'ownerId': widget.currentOwnerId ?? '',
+            'mainCategoryName': name,
+          },
         );
         break;
 
       case 'SUB_CATEGORY':
       case 'SUBCATEGORY':
-        // 🎯 التوجيه المباشر لنسخة المستهلك لضمان الشريط السفلي الصحيح
-        // نمرر targetId ليكون هو subCategoryId الذي يبحث عنه الجريد
-        Navigator.push(
+        // 🎯 التوجيه لصفحة المنتجات بالسيستم الجديد (Arguments)
+        Navigator.pushNamed(
           context,
-          MaterialPageRoute(
-            builder: (context) => ConsumerProductListScreen(
-              mainCategoryId: '', 
-              subCategoryId: targetId,
-              manufacturerId: null,
-            ),
-          ),
+          ConsumerProductListScreen.routeName,
+          arguments: {
+            'mainId': '', 
+            'subId': targetId,
+            'ownerId': widget.currentOwnerId ?? '',
+            'subCategoryName': name,
+          },
         );
         break;
 
       case 'RETAILER':
-      case 'SELLER': 
+      case 'SELLER':
       case 'STORE':
-        Navigator.push(
+        Navigator.pushNamed(
           context,
-          MaterialPageRoute(
-            builder: (context) => MarketplaceHomeScreen(
-              currentStoreId: targetId,
-              currentStoreName: name,
-            ),
-          ),
+          MarketplaceHomeScreen.routeName,
+          arguments: {
+            'storeId': targetId,
+            'storeName': name,
+          },
         );
         break;
 
@@ -122,7 +116,7 @@ class _PromoSliderWidgetState extends State<PromoSliderWidget> {
   @override
   Widget build(BuildContext context) {
     if (widget.banners.isEmpty) return const SizedBox.shrink();
-    
+
     return Column(
       children: [
         SizedBox(
@@ -178,3 +172,4 @@ class _PromoSliderWidgetState extends State<PromoSliderWidget> {
     );
   }
 }
+
