@@ -229,16 +229,17 @@ class MyApp extends StatelessWidget {
               );
             }
             if (settings.name == ConsumerProductListScreen.routeName) {
-              final args = settings.arguments as Map<String, dynamic>?;
-              return MaterialPageRoute(
-                builder: (context) => ConsumerProductListScreen(
-                  ownerId: args?['ownerId'] ?? '',
-                  mainId: args?['mainId'] ?? '',
-                  subId: args?['subId'] ?? '',
-                  subCategoryName: args?['subCategoryName'] ?? 'المنتجات',
-                ),
-              );
-            }
+  final args = settings.arguments as Map<String, dynamic>?;
+  return MaterialPageRoute(
+    builder: (context) => ConsumerProductListScreen(
+      ownerId: args?['ownerId'] ?? '',
+      mainCategoryId: args?['mainId'] ?? '', // تم التغيير لـ mainCategoryId
+      subCategoryId: args?['subId'] ?? '',   // تم التغيير لـ subCategoryId
+      subCategoryName: args?['subCategoryName'] ?? 'المنتجات',
+    ),
+  );
+}
+
             if (settings.name == '/productDetails') {
               final args = settings.arguments as Map<String, dynamic>?;
               return MaterialPageRoute(
