@@ -8,7 +8,7 @@ import '../../theme/app_theme.dart';
 
 class ConsumerProductListScreen extends StatefulWidget {
   final String mainCategoryId;
-  final String subCategoryId; // دي اللي هنقارنها بـ subId في كولكشن المنتجات
+  final String subCategoryId;
   final String? ownerId;
   final String? subCategoryName;
   final String? manufacturerId;
@@ -38,7 +38,7 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
       child: Scaffold(
         backgroundColor: const Color(0xFFFBFDFF),
         appBar: BuyerProductHeader(
-          title: widget.subCategoryName ?? 'عروض المتجر',
+          title: widget.subCategoryName ?? 'المنتجات',
           isLoading: false,
         ),
         floatingActionButton: _buildFloatingCart(),
@@ -49,7 +49,7 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
   }
 
   Widget _buildProductGrid() {
-    // 1️⃣ هنجيب كل عروض التاجر ده الأول
+    // 1️⃣ جلب عروض التاجر فقط بدون تعقيد في الـ Query
     return StreamBuilder<QuerySnapshot>(
       stream: _db.collection('marketOffer')
           .where('ownerId', isEqualTo: widget.ownerId)
@@ -60,43 +60,43 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text("لا توجد عروض لهذا التاجر حالياً"));
+          return const Center(child: Text("لا توجد عروض متاحة لهذا التاجر"));
         }
 
-        final allOffers = snapshot.data!.docs;
+        final offers = snapshot.data!.docs;
 
-        // 2️⃣ نستخدم ListView أو GridView مع FutureBuilder لكل منتج للتحقق من القسم
         return GridView.builder(
           padding: EdgeInsets.fromLTRB(3.w, 2.h, 3.w, 15.h),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            childAspectRatio: 0.62,
+            childAspectRatio: 0.60,
             crossAxisSpacing: 3.w,
             mainAxisSpacing: 3.w,
           ),
-          itemCount: allOffers.length,
+          itemCount: offers.length,
           itemBuilder: (context, index) {
-            final offerData = allOffers[index].data() as Map<String, dynamic>;
-            offerData['offerId'] = allOffers[index].id;
-            final productId = offerData['productId'] ?? '';
+            final offerData = offers[index].data() as Map<String, dynamic>;
+            offerData['offerId'] = offers[index].id;
+            final pId = offerData['productId'] ?? '';
 
-            // 3️⃣ هنا اللعبة: نتحقق إذا كان المنتج يتبع القسم المطلوب
+            // 2️⃣ جلب بيانات المنتج لكل عرض بشكل منفصل
             return FutureBuilder<DocumentSnapshot>(
-              future: _db.collection('products').doc(productId).get(),
+              future: _db.collection('products').doc(pId).get(),
               builder: (context, prodSnap) {
-                if (!prodSnap.hasData || !prodSnap.data!.exists) return const SizedBox.shrink();
-                
+                if (!prodSnap.hasData || !prodSnap.data!.exists) {
+                   return const SizedBox.shrink(); 
+                }
+
                 final prodData = prodSnap.data!.data() as Map<String, dynamic>;
                 
-                // الفلترة بالقسم الفرعي (subId في كولكشن products)
+                // 3️⃣ الفلترة بالقسم الفرعي يدوياً (subId)
                 if (prodData['subId'] != widget.subCategoryId) {
-                  return const SizedBox.shrink(); // لو مش نفس القسم، أخفيه
+                  return const SizedBox.shrink();
                 }
 
                 return _ProductCard(
-                  offer: offerData, 
-                  productImageUrl: (prodData['imageUrls'] as List?)?.first ?? '',
-                  productName: prodData['name'] ?? 'منتج',
+                  offer: offerData,
+                  productData: prodData,
                 );
               },
             );
@@ -113,9 +113,8 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
         return FloatingActionButton.extended(
           onPressed: () => Navigator.pushNamed(context, '/cart'),
           backgroundColor: AppTheme.primaryGreen,
-          label: Text("عرض السلة (${cart.itemCount})", 
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          icon: const Icon(Icons.shopping_basket, color: Colors.white),
+          label: Text("سلة المشتريات (${cart.itemCount})", style: const TextStyle(color: Colors.white)),
+          icon: const Icon(Icons.shopping_cart, color: Colors.white),
         );
       },
     );
@@ -124,37 +123,39 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
 
 class _ProductCard extends StatelessWidget {
   final Map<String, dynamic> offer;
-  final String productImageUrl;
-  final String productName;
+  final Map<String, dynamic> productData;
 
-  const _ProductCard({
-    required this.offer, 
-    required this.productImageUrl,
-    required this.productName,
-  });
+  const _ProductCard({required this.offer, required this.productData});
 
   @override
   Widget build(BuildContext context) {
     final cart = Provider.of<CartProvider>(context);
+    
+    // بيانات العرض
     final List units = offer['units'] ?? [];
     final firstUnit = units.isNotEmpty ? units[0] : {'unitName': 'وحدة', 'price': 0};
     final double price = (firstUnit['price'] as num).toDouble();
 
-    // البحث عن المنتج في السلة
+    // بيانات المنتج (الصورة والاسم)
+    final String name = productData['name'] ?? 'منتج';
+    final List imageUrls = productData['imageUrls'] ?? [];
+    final String img = imageUrls.isNotEmpty ? imageUrls[0] : '';
+
+    // حساب الكمية في السلة
+    int quantity = 0;
     var cartItem;
     try {
       cartItem = cart.sellersOrders.values
-          .expand((seller) => seller.items)
-          .firstWhere((item) => item.offerId == offer['offerId']);
-    } catch (_) { cartItem = null; }
-    
-    final int quantity = cartItem != null ? cartItem.quantity : 0;
+          .expand((s) => s.items)
+          .firstWhere((i) => i.offerId == offer['offerId']);
+      quantity = cartItem.quantity;
+    } catch (_) {}
 
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)],
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
       ),
       child: Column(
         children: [
@@ -162,60 +163,50 @@ class _ProductCard extends StatelessWidget {
             flex: 4,
             child: Padding(
               padding: const EdgeInsets.all(8.0),
-              child: productImageUrl.isNotEmpty 
-                ? Image.network(productImageUrl, fit: BoxFit.contain)
-                : const Icon(Icons.image, color: Colors.grey),
+              child: img.isNotEmpty 
+                ? Image.network(img, fit: BoxFit.contain)
+                : const Icon(Icons.image_not_supported, color: Colors.grey),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4.0),
-            child: Column(
-              children: [
-                Text(productName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11), maxLines: 1),
-                Text("${firstUnit['unitName']}", style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                Text("$price ج.م", style: TextStyle(color: AppTheme.primaryGreen, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
+          Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12), maxLines: 1),
+          Text("${firstUnit['unitName']} - $price ج.م", style: TextStyle(color: AppTheme.primaryGreen, fontSize: 11)),
+          
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: quantity == 0 
-              ? ElevatedButton(
-                  onPressed: () => _addToCart(cart, firstUnit),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryGreen,
-                    minimumSize: const Size(double.infinity, 32),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: const Text("إضافة", style: TextStyle(color: Colors.white, fontSize: 12)),
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    IconButton(icon: const Icon(Icons.add_circle, color: Colors.green, size: 28), 
-                      onPressed: () => cart.changeQty(cartItem, 1, 'consumer')),
-                    Text("$quantity", style: const TextStyle(fontWeight: FontWeight.bold)),
-                    IconButton(icon: const Icon(Icons.remove_circle, color: Colors.red, size: 28), 
-                      onPressed: () => cart.changeQty(cartItem, -1, 'consumer')),
-                  ],
+            ? ElevatedButton(
+                onPressed: () => _addToCart(cart, firstUnit, name, img),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryGreen,
+                  minimumSize: const Size(double.infinity, 35),
                 ),
+                child: const Text("إضافة", style: TextStyle(color: Colors.white)),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  IconButton(icon: const Icon(Icons.add_circle, color: Colors.green), onPressed: () => cart.changeQty(cartItem, 1, 'consumer')),
+                  Text("$quantity", style: const TextStyle(fontWeight: FontWeight.bold)),
+                  IconButton(icon: const Icon(Icons.remove_circle, color: Colors.red), onPressed: () => cart.changeQty(cartItem, -1, 'consumer')),
+                ],
+              ),
           )
         ],
       ),
     );
   }
 
-  void _addToCart(CartProvider cart, dynamic unit) {
+  void _addToCart(CartProvider cart, dynamic unit, String name, String img) {
     cart.addItemToCart(
       offerId: offer['offerId'],
       productId: offer['productId'],
       sellerId: offer['ownerId'],
-      sellerName: offer['supermarketName'] ?? 'التاجر',
-      name: productName,
+      sellerName: offer['supermarketName'] ?? 'تاجر',
+      name: name,
       price: (unit['price'] as num).toDouble(),
       unit: unit['unitName'],
       unitIndex: 0,
-      imageUrl: productImageUrl, 
+      imageUrl: img, 
       userRole: 'consumer',
     );
   }
