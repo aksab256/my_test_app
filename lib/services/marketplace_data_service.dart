@@ -8,10 +8,11 @@ import 'package:my_test_app/models/offer_model.dart';
 class MarketplaceDataService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // 1. جلب البانرات لمتجر معين
+  // 1. جلب البانرات لمتجر معين (بدون تغيير)
   Future<List<BannerModel>> fetchBanners(String ownerId) async {
     try {
-      final bannersQuery = await _db.collection('consumerBanners')
+      final bannersQuery = await _db
+          .collection('consumerBanners')
           .where('status', isEqualTo: 'active')
           .where('ownerId', isEqualTo: ownerId)
           .orderBy('order', descending: false)
@@ -33,55 +34,43 @@ class MarketplaceDataService {
     }
   }
 
-  // 2. جلب الأقسام بناءً على عروض المتجر
+  // 2. [تعديل الطلقة 🚀] جلب الأقسام بناءً على عروض المتجر مباشرة
   Future<List<CategoryModel>> fetchCategoriesByOffers(String ownerId) async {
     try {
-      final offersSnapshot = await _db.collection('marketOffer')
+      // بنجيب العروض اللي فيها mainCategoryId محشور جواها
+      final offersSnapshot = await _db
+          .collection('marketOffer')
           .where('ownerId', isEqualTo: ownerId)
+          .where('status', isEqualTo: 'active')
           .get();
 
       if (offersSnapshot.docs.isEmpty) return [];
 
-      final productIds = offersSnapshot.docs
-          .map((doc) => doc.data()['productId'] as String?)
-          .where((id) => id != null)
-          .toSet();
-
-      if (productIds.isEmpty) return [];
-
-      final productsFutures = productIds.map((id) => _db.collection('products').doc(id!).get());
-      final productsSnapshots = await Future.wait(productsFutures);
-
-      final mainCategoryIds = productsSnapshots
-          .where((doc) => doc.exists)
-          .map((doc) => doc.data()?['mainId'] as String?)
-          .where((id) => id != null)
+      // سحب المعرفات مباشرة من العرض (وفرنا لفة كولكشن products)
+      final mainCategoryIds = offersSnapshot.docs
+          .map((doc) => doc.data() as Map<String, dynamic>)
+          .where((data) => data.containsKey('mainCategoryId'))
+          .map((data) => data['mainCategoryId'] as String)
           .toSet();
 
       if (mainCategoryIds.isEmpty) return [];
 
-      final categoriesFutures = mainCategoryIds.map((id) => _db.collection('mainCategory').doc(id!).get());
-      final categoriesSnapshots = await Future.wait(categoriesFutures);
+      // جلب بيانات الأقسام في طلب واحد للسيرفر
+      final categoriesSnapshots = await _db
+          .collection('mainCategory')
+          .where(FieldPath.documentId, whereIn: mainCategoryIds.toList())
+          .get();
 
-      final List<CategoryModel> activeCategories = [];
-
-      for (var docSnap in categoriesSnapshots) {
-        if (docSnap.exists) {
-          final data = docSnap.data();
-          final statusString = data?['status']?.toString().toLowerCase();
-          final isActive = statusString == 'active';
-
-          if (isActive) {
-            activeCategories.add(CategoryModel(
-              id: docSnap.id,
-              name: data?['name'] ?? 'قسم غير مسمى',
-              imageUrl: data?['imageUrl'] ?? '',
-              order: (data?['order'] as num?)?.toInt() ?? 0,
-              status: isActive,
-            ));
-          }
-        }
-      }
+      final List<CategoryModel> activeCategories = categoriesSnapshots.docs.map((docSnap) {
+        final data = docSnap.data();
+        return CategoryModel(
+          id: docSnap.id,
+          name: data['name'] ?? 'قسم غير مسمى',
+          imageUrl: data['imageUrl'] ?? '',
+          order: (data['order'] as num?)?.toInt() ?? 0,
+          status: data['status']?.toString().toLowerCase() == 'active',
+        );
+      }).where((cat) => cat.status).toList();
 
       activeCategories.sort((a, b) => a.order.compareTo(b.order));
       return activeCategories;
@@ -90,58 +79,42 @@ class MarketplaceDataService {
     }
   }
 
-  // 3. جلب الأقسام الفرعية (SubCategories) بناءً على عروض المتجر والقسم الرئيسي
+  // 3. [تعديل الطلقة 🚀] جلب الأقسام الفرعية بناءً على عروض المتجر والقسم الرئيسي
   Future<List<CategoryModel>> fetchSubCategoriesByOffers(String mainCategoryId, String ownerId) async {
     try {
-      final offersSnapshot = await _db.collection('marketOffer')
+      final offersSnapshot = await _db
+          .collection('marketOffer')
           .where('ownerId', isEqualTo: ownerId)
+          .where('mainCategoryId', isEqualTo: mainCategoryId)
+          .where('status', isEqualTo: 'active')
           .get();
 
       if (offersSnapshot.docs.isEmpty) return [];
 
-      final productIds = offersSnapshot.docs
-          .map((doc) => doc.data()['productId'] as String?)
-          .where((id) => id != null)
+      // سحب معرف القسم الفرعي مباشرة من العرض
+      final subCategoryIds = offersSnapshot.docs
+          .map((doc) => doc.data() as Map<String, dynamic>)
+          .where((data) => data.containsKey('subCategoryId'))
+          .map((data) => data['subCategoryId'] as String)
           .toSet();
-      if (productIds.isEmpty) return [];
-
-      final productDocsPromises = productIds.map((id) => _db.collection('products').doc(id!).get());
-      final productDocs = await Future.wait(productDocsPromises);
-
-      final subCategoryIds = <String>{};
-      for (var productDoc in productDocs) {
-        if (productDoc.exists) {
-          final productData = productDoc.data();
-          if (productData?['mainId'] == mainCategoryId && productData?['subId'] != null) {
-            subCategoryIds.add(productData!['subId'] as String);
-          }
-        }
-      }
 
       if (subCategoryIds.isEmpty) return [];
 
-      final subCategoriesPromises = subCategoryIds.map((id) => _db.collection('subCategory').doc(id).get());
-      final subCategoriesDocs = await Future.wait(subCategoriesPromises);
+      final subCategoriesDocs = await _db
+          .collection('subCategory')
+          .where(FieldPath.documentId, whereIn: subCategoryIds.toList())
+          .get();
 
-      final List<CategoryModel> activeSubCategories = [];
-
-      for (var docSnap in subCategoriesDocs) {
-        if (docSnap.exists) {
-          final data = docSnap.data();
-          final statusString = data?['status']?.toString().toLowerCase();
-          final isActive = statusString == 'active';
-
-          if (isActive) {
-            activeSubCategories.add(CategoryModel(
-              id: docSnap.id,
-              name: data?['name'] ?? 'قسم فرعي غير مسمى',
-              imageUrl: data?['imageUrl'] ?? '',
-              order: (data?['order'] as num?)?.toInt() ?? 0,
-              status: isActive,
-            ));
-          }
-        }
-      }
+      final List<CategoryModel> activeSubCategories = subCategoriesDocs.docs.map((docSnap) {
+        final data = docSnap.data();
+        return CategoryModel(
+          id: docSnap.id,
+          name: data['name'] ?? 'قسم فرعي غير مسمى',
+          imageUrl: data['imageUrl'] ?? '',
+          order: (data['order'] as num?)?.toInt() ?? 0,
+          status: data['status']?.toString().toLowerCase() == 'active',
+        );
+      }).where((sub) => sub.status).toList();
 
       activeSubCategories.sort((a, b) => a.order.compareTo(b.order));
       return activeSubCategories;
@@ -150,93 +123,70 @@ class MarketplaceDataService {
     }
   }
 
-  // 4. جلب المنتجات والعروض حسب القسم الفرعي والمتجر
+  // 4. جلب المنتجات والعروض (تم تحسين الاستعلام)
   Future<List<Map<String, dynamic>>> fetchProductsAndOffersBySubCategory({
     required String ownerId,
     required String mainId,
     required String subId,
   }) async {
     try {
-      final offersSnapshot = await _db.collection('marketOffer')
+      final offersSnapshot = await _db
+          .collection('marketOffer')
           .where('ownerId', isEqualTo: ownerId)
+          .where('mainCategoryId', isEqualTo: mainId)
+          .where('subCategoryId', isEqualTo: subId)
+          .where('status', isEqualTo: 'active')
           .get();
 
       if (offersSnapshot.docs.isEmpty) return [];
 
-      final productIds = offersSnapshot.docs
-          .map((doc) => doc.data()['productId'] as String?)
-          .where((id) => id != null)
-          .toSet();
-      if (productIds.isEmpty) return [];
-
-      final productsQuery = await _db.collection('products')
-          .where('mainId', isEqualTo: mainId)
-          .where('subId', isEqualTo: subId)
-          .where(FieldPath.documentId, whereIn: productIds.toList())
-          .get();
-
+      // هنا نقدر نعرض المنتجات فوراً من بيانات العرض لو حابب، 
+      // بس هنخلي الهيكل ده شغال لو احتجت بيانات تفصيلية زيادة من كولكشن products
       final List<Map<String, dynamic>> results = [];
-      for (var productDoc in productsQuery.docs) {
-        final productId = productDoc.id;
-        final productData = productDoc.data();
-
-        final offerDoc = offersSnapshot.docs.firstWhere(
-          (doc) => doc.data()['productId'] == productId,
-          orElse: () => throw Exception('Offer not found for product $productId'),
-        );
-
-        final offerModel = ProductOfferModel.fromFirestore(offerDoc.data(), offerDoc.id);
-
+      for (var offerDoc in offersSnapshot.docs) {
+        final offerData = offerDoc.data();
+        
+        // استخدام البيانات المسطحة اللي خزنّاها في العرض (الاسم والصورة)
         final productModel = ProductModel(
-          id: productId,
-          name: productData['name'] ?? 'منتج غير مسمى',
-          mainCategoryId: productData['mainId'],
-          subCategoryId: productData['subId'],
-          imageUrls: List<String>.from(productData['imageUrls'] ?? []),
-          displayPrice: (productData['displayPrice'] as num?)?.toDouble(),
-          isAvailable: productData['isAvailable'] ?? true,
+          id: offerData['productId'],
+          name: offerData['productName'] ?? 'منتج غير مسمى',
+          mainCategoryId: offerData['mainCategoryId'],
+          subCategoryId: offerData['subCategoryId'],
+          imageUrls: [offerData['productImage'] ?? ''],
+          displayPrice: 0.0, // الأسعار موجودة في الـ units داخل الـ offer
+          isAvailable: true,
         );
+
+        final offerModel = ProductOfferModel.fromFirestore(offerData, offerDoc.id);
 
         results.add({
           'product': productModel,
           'offer': offerModel,
         });
       }
-
       return results;
     } catch (e) {
       throw Exception('فشل جلب المنتجات والعروض: $e');
     }
   }
 
-  // 🟢 5. [التعديل الموحد]: جلب اسم البائع/المتجر الموثوق به من المصدر الصحيح (Consumer أو Buyer) 🟢
+  // 5. جلب اسم البائع (بدون تغيير)
   Future<String> fetchSupermarketNameById(String ownerId) async {
-    // 1. محاولة البحث في مجموعة المُستهلكين (deliverySupermarkets)
     try {
       final docSnap = await _db.collection('deliverySupermarkets').doc(ownerId).get();
       if (docSnap.exists) {
         final data = docSnap.data();
-        // 🟢 اسم المتجر للمستهلك
         return data?['supermarketName'] as String? ?? 'بائع (سوبر ماركت)';
       }
-    } catch (e) {
-      // تجاهل ومتابعة البحث
-    }
-
-    // 2. محاولة البحث في مجموعة المُشترين/الموردين (sellers)
+    } catch (e) {}
     try {
       final docSnap = await _db.collection('sellers').doc(ownerId).get();
       if (docSnap.exists) {
         final data = docSnap.data();
-        // 💡 اسم البائع للمشتري/المورد (افتراض أن الحقل هو 'name')
-        return data?['name'] as String? ?? 'بائع (مورد)'; 
+        return data?['name'] as String? ?? 'بائع (مورد)';
       }
-    } catch (e) {
-      // تجاهل ومتابعة البحث
-    }
-
-    // 3. فشل العثور على أي مصدر
-    throw Exception('فشل جلب اسم البائع للمعرف $ownerId: غير موجود في أي مجموعة موثوقة.');
+    } catch (e) {}
+    throw Exception('فشل جلب اسم البائع للمعرف $ownerId');
   }
 }
 

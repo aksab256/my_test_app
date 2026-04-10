@@ -5,7 +5,7 @@ import 'package:sizer/sizer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
 import 'package:my_test_app/widgets/buyer_product_header.dart';
-import 'package:my_test_app/screens/consumer/consumer_widgets.dart'; 
+import 'package:my_test_app/screens/consumer/consumer_widgets.dart';
 import '../../theme/app_theme.dart';
 
 class ConsumerProductListScreen extends StatefulWidget {
@@ -39,11 +39,10 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
         body: SafeArea(
           child: _buildProductGrid(ownerId, subId),
         ),
-        // 🎯 الشريط السفلي مع ضبط الأيقونات (activeIndex: -1 عشان ميبقاش فيه زرار منور ع الفاضي)
         bottomNavigationBar: Consumer<CartProvider>(
           builder: (context, cart, _) => ConsumerFooterNav(
             cartCount: cart.itemCount,
-            activeIndex: -1, 
+            activeIndex: -1,
           ),
         ),
         floatingActionButton: _buildFloatingCart(),
@@ -53,9 +52,11 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
   }
 
   Widget _buildProductGrid(String ownerId, String subId) {
+    // 🚀 تم استبدال الـ FutureBuilder بفلترة مباشرة من الـ Stream لسرعة خرافية
     return StreamBuilder<QuerySnapshot>(
       stream: _db.collection('marketOffer')
           .where('ownerId', isEqualTo: ownerId)
+          .where('subCategoryId', isEqualTo: subId) // 🎯 فلترة مباشرة بالقسم الفرعي
           .where('status', isEqualTo: 'active')
           .snapshots(),
       builder: (context, snapshot) {
@@ -67,61 +68,33 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
           return _buildEmptyState();
         }
 
-        // 🛠️ الفلترة المسبقة لمنع الأماكن الفاضية في الـ Grid
-        return FutureBuilder<List<Map<String, dynamic>>>(
-          future: _filterOffers(snapshot.data!.docs, subId),
-          builder: (context, filteredSnapshot) {
-            if (filteredSnapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
+        final docs = snapshot.data!.docs;
 
-            final finalOffers = filteredSnapshot.data ?? [];
+        return GridView.builder(
+          padding: EdgeInsets.fromLTRB(3.w, 2.h, 3.w, 15.h),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 0.68,
+            crossAxisSpacing: 3.w,
+            mainAxisSpacing: 3.w,
+          ),
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final offerData = docs[index].data() as Map<String, dynamic>;
+            offerData['offerId'] = docs[index].id;
 
-            if (finalOffers.isEmpty) {
-              return _buildEmptyState();
-            }
-
-            return GridView.builder(
-              padding: EdgeInsets.fromLTRB(3.w, 2.h, 3.w, 15.h),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 0.68,
-                crossAxisSpacing: 3.w,
-                mainAxisSpacing: 3.w,
-              ),
-              itemCount: finalOffers.length,
-              itemBuilder: (context, index) {
-                final item = finalOffers[index];
-                return _ProductCard(
-                  offer: item['offer'],
-                  productData: item['product'],
-                );
+            // 🎯 نستخدم البيانات المحشورة في العرض مباشرة لإلغاء طلبات السيرفر المتكررة
+            return _ProductCard(
+              offer: offerData,
+              productData: {
+                'name': offerData['productName'] ?? 'منتج',
+                'imageUrls': [offerData['productImage'] ?? ''],
               },
             );
           },
         );
       },
     );
-  }
-
-  // 🎯 دالة الفلترة: بتجيب بيانات المنتج وتشيك على الـ subId قبل ما ترسم الـ Grid
-  Future<List<Map<String, dynamic>>> _filterOffers(List<QueryDocumentSnapshot> docs, String subId) async {
-    List<Map<String, dynamic>> results = [];
-    for (var doc in docs) {
-      final offerData = doc.data() as Map<String, dynamic>;
-      offerData['offerId'] = doc.id;
-      final pId = offerData['productId'] ?? '';
-
-      final prodSnap = await _db.collection('products').doc(pId).get();
-      if (prodSnap.exists) {
-        final prodData = prodSnap.data() as Map<String, dynamic>;
-        // شرط الفلترة: لو الـ subId مطابق أو لو الـ subId المطلوب فاضي (عرض الكل)
-        if (subId.isEmpty || prodData['subId'] == subId) {
-          results.add({'offer': offerData, 'product': prodData});
-        }
-      }
-    }
-    return results;
   }
 
   Widget _buildEmptyState() {
@@ -131,8 +104,8 @@ class _ConsumerProductListScreenState extends State<ConsumerProductListScreen> {
         children: [
           Icon(Icons.category_outlined, size: 70, color: Colors.grey[300]),
           const SizedBox(height: 15),
-          const Text("لا توجد منتجات متاحة في هذا القسم حالياً", 
-            style: TextStyle(color: Colors.grey, fontSize: 14)),
+          const Text("لا توجد منتجات متاحة في هذا القسم حالياً",
+              style: TextStyle(color: Colors.grey, fontSize: 14)),
         ],
       ),
     );
@@ -166,8 +139,8 @@ class _ProductCard extends StatelessWidget {
     final units = offer['units'] as List? ?? [];
     final firstUnit = units.isNotEmpty ? units[0] : {'unitName': 'وحدة', 'price': 0};
     final double price = (firstUnit['price'] as num).toDouble();
-    final String pName = productData['name'] ?? 'منتج';
-    final List imgs = productData['imageUrls'] as List? ?? [];
+    final String pName = productData['name'];
+    final List imgs = productData['imageUrls'];
 
     int quantity = 0;
     var cartItem;
@@ -192,7 +165,7 @@ class _ProductCard extends StatelessWidget {
               padding: const EdgeInsets.all(8.0),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: imgs.isNotEmpty
+                child: imgs.isNotEmpty && imgs[0] != ''
                     ? CachedNetworkImage(
                         imageUrl: imgs[0],
                         fit: BoxFit.contain,
@@ -213,7 +186,8 @@ class _ProductCard extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          Text("$price ج.م", style: TextStyle(color: AppTheme.primaryGreen, fontWeight: FontWeight.w900, fontSize: 14)),
+          Text("$price ج.م",
+              style: TextStyle(color: AppTheme.primaryGreen, fontWeight: FontWeight.w900, fontSize: 14)),
           Text(firstUnit['unitName'], style: const TextStyle(color: Colors.grey, fontSize: 10)),
           const SizedBox(height: 8),
           Padding(
@@ -225,7 +199,8 @@ class _ProductCard extends StatelessWidget {
                       height: 35,
                       width: double.infinity,
                       decoration: BoxDecoration(color: AppTheme.primaryGreen, borderRadius: BorderRadius.circular(8)),
-                      child: const Center(child: Text("إضافة", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                      child: const Center(
+                          child: Text("إضافة", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                     ),
                   )
                 : Row(
