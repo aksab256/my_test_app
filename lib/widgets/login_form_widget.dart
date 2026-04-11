@@ -1,16 +1,11 @@
-// lib/widgets/login_form_widget.dart
 import 'package:flutter/material.dart';
-import 'package:my_test_app/helpers/auth_service.dart';
-import 'package:my_test_app/screens/forgot_password_screen.dart';
-import 'package:my_test_app/services/user_session.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:math'; // لتوليد الـ OTP
-import 'package:provider/provider.dart';
-import 'package:my_test_app/providers/buyer_data_provider.dart';
+import 'dart:math';
+import 'package:my_test_app/models/logged_user.dart';
+import 'package:my_test_app/screens/otp_verification_screen.dart';
+import 'package:my_test_app/screens/forgot_password_screen.dart';
 
 class LoginFormWidget extends StatefulWidget {
   const LoginFormWidget({super.key});
@@ -27,7 +22,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   String? _errorMessage;
   final Color primaryGreen = const Color(0xff28a745);
 
-  // --- دالة إرسال الـ OTP التجريبي (بيئة الاختبار المجانية 5000 رسالة) ---
   Future<void> _initiateOtpLogin() async {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
@@ -39,35 +33,65 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
     try {
       String phoneClean = _phone.trim();
-      // توليد كود من 6 أرقام
-      String generatedOtp = (Random().nextInt(900000) + 100000).toString();
+      
+      // ✅ 1. توليد كود من 4 أرقام ليطابق مربعات صفحة الـ OTP
+      String generatedOtp = (Random().nextInt(9000) + 1000).toString();
 
-      // إعدادات الـ API (استخدم البيانات من صورك - environment: 2)
-      final url = Uri.parse("https://smsmisr.com/api/OTP/");
-      final response = await http.post(url, body: {
-        "environment": "2", // وضع الاختبار المجاني
-        "username": "اكتب_يوزر_الـ_API_هنا", 
-        "password": "اكتب_باسورد_الـ_API_هنا",
-        "sender": "اكتب_التوكن_الأحمر_هنا", 
-        "mobile": "20$phoneClean",
-        "template": "اكتب_التوكن_الأزرق_هنا",
-        "otp": generatedOtp,
-      });
+      // ✅ 2. جلب بيانات المستخدم من Firestore لضمان وجود الحساب
+      final userQuery = await FirebaseFirestore.instance
+          .collection('consumers')
+          .where('phone', isEqualTo: phoneClean)
+          .get();
 
-      debugPrint("SMS Misr Response: ${response.body}");
-
-      if (response.statusCode == 200) {
-        if (!mounted) return;
-        
-        // الانتقال لصفحة التأكيد (سنقوم بإنشائها) وتمرير البيانات
-        Navigator.of(context).pushNamed('/otp_verification', arguments: {
-          'phone': phoneClean,
-          'password': _password,
-          'otpCode': generatedOtp, // الكود اللي اتبعت عشان نقارنه هناك
-        });
-      } else {
-        setState(() => _errorMessage = "فشل في التواصل مع مزود الخدمة");
+      if (userQuery.docs.isEmpty) {
+        setState(() => _errorMessage = "هذا الرقم غير مسجل لدينا");
+        return;
       }
+
+      final userData = userQuery.docs.first.data();
+      final loggedInUser = LoggedInUser(
+        id: userQuery.docs.first.id,
+        fullname: userData['fullname'] ?? 'مستخدم',
+        role: userData['role'] ?? 'consumer',
+        phone: phoneClean,
+      );
+
+      // ✅ 3. محاولة الاتصال بـ SMS Misr (حتى لو مفيش رصيد)
+      try {
+        final url = Uri.parse("https://smsmisr.com/api/OTP/");
+        await http.post(url, body: {
+          "environment": "2", // وضع الاختبار
+          "username": "YOUR_USERNAME", // استبدلها ببياناتك
+          "password": "YOUR_PASSWORD", // استبدلها ببياناتك
+          "sender": "YOUR_SENDER",
+          "mobile": "20$phoneClean",
+          "template": "YOUR_TEMPLATE",
+          "otp": generatedOtp,
+        });
+      } catch (e) {
+        debugPrint("SMS API Error (Ignored for testing): $e");
+      }
+
+      if (!mounted) return;
+
+      // ✅ 4. إظهار الكود للمستخدم في رسالة (SnackBar) لأنه مفيش SMS هتوصل
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('وضع الاختبار: كود التحقق هو $generatedOtp'),
+          duration: const Duration(seconds: 10),
+          backgroundColor: primaryGreen,
+        ),
+      );
+
+      // ✅ 5. الانتقال لصفحة الـ OTP بالبيانات الصحيحة
+      Navigator.of(context).pushNamed(
+        OtpVerificationScreen.routeName,
+        arguments: {
+          'otp': generatedOtp, // الكود اللي هيطابق هناك
+          'user': loggedInUser, // بيانات اليوزر عشان الجلسة
+        },
+      );
+
     } catch (e) {
       debugPrint("OTP Error: $e");
       setState(() => _errorMessage = "خطأ تقني في إرسال الكود");
@@ -100,7 +124,9 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (context) => const ForgotPasswordScreen())),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
+              ),
               child: Text('نسيت كلمة المرور؟', style: TextStyle(color: primaryGreen)),
             ),
           ),
@@ -109,7 +135,11 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           if (_errorMessage != null)
             Padding(
               padding: const EdgeInsets.only(top: 10),
-              child: Text(_errorMessage!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              child: Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+              ),
             ),
         ],
       ),
@@ -125,7 +155,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         gradient: LinearGradient(colors: [primaryGreen, const Color(0xff1e7e34)]),
       ),
       child: ElevatedButton(
-        // تم تغيير الدالة لتبدأ بطلب الـ OTP
         onPressed: _isLoading ? null : _initiateOtpLogin,
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
@@ -134,13 +163,15 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         ),
         child: _isLoading
             ? const CircularProgressIndicator(color: Colors.white)
-            : const Text('تسجيل الدخول (OTP)', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            : const Text(
+                'تسجيل الدخول (OTP)',
+                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
       ),
     );
   }
 }
 
-// --- ويدجت الإدخال (نفس التصميم الأصلي تماماً) ---
 class _InputGroup extends StatelessWidget {
   final IconData icon;
   final String hintText;
@@ -170,9 +201,18 @@ class _InputGroup extends StatelessWidget {
         filled: true,
         fillColor: Colors.grey.shade50,
         contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.grey.shade300)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.grey.shade200)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: const BorderSide(color: Color(0xff28a745), width: 2)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: const BorderSide(color: Color(0xff28a745), width: 2),
+        ),
       ),
       validator: validator,
       onSaved: onSaved,
