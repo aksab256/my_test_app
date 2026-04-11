@@ -157,7 +157,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
       child: Container(
-        height: 88.h, // زيادة الارتفاع قليلاً لشكل أفضل
+        height: 88.h, 
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.98),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(35)),
@@ -253,11 +253,11 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
               child: Text(
                 text,
                 style: TextStyle(
-                  fontSize: 13.5.sp, // تم تكبير الخط هنا ليكون واضحاً جداً
+                  fontSize: 13.5.sp, 
                   fontWeight: isUser ? FontWeight.w600 : FontWeight.w500,
                   fontFamily: 'Cairo',
                   color: isUser ? Colors.white : Colors.black87,
-                  height: 1.5, // زيادة تباعد الأسطر لراحة العين
+                  height: 1.5,
                 ),
               ),
             ),
@@ -314,7 +314,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
                 hintText: "اسأل شـيرا عن أي شيء...",
                 hintStyle: TextStyle(color: Colors.grey[400], fontSize: 11.sp),
                 filled: true,
-                fillColor: Colors.grey[50) : Colors.grey[100],
+                fillColor: Colors.grey[50], // تم تصحيح الخطأ هنا ] بدل )
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
               ),
