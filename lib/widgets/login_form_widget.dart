@@ -8,18 +8,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-
-// 🟢 [إضافة دقيقة]: استيراد البروفايدر لربط البيانات لحظياً
+import 'dart:math'; // لتوليد الـ OTP
 import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 
-// استيراد الشاشات لجلب الـ routeName الصحيح
-import 'package:my_test_app/screens/buyer/buyer_home_screen.dart';
-import 'package:my_test_app/screens/consumer/consumer_home_screen.dart';
-import 'package:my_test_app/screens/seller_screen.dart';
-
 class LoginFormWidget extends StatefulWidget {
   const LoginFormWidget({super.key});
+
   @override
   State<LoginFormWidget> createState() => _LoginFormWidgetState();
 }
@@ -30,10 +25,10 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   String _password = '';
   bool _isLoading = false;
   String? _errorMessage;
-  final AuthService _authService = AuthService();
   final Color primaryGreen = const Color(0xff28a745);
 
-  Future<void> _submitLogin() async {
+  // --- دالة إرسال الـ OTP التجريبي (بيئة الاختبار المجانية 5000 رسالة) ---
+  Future<void> _initiateOtpLogin() async {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
 
@@ -43,176 +38,44 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     });
 
     try {
-      String? userRole;
       String phoneClean = _phone.trim();
-      
-      try {
-        debugPrint("Attempting login via @aksab.com...");
-        userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aksab.com", _password);
-            } catch (e) {
-        debugPrint("Aksab failed, attempting @aswaq.com...");
-        userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aswaq.com", _password);
-      }
+      // توليد كود من 6 أرقام
+      String generatedOtp = (Random().nextInt(900000) + 100000).toString();
 
-      // 👇 ضيف الكود ده هنا بالظبط 👇
-      final userToCheck = FirebaseAuth.instance.currentUser;
-      if (userToCheck != null) {
-        var checkDoc = await FirebaseFirestore.instance.collection('consumers').doc(userToCheck.uid).get();
-        if (!checkDoc.exists) {
-          checkDoc = await FirebaseFirestore.instance.collection('users').doc(userToCheck.uid).get();
-        }
-        if (!checkDoc.exists) {
-  checkDoc = await FirebaseFirestore.instance.collection('sellers').doc(userToCheck.uid).get();
-}
+      // إعدادات الـ API (استخدم البيانات من صورك - environment: 2)
+      final url = Uri.parse("https://smsmisr.com/api/OTP/");
+      final response = await http.post(url, body: {
+        "environment": "2", // وضع الاختبار المجاني
+        "username": "اكتب_يوزر_الـ_API_هنا", 
+        "password": "اكتب_باسورد_الـ_API_هنا",
+        "sender": "اكتب_التوكن_الأحمر_هنا", 
+        "mobile": "20$phoneClean",
+        "template": "اكتب_التوكن_الأزرق_هنا",
+        "otp": generatedOtp,
+      });
 
-        if (checkDoc.exists && checkDoc.data()?['status'] == 'delete_requested') {
-          await FirebaseAuth.instance.signOut();
-          if (mounted) {
-            setState(() {
-              _isLoading = false;
-              _errorMessage = 'هذا الحساب قيد الحذف نهائياً، لا يمكن تسجيل الدخول إليه.';
-            });
-          }
-          return;
-        }
-      }
-      // 👆 نهاية الكود المضاف 👆
+      debugPrint("SMS Misr Response: ${response.body}");
 
-      // تحميل بيانات الجلسة في الذاكرة
-      await UserSession.loadSession();
-
-
-      
-      
-      // 🟢 [التعديل السحري]: تحديث البروفايدر فوراً بالبيانات الجديدة المخزنة
-      // هذا السطر يمنع مشكلة "إغلاق وفتح التطبيق" ويجعل العنوان يظهر فوراً
-      if (mounted) {
-        await Provider.of<BuyerDataProvider>(context, listen: false).initializeData(
-          FirebaseAuth.instance.currentUser?.uid,
-          UserSession.ownerId,
-          UserSession.merchantName ?? "مستخدم أكسب"
-        );
-      }
-
-      // منطق الموظفين (Sub Users)
-      if (UserSession.isSubUser) {
-        final subUserDoc = await FirebaseFirestore.instance.collection("subUsers").doc(phoneClean).get();
-        if (subUserDoc.exists && subUserDoc.data()?['mustChangePassword'] == true) {
-          if (mounted) setState(() => _isLoading = false);
-          _showChangePasswordDialog(phoneClean);
-          return;
-        }
-      }
-
-      _sendNotificationDataToAWS().catchError((e) => debugPrint("AWS Silent Error: $e"));
-
-      if (!mounted) return;
-      _navigateToHome(userRole ?? UserSession.role);
-
-    } catch (e) {
-      debugPrint("Core Login Error: $e");
-      if (FirebaseAuth.instance.currentUser != null) {
-        _navigateToHome(UserSession.role);
-        return;
-      }
-      
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          if (e.toString().contains('account-not-active')) {
-            _errorMessage = 'هذا الحساب معلق، يرجى التواصل مع الإدارة';
-          } else {
-            _errorMessage = 'رقم الهاتف أو كلمة المرور غير صحيحة';
-          }
+      if (response.statusCode == 200) {
+        if (!mounted) return;
+        
+        // الانتقال لصفحة التأكيد (سنقوم بإنشائها) وتمرير البيانات
+        Navigator.of(context).pushNamed('/otp_verification', arguments: {
+          'phone': phoneClean,
+          'password': _password,
+          'otpCode': generatedOtp, // الكود اللي اتبعت عشان نقارنه هناك
         });
-      }
-    }
-  }
-
-  void _navigateToHome(String? role) {
-    if (!mounted) return;
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: const Text('✅ تم تسجيل الدخول بنجاح!'), backgroundColor: primaryGreen),
-    );
-    
-    String route;
-    if (role == 'buyer') {
-      route = BuyerHomeScreen.routeName;
-    } else if (role == 'consumer') {
-      route = ConsumerHomeScreen.routeName;
-    } else if (role == 'seller') {
-      route = SellerScreen.routeName;
-    } else {
-      route = SellerScreen.routeName; 
-    }
-    
-    debugPrint("Final Redirect: $route for role: $role");
-    Navigator.of(context).pushNamedAndRemoveUntil(route, (route) => false);
-  }
-
-  void _showChangePasswordDialog(String phone) {
-    final TextEditingController newPassController = TextEditingController();
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("تأمين الحساب", textAlign: TextAlign.center),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text("يرجى تعيين كلمة سر جديدة لحماية حسابك."),
-            const SizedBox(height: 15),
-            TextField(
-              controller: newPassController,
-              obscureText: true,
-              decoration: InputDecoration(
-                hintText: "كلمة السر الجديدة",
-                filled: true,
-                fillColor: Colors.grey[100],
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: primaryGreen),
-            onPressed: () async {
-              if (newPassController.text.length < 6) return;
-              try {
-                await FirebaseAuth.instance.currentUser?.updatePassword(newPassController.text.trim());
-                await FirebaseFirestore.instance.collection("subUsers").doc(phone).update({'mustChangePassword': false});
-                
-                if (!mounted) return;
-                _navigateToHome(UserSession.role);
-              } catch (e) {
-                debugPrint("Pass update error: $e");
-              }
-            },
-            child: const Text("حفظ ودخول", style: TextStyle(color: Colors.white)),
-          )
-        ],
-      ),
-    );
-  }
-
-  Future<void> _sendNotificationDataToAWS() async {
-    try {
-      String? token = await FirebaseMessaging.instance.getToken();
-      String? uid = FirebaseAuth.instance.currentUser?.uid;
-      if (token != null && uid != null) {
-        const String apiUrl = "https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction";
-        await http.post(Uri.parse(apiUrl),
-            headers: {"Content-Type": "application/json"},
-            body: jsonEncode({"userId": uid, "fcmToken": token, "role": UserSession.role ?? "seller"}));
+      } else {
+        setState(() => _errorMessage = "فشل في التواصل مع مزود الخدمة");
       }
     } catch (e) {
-      debugPrint("AWS Error: $e");
+      debugPrint("OTP Error: $e");
+      setState(() => _errorMessage = "خطأ تقني في إرسال الكود");
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Form(
@@ -262,18 +125,22 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         gradient: LinearGradient(colors: [primaryGreen, const Color(0xff1e7e34)]),
       ),
       child: ElevatedButton(
-        onPressed: _isLoading ? null : _submitLogin,
+        // تم تغيير الدالة لتبدأ بطلب الـ OTP
+        onPressed: _isLoading ? null : _initiateOtpLogin,
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         ),
-        child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('تسجيل الدخول', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        child: _isLoading
+            ? const CircularProgressIndicator(color: Colors.white)
+            : const Text('تسجيل الدخول (OTP)', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
       ),
     );
   }
 }
 
+// --- ويدجت الإدخال (نفس التصميم الأصلي تماماً) ---
 class _InputGroup extends StatelessWidget {
   final IconData icon;
   final String hintText;
@@ -312,3 +179,4 @@ class _InputGroup extends StatelessWidget {
     );
   }
 }
+
