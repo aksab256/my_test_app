@@ -29,12 +29,15 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
 
-    setState(() { _isLoading = true; _errorMessage = null; });
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
     try {
       String phoneClean = _phone.trim();
       
-      // 1. التحقق من كلمة السر أولاً (نفس منطق الأصل)
+      // 1. التحقق من كلمة السر أولاً (المنطق الأصلي من Commit f27072d)
       String? userRole;
       try {
         userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aksab.com", _password);
@@ -42,7 +45,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aswaq.com", _password);
       }
 
-      // 2. التحقق من حالة الحساب (Status check من الأصل)
+      // التحقق من حالة الحساب (delete_requested)
       final userToCheck = FirebaseAuth.instance.currentUser;
       if (userToCheck != null) {
         var checkDoc = await FirebaseFirestore.instance.collection('consumers').doc(userToCheck.uid).get();
@@ -59,38 +62,54 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         }
       }
 
-      // 3. لو كله تمام.. نبعت الـ OTP (SMS Misr)
+      // 2. إعداد وإرسال الـ OTP عبر SMS Misr (نظام GET Request)
       String generatedOtp = (Random().nextInt(9000) + 1000).toString();
-      final response = await http.post(
-        Uri.parse("https://smsmisr.com/api/OTP/"),
-        body: {
-          "environment": "2",
-          "username": "76495914",
-          "password": "p7u(Y9G9e9)",
-          "sender": "603b711e51270830768c8585915d5d179c36209b69994f8e580e060012759885",
-          "mobile": "20$phoneClean",
-          "template": "180b55ec70499e056d6f20050854d19d65851412061225884241680191564552",
-          "otp": generatedOtp,
-        },
-      );
-
-      // 4. تجهيز بيانات اليوزر للتوجيه
-      LoggedInUser loggedUser = LoggedInUser(
-        id: userToCheck!.uid,
-        fullname: UserSession.merchantName ?? 'مستخدم',
-        role: userRole ?? 'seller',
-        phone: phoneClean,
-      );
-
-      if (!mounted) return;
       
-      Navigator.of(context).pushNamed(
-        OtpVerificationScreen.routeName,
-        arguments: {'otp': generatedOtp, 'user': loggedUser},
-      );
+      // التوكن المختار بناءً على المستندات: Your One Time Password (OTP) is...
+      String templateToken = "eb60c2a456825a40a56dd36813e8ba8740b6dbe1c5d6921034bd9508e78d5fac";
+      
+      final url = Uri.parse("https://smsmisr.com/api/OTP/").replace(queryParameters: {
+        "environment": "2", // 1 for Live, 2 for Test
+        "username": "76495914",
+        "password": "p7u(Y9G9e9)",
+        "sender": "603b711e51270830768c8585915d5d179c36209b69994f8e580e060012759885",
+        "mobile": "20$phoneClean",
+        "template": templateToken,
+        "otp": generatedOtp,
+      });
+
+      debugPrint("Sending OTP Request to: $url");
+      final response = await http.get(url);
+      final responseData = jsonDecode(response.body);
+
+      // 3. التحقق من رد السيرفر (كود 4901 يعني نجاح)
+      if (responseData['code'] == "4901") {
+        LoggedInUser loggedUser = LoggedInUser(
+          id: userToCheck!.uid,
+          fullname: UserSession.merchantName ?? 'مستخدم أكسب',
+          role: userRole ?? 'seller',
+          phone: phoneClean,
+        );
+
+        if (!mounted) return;
+        
+        Navigator.of(context).pushNamed(
+          OtpVerificationScreen.routeName,
+          arguments: {
+            'otp': generatedOtp,
+            'user': loggedUser,
+          },
+        );
+      } else {
+        // التعامل مع أكواد الخطأ من الجدول
+        String errorDetail = "خطأ في الخدمة (${responseData['code']})";
+        if (responseData['code'] == "4906") errorDetail = "رصيد الرسائل غير كافٍ";
+        setState(() => _errorMessage = errorDetail);
+      }
 
     } catch (e) {
-      setState(() => _errorMessage = "خطأ في رقم الهاتف أو كلمة المرور");
+      debugPrint("Login Process Error: $e");
+      setState(() => _errorMessage = "خطأ في البيانات أو الاتصال بالشبكة");
     } finally {
       setState(() => _isLoading = false);
     }
@@ -98,7 +117,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // استخدم نفس تصميم الـ UI الأصلي الجميل اللي كان معاك
     return Form(
       key: _formKey,
       child: Column(
@@ -108,10 +126,15 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           _buildInput(Icons.lock_outline, 'كلمة المرور', (v) => _password = v!, isPass: true),
           const SizedBox(height: 20),
           _buildSubmitButton(),
-          if (_errorMessage != null) Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Text(_errorMessage!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-          ),
+          if (_errorMessage != null) 
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                _errorMessage!, 
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)
+              ),
+            ),
         ],
       ),
     );
@@ -126,9 +149,17 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         hintText: hint,
         filled: true,
         fillColor: Colors.grey.shade50,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.grey.shade200)),
+        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15), 
+          borderSide: BorderSide(color: Colors.grey.shade300)
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15), 
+          borderSide: BorderSide(color: Colors.grey.shade200)
+        ),
       ),
-      validator: (value) => (value == null || value.isEmpty) ? 'مطلوب' : null,
+      validator: (value) => (value == null || value.isEmpty) ? 'برجاء إدخال البيانات' : null,
       onSaved: onSaved,
     );
   }
@@ -142,8 +173,14 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryGreen,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          elevation: 2,
         ),
-        child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('تسجيل الدخول (OTP)', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        child: _isLoading 
+          ? const CircularProgressIndicator(color: Colors.white) 
+          : const Text(
+              'تسجيل الدخول (OTP)', 
+              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)
+            ),
       ),
     );
   }
