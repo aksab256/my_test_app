@@ -6,7 +6,7 @@ import 'package:my_test_app/data_sources/offer_data_source.dart';
 import 'package:my_test_app/models/offer_model.dart';
 import 'package:my_test_app/widgets/form_widgets.dart';
 import 'package:sizer/sizer.dart';
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' as excel_lib; // تم إضافة الاسم المستعار هنا لحل التداخل
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -41,8 +41,8 @@ class _OffersScreenState extends State<OffersScreen> {
 
   // دالة تصدير البيانات إلى إكسيل بجدول منظم وبدون اختصارات
   Future<void> _exportToExcel() async {
-    var excel = Excel.createExcel();
-    Sheet sheetObject = excel['العروض المتاحة'];
+    var excel = excel_lib.Excel.createExcel(); // استخدام الاسم المستعار
+    excel_lib.Sheet sheetObject = excel['العروض المتاحة'];
     excel.delete('Sheet1'); 
 
     // تعريف العناوين - نسخة كاملة بدون اختصارات
@@ -59,8 +59,8 @@ class _OffersScreenState extends State<OffersScreen> {
 
     // إضافة صف العناوين
     for (var i = 0; i < headers.length; i++) {
-      var cell = sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
-      cell.value = TextCellValue(headers[i]);
+      var cell = sheetObject.cell(excel_lib.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+      cell.value = excel_lib.TextCellValue(headers[i]);
     }
 
     // إضافة البيانات من القائمة المفلترة حالياً
@@ -68,14 +68,14 @@ class _OffersScreenState extends State<OffersScreen> {
       var offer = _filteredOffers[row];
       var unit = offer.units.isNotEmpty ? offer.units[0] : null;
 
-      sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row + 1)).value = TextCellValue(offer.id ?? "");
-      sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row + 1)).value = TextCellValue(offer.productName);
-      sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: row + 1)).value = TextCellValue(offer.status == "active" ? "نشط" : "معطل");
-      sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: row + 1)).value = DoubleCellValue(unit?.price.toDouble() ?? 0.0);
-      sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: row + 1)).value = IntCellValue(unit?.availableStock ?? 0);
-      sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: row + 1)).value = IntCellValue(offer.minOrder ?? 0);
-      sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: row + 1)).value = IntCellValue(offer.maxOrder ?? 0);
-      sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: row + 1)).value = TextCellValue(offer.createdAt?.toString() ?? "");
+      sheetObject.cell(excel_lib.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row + 1)).value = excel_lib.TextCellValue(offer.id ?? "");
+      sheetObject.cell(excel_lib.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row + 1)).value = excel_lib.TextCellValue(offer.productName);
+      sheetObject.cell(excel_lib.CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: row + 1)).value = excel_lib.TextCellValue(offer.status == "active" ? "نشط" : "معطل");
+      sheetObject.cell(excel_lib.CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: row + 1)).value = excel_lib.DoubleCellValue(unit?.price.toDouble() ?? 0.0);
+      sheetObject.cell(excel_lib.CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: row + 1)).value = excel_lib.IntCellValue(unit?.availableStock ?? 0);
+      sheetObject.cell(excel_lib.CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: row + 1)).value = excel_lib.IntCellValue(offer.minOrder ?? 0);
+      sheetObject.cell(excel_lib.CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: row + 1)).value = excel_lib.IntCellValue(offer.maxOrder ?? 0);
+      sheetObject.cell(excel_lib.CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: row + 1)).value = excel_lib.TextCellValue(offer.createdAt?.toString() ?? "");
     }
 
     final directory = await getTemporaryDirectory();
