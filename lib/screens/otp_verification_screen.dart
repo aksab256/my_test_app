@@ -52,17 +52,31 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       final LoggedInUser user = args['user'];
 
       if (enteredOtp == correctOtp) {
-        // حفظ الجلسة محلياً
+        // ✅ التوافق مع نظام الجلسة القديم
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('loggedUser', jsonEncode(user.toJson()));
-        await UserSession.updateSession(user);
+        
+        // إنشاء Map متوافق مع ما يتوقعه UserSession.loadSession
+        final Map<String, dynamic> userData = {
+          'id': user.id,
+          'fullname': user.fullname,
+          'role': user.role,
+          'phone': user.phone,
+          'ownerId': user.id, // افتراضي لأن UserSession يطلبه
+          'merchantName': user.fullname, // افتراضي
+          'isSubUser': false,
+        };
+
+        await prefs.setString('loggedUser', jsonEncode(userData));
+        
+        // ✅ استدعاء الدالة الموجودة فعلياً في UserSession
+        await UserSession.loadSession();
 
         // تهيئة بيانات المستخدم في البروفايدر
+        if (!mounted) return;
         await Provider.of<BuyerDataProvider>(context, listen: false)
             .initializeData(user.id, user.id, user.fullname);
 
         // التوجيه حسب الرتبة
-        if (!mounted) return;
         if (user.role == "seller") {
           Navigator.pushNamedAndRemoveUntil(context, SellerScreen.routeName, (route) => false);
         } else if (user.role == "consumer") {
