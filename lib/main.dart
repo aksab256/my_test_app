@@ -9,6 +9,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:facebook_app_events/facebook_app_events.dart'; // ✅ تتبع فيسبوك
 
 // ✅ استخدام مكتبة جوجل مابس فقط لمنع التعارض مع latlong2
 import 'package:google_maps_flutter/google_maps_flutter.dart' as google_maps;
@@ -72,11 +75,15 @@ void main() async {
   await initializeDateFormatting('ar', null);
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
+  // ✅ تهيئة فيسبوك
+  final facebookAppEvents = FacebookAppEvents();
+  facebookAppEvents.setAutoLogAppEventsEnabled(true);
+
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
 
-  // ✅ النسخة الأصلية من الـ Commit المستقر تماماً كما ظهرت عندك
+  // ✅ النسخة الأصلية من الـ Commit المستقر تماماً كما ظهرت عندك (بدون أي تعديل أو اختصار)
   await flutterLocalNotificationsPlugin.initialize(
     settings: initializationSettings,
   );
@@ -122,15 +129,51 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  // ✅ دالة التحديث الإجباري
+  void _checkUpdate(BuildContext context) async {
+    try {
+      DocumentSnapshot config = await FirebaseFirestore.instance.collection('app_config').doc('version_control').get();
+      if (config.exists) {
+        int latestVersion = config['min_version']; 
+        int currentVersion = 2; // رقم الإصدار الحالي لتطبيقك
+        if (currentVersion < latestVersion) {
+          _showUpdateDialog(context, config['update_url']);
+        }
+      }
+    } catch (e) {
+      debugPrint("Update check failed: $e");
+    }
+  }
+
+  void _showUpdateDialog(BuildContext context, String url) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text("تحديث إجباري"),
+        content: const Text("يتوفر إصدار جديد من تطبيق أكسب يحتوي على تحسينات هامة. يرجى التحديث للمتابعة."),
+        actions: [
+          TextButton(
+            onPressed: () async => await launchUrl(Uri.parse(url)),
+            child: const Text("تحديث الآن"),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeNotifier = Provider.of<ThemeNotifier>(context);
+    
+    // فحص التحديث عند بناء التطبيق
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkUpdate(context));
 
     return Sizer(
       builder: (context, orientation, deviceType) {
         return MaterialApp(
           navigatorKey: navigatorKey,
-          title: 'رابية أحلى',
+          title: 'أكسب',
           debugShowCheckedModeBanner: false,
           locale: const Locale('ar', 'EG'),
           localizationsDelegates: const [
@@ -156,12 +199,7 @@ class MyApp extends StatelessWidget {
           routes: {
             '/': (context) => const AuthWrapper(),
             '/sellerhome': (context) => const SellerScreen(),
-            // داخل MaterialApp في ملف main.dart
-
-  // ... الطرق الحالية ...
-  '/otp_verification': (context) => const OtpVerificationScreen(),
-
-
+            '/otp_verification': (context) => const OtpVerificationScreen(), // ✅ تم الإصلاح
             LoginScreen.routeName: (context) => const LoginScreen(),
             SellerScreen.routeName: (context) => const SellerScreen(),
             BuyerHomeScreen.routeName: (context) => const BuyerHomeScreen(),
@@ -196,15 +234,12 @@ class MyApp extends StatelessWidget {
             '/abaatly-had': (context) {
               final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
               final rawLocation = args?['location'];
-
-              // ✅ التعامل مع الموقع باستخدام Google Maps حصرياً
               google_maps.LatLng finalLocation;
               if (rawLocation is google_maps.LatLng) {
                 finalLocation = rawLocation;
               } else {
                 finalLocation = const google_maps.LatLng(30.0444, 31.2357);
               }
-
               return AbaatlyHadProScreen(
                 userCurrentLocation: finalLocation,
                 isStoreOwner: args?['isStoreOwner'] ?? false,
@@ -235,16 +270,12 @@ class MyApp extends StatelessWidget {
                 ),
               );
             }
-            // التعديل الصحيح في main.dart
-if (settings.name == ConsumerProductListScreen.routeName) {
-  return MaterialPageRoute(
-    settings: settings, // ✅ السطر ده هو اللي هينقل ownerId و subId للصفحة
-    builder: (context) => const ConsumerProductListScreen(), 
-  );
-}
-
-
-
+            if (settings.name == ConsumerProductListScreen.routeName) {
+              return MaterialPageRoute(
+                settings: settings, 
+                builder: (context) => const ConsumerProductListScreen(), 
+              );
+            }
             if (settings.name == '/productDetails') {
               final args = settings.arguments as Map<String, dynamic>?;
               return MaterialPageRoute(
@@ -370,4 +401,3 @@ class PostRegistrationMessageScreen extends StatelessWidget {
     );
   }
 }
-
