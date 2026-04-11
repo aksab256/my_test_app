@@ -28,6 +28,7 @@ import 'package:my_test_app/services/user_session.dart';
 import 'package:my_test_app/models/user_role.dart';
 
 // استيراد الشاشات
+import 'package:my_test_app/screens/otp_verification_screen.dart';
 import 'package:my_test_app/screens/login_screen.dart';
 import 'package:my_test_app/screens/seller_screen.dart';
 import 'package:my_test_app/screens/buyer/buyer_home_screen.dart';
@@ -155,6 +156,12 @@ class MyApp extends StatelessWidget {
           routes: {
             '/': (context) => const AuthWrapper(),
             '/sellerhome': (context) => const SellerScreen(),
+            // داخل MaterialApp في ملف main.dart
+
+  // ... الطرق الحالية ...
+  '/otp_verification': (context) => const OtpVerificationScreen(),
+
+
             LoginScreen.routeName: (context) => const LoginScreen(),
             SellerScreen.routeName: (context) => const SellerScreen(),
             BuyerHomeScreen.routeName: (context) => const BuyerHomeScreen(),
