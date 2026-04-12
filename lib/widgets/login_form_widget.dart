@@ -36,8 +36,8 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
     try {
       String phoneClean = _phone.trim();
-      
-      // 1. التحقق من كلمة السر أولاً (المنطق الأصلي من Commit f27072d)
+
+      // 1. التحقق من كلمة السر أولاً عبر Firebase
       String? userRole;
       try {
         userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aksab.com", _password);
@@ -45,31 +45,31 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aswaq.com", _password);
       }
 
-      // التحقق من حالة الحساب (delete_requested)
       final userToCheck = FirebaseAuth.instance.currentUser;
-      if (userToCheck != null) {
-        var checkDoc = await FirebaseFirestore.instance.collection('consumers').doc(userToCheck.uid).get();
-        if (!checkDoc.exists) checkDoc = await FirebaseFirestore.instance.collection('users').doc(userToCheck.uid).get();
-        if (!checkDoc.exists) checkDoc = await FirebaseFirestore.instance.collection('sellers').doc(userToCheck.uid).get();
+      if (userToCheck == null) throw Exception("Authentication Failed");
 
-        if (checkDoc.exists && checkDoc.data()?['status'] == 'delete_requested') {
-          await FirebaseAuth.instance.signOut();
-          setState(() {
-            _isLoading = false;
-            _errorMessage = 'هذا الحساب قيد الحذف نهائياً، لا يمكن تسجيل الدخول إليه.';
-          });
-          return;
-        }
+      // التحقق من حالة الحساب (Status check)
+      var checkDoc = await FirebaseFirestore.instance.collection('consumers').doc(userToCheck.uid).get();
+      if (!checkDoc.exists) checkDoc = await FirebaseFirestore.instance.collection('users').doc(userToCheck.uid).get();
+      if (!checkDoc.exists) checkDoc = await FirebaseFirestore.instance.collection('sellers').doc(userToCheck.uid).get();
+
+      if (checkDoc.exists && checkDoc.data()?['status'] == 'delete_requested') {
+        await FirebaseAuth.instance.signOut();
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'هذا الحساب قيد الحذف نهائياً، لا يمكن تسجيل الدخول إليه.';
+        });
+        return;
       }
 
-      // 2. إعداد وإرسال الـ OTP عبر SMS Misr (نظام GET Request)
+      // 2. إرسال الـ OTP عبر SMS Misr بنظام الـ GET
       String generatedOtp = (Random().nextInt(9000) + 1000).toString();
       
-      // التوكن المختار بناءً على المستندات: Your One Time Password (OTP) is...
+      // استخدام التمبلت الخاص بـ Your One Time Password (OTP) is...
       String templateToken = "eb60c2a456825a40a56dd36813e8ba8740b6dbe1c5d6921034bd9508e78d5fac";
-      
+
       final url = Uri.parse("https://smsmisr.com/api/OTP/").replace(queryParameters: {
-        "environment": "2", // 1 for Live, 2 for Test
+        "environment": "2", // وضع الاختبار
         "username": "76495914",
         "password": "p7u(Y9G9e9)",
         "sender": "603b711e51270830768c8585915d5d179c36209b69994f8e580e060012759885",
@@ -78,21 +78,26 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         "otp": generatedOtp,
       });
 
-      debugPrint("Sending OTP Request to: $url");
+      debugPrint("Requesting OTP: $url");
       final response = await http.get(url);
-      final responseData = jsonDecode(response.body);
+      
+      if (response.body.isEmpty) throw Exception("Empty response from SMS server");
 
-      // 3. التحقق من رد السيرفر (كود 4901 يعني نجاح)
-      if (responseData['code'] == "4901") {
+      final responseData = jsonDecode(response.body);
+      // تحويل الكود لنص لضمان عدم حدوث Null عند المقارنة
+      final String resultCode = responseData['code']?.toString() ?? "unknown";
+
+      // 3. معالجة النتيجة بناءً على مستندات SMS Misr
+      if (resultCode == "4901") {
         LoggedInUser loggedUser = LoggedInUser(
-          id: userToCheck!.uid,
+          id: userToCheck.uid,
           fullname: UserSession.merchantName ?? 'مستخدم أكسب',
           role: userRole ?? 'seller',
           phone: phoneClean,
         );
 
         if (!mounted) return;
-        
+
         Navigator.of(context).pushNamed(
           OtpVerificationScreen.routeName,
           arguments: {
@@ -101,15 +106,21 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           },
         );
       } else {
-        // التعامل مع أكواد الخطأ من الجدول
-        String errorDetail = "خطأ في الخدمة (${responseData['code']})";
-        if (responseData['code'] == "4906") errorDetail = "رصيد الرسائل غير كافٍ";
+        // ترجمة الأكواد لمنع ظهور (null) للمستخدم
+        String errorDetail;
+        switch (resultCode) {
+          case "4903": errorDetail = "خطأ في بيانات حساب الإرسال"; break;
+          case "4906": errorDetail = "عفواً، رصيد رسائل SMS غير كافٍ"; break;
+          case "4909": errorDetail = "خطأ في توكن القالب (Template Token)"; break;
+          case "4905": errorDetail = "رقم الهاتف غير صحيح"; break;
+          default: errorDetail = "فشل إرسال الكود: (Code $resultCode)";
+        }
         setState(() => _errorMessage = errorDetail);
       }
 
     } catch (e) {
-      debugPrint("Login Process Error: $e");
-      setState(() => _errorMessage = "خطأ في البيانات أو الاتصال بالشبكة");
+      debugPrint("Aksab Login Error: $e");
+      setState(() => _errorMessage = "تأكد من رقم الهاتف وكلمة المرور");
     } finally {
       setState(() => _isLoading = false);
     }
@@ -126,11 +137,11 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           _buildInput(Icons.lock_outline, 'كلمة المرور', (v) => _password = v!, isPass: true),
           const SizedBox(height: 20),
           _buildSubmitButton(),
-          if (_errorMessage != null) 
+          if (_errorMessage != null)
             Padding(
               padding: const EdgeInsets.only(top: 10),
               child: Text(
-                _errorMessage!, 
+                _errorMessage!,
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)
               ),
@@ -144,6 +155,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     return TextFormField(
       obscureText: isPass,
       textAlign: TextAlign.right,
+      keyboardType: isPass ? TextInputType.text : TextInputType.phone,
       decoration: InputDecoration(
         prefixIcon: Icon(icon, color: primaryGreen),
         hintText: hint,
@@ -151,15 +163,15 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         fillColor: Colors.grey.shade50,
         contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15), 
+          borderRadius: BorderRadius.circular(15),
           borderSide: BorderSide(color: Colors.grey.shade300)
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15), 
+          borderRadius: BorderRadius.circular(15),
           borderSide: BorderSide(color: Colors.grey.shade200)
         ),
       ),
-      validator: (value) => (value == null || value.isEmpty) ? 'برجاء إدخال البيانات' : null,
+      validator: (value) => (value == null || value.isEmpty) ? 'برجاء إكمال الحقل' : null,
       onSaved: onSaved,
     );
   }
@@ -175,10 +187,10 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
           elevation: 2,
         ),
-        child: _isLoading 
-          ? const CircularProgressIndicator(color: Colors.white) 
+        child: _isLoading
+          ? const CircularProgressIndicator(color: Colors.white)
           : const Text(
-              'تسجيل الدخول (OTP)', 
+              'تسجيل الدخول (OTP)',
               style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)
             ),
       ),
