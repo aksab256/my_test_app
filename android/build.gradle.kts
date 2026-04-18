@@ -4,9 +4,10 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        // ✅ تم التحديث لـ 8.1.1 ليتطابق مع settings.gradle.kts وحل خطأ الـ Build
-        classpath("com.android.tools.build:gradle:8.1.1") 
+        // ✅ يجب أن يطابق الإصدار الموجود في settings.gradle.kts
+        classpath("com.android.tools.build:gradle:8.6.0") 
         
+        // إعدادات Google Services و Crashlytics
         classpath("com.google.gms:google-services:4.4.1")
         classpath("com.google.firebase:firebase-crashlytics-gradle:3.0.2")
     }

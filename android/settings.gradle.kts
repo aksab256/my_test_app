@@ -20,11 +20,11 @@ pluginManagement {
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     
-    // ✅ تم التحديث لـ 8.1.1 لحل مشكلة الحد الأدنى المدعوم من Flutter
-    id("com.android.application") version "8.1.1" apply false 
+    // ✅ تحديث لـ 8.6.0 لحل مشكلة الحد الأدنى وتجنب Drop Support
+    id("com.android.application") version "8.6.0" apply false 
     
-    // إصدار مستقر يتوافق مع Java 17
-    id("org.jetbrains.kotlin.android") version "1.8.22" apply false
+    // ✅ تحديث لـ 2.1.0 لحل تعارض مكتبات Firebase Measurement الجديدة
+    id("org.jetbrains.kotlin.android") version "2.1.0" apply false
     
     // 🚀 إعدادات Firebase للمشروع الجديد (aksab-erp)
     id("com.google.gms.google-services") version "4.4.1" apply false
