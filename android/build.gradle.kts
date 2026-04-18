@@ -4,9 +4,11 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle:8.1.0")        // نسخة Gradle مناسبة
-        classpath("com.google.gms:google-services:4.4.1")        // ⬅️ إضافة Google Services
-        classpath("com.google.firebase:firebase-crashlytics-gradle:3.0.2") // 🚀 إضافة كلاس باث الكراشليتكس
+        // ✅ تم التحديث لـ 8.1.1 ليتطابق مع settings.gradle.kts وحل خطأ الـ Build
+        classpath("com.android.tools.build:gradle:8.1.1") 
+        
+        classpath("com.google.gms:google-services:4.4.1")
+        classpath("com.google.firebase:firebase-crashlytics-gradle:3.0.2")
     }
 }
 
@@ -21,6 +23,7 @@ val newBuildDir: Directory =
     rootProject.layout.buildDirectory
         .dir("../../build")
         .get()
+
 rootProject.layout.buildDirectory.value(newBuildDir)
 
 subprojects {
@@ -35,3 +38,4 @@ subprojects {
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
+
