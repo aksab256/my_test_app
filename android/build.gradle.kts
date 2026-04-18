@@ -1,41 +1,50 @@
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
+android {
+    namespace = "com.aksabeg500"
+    
+    // ✅ التعديل الجوهري: يجب أن يكون 36 ليتوافق مع مكتبات androidx الحديثة
+    compileSdk = 36 
+
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        isCoreLibraryDesugaringEnabled = true
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
-    dependencies {
-        // ✅ يجب أن يطابق الإصدار 8.9.1
-        classpath("com.android.tools.build:gradle:8.9.1") 
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_17.toString()
+    }
+
+    signingConfigs {
+        create("release") {
+            keyAlias = System.getenv("KEY_ALIAS") ?: ""
+            keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+            storePassword = System.getenv("STORE_PASSWORD") ?: ""
+            val keystorePath = System.getenv("KEYSTORE_PATH") ?: "release-keystore.jks"
+            storeFile = file(keystorePath)
+        }
+    }
+
+    defaultConfig {
+        applicationId = "com.aksabeg500"
+        minSdk = 24
         
-        classpath("com.google.gms:google-services:4.4.1")
-        classpath("com.google.firebase:firebase-crashlytics-gradle:3.0.2")
+        // ابقِ هذا على 35 لضمان التوافق مع متطلبات جوجل بلاي الحالية وعدم حدوث مشاكل في التصاريح
+        targetSdk = 35 
+        
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+        multiDexEnabled = true
     }
-}
 
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
     }
-}
-
-val newBuildDir: Directory =
-    rootProject.layout.buildDirectory
-        .dir("../../build")
-        .get()
-
-rootProject.layout.buildDirectory.value(newBuildDir)
-
-subprojects {
-    val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
-    project.layout.buildDirectory.value(newSubprojectBuildDir)
-}
-
-subprojects {
-    project.evaluationDependsOn(":app")
-}
-
-tasks.register<Delete>("clean") {
-    delete(rootProject.layout.buildDirectory)
 }
 
