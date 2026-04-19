@@ -11,7 +11,7 @@ plugins {
 
 android {
     namespace = "com.aksabeg500"
-    compileSdk = 35
+    compileSdk = 36
 
     ndkVersion = flutter.ndkVersion
 
@@ -24,7 +24,7 @@ android {
     defaultConfig {
         applicationId = "com.aksabeg500"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
