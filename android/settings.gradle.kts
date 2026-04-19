@@ -1,19 +1,6 @@
 pluginManagement {
-    val flutterSdkPath = run {
-        val properties = java.util.Properties()
-        val localPropertiesFile = file("local.properties")
-
-        if (localPropertiesFile.exists()) {
-            localPropertiesFile.inputStream().use { properties.load(it) }
-        }
-
-        // 👇 fallback مهم لـ GitHub Actions
-        val flutterSdkPath = properties.getProperty("flutter.sdk")
-            ?: System.getenv("FLUTTER_ROOT")
-
-        require(flutterSdkPath != null) { "flutter.sdk not set" }
-        flutterSdkPath
-    }
+    val flutterSdkPath = System.getenv("FLUTTER_ROOT")
+        ?: error("FLUTTER_ROOT not set")
 
     includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
 
@@ -23,3 +10,14 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+
+plugins {
+    id("dev.flutter.flutter-plugin-loader") version "1.0.0"
+
+    id("com.android.application") version "8.9.1" apply false
+    id("org.jetbrains.kotlin.android") version "2.3.10" apply false
+    id("com.google.gms.google-services") version "4.4.1" apply false
+    id("com.google.firebase.crashlytics") version "3.0.2" apply false
+}
+
+include(":app")
