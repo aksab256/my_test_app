@@ -13,7 +13,12 @@
           "package_name": "com.aksab.logistics_v2"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "549455573441-6rc17cs9n0kh7nriliojog9hj7ej1h9d.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyB4Nu0SHkkoSQi9gMjxNK5pfnqbKSrS5fg"
@@ -21,7 +26,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "549455573441-6rc17cs9n0kh7nriliojog9hj7ej1h9d.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "549455573441-e0nk2nbqd9jq6jprmodaf1sosl48jvsk.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.myTestApp"
+              }
+            }
+          ]
         }
       }
     },
@@ -32,7 +49,28 @@
           "package_name": "com.aksabeg500"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "549455573441-iiok4jf8tvf9o5c4ge82bpa6cnq9i3g1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aksabeg500",
+            "certificate_hash": "5eb23720b9e069cc09cd6677d9efc4b3cbd4566e"
+          }
+        },
+        {
+          "client_id": "549455573441-u9g7t671480a1dvug8uh72gl87bn8tk0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aksabeg500",
+            "certificate_hash": "fb8e549c84c43182117e6a496c1a6a5e1e0179e9"
+          }
+        },
+        {
+          "client_id": "549455573441-6rc17cs9n0kh7nriliojog9hj7ej1h9d.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyB4Nu0SHkkoSQi9gMjxNK5pfnqbKSrS5fg"
@@ -40,7 +78,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "549455573441-6rc17cs9n0kh7nriliojog9hj7ej1h9d.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "549455573441-e0nk2nbqd9jq6jprmodaf1sosl48jvsk.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.myTestApp"
+              }
+            }
+          ]
         }
       }
     }
