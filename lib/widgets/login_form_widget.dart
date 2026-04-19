@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'dart:math';
 import 'package:my_test_app/helpers/auth_service.dart';
 import 'package:my_test_app/services/user_session.dart';
 import 'package:my_test_app/models/logged_user.dart';
@@ -36,90 +33,76 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
     try {
       String phoneClean = _phone.trim();
+      // تأكد من تنظيف الرقم (بدون الصفر الأول) لإرساله بصيغة +20
+      String searchPhone = phoneClean;
+      if (searchPhone.startsWith('0')) searchPhone = searchPhone.substring(1);
+      
+      String fullPhone = '+20$searchPhone';
 
-      // 1. التحقق من كلمة السر أولاً عبر Firebase
+      // 1. التحقق من كلمة السر والوجود في السيستم (أمان العهدة)
       String? userRole;
       try {
-        userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aksab.com", _password);
+        userRole = await _authService.signInWithEmailAndPassword("$searchPhone@aksab.com", _password);
       } catch (e) {
-        userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aswaq.com", _password);
+        userRole = await _authService.signInWithEmailAndPassword("$searchPhone@aswaq.com", _password);
       }
 
       final userToCheck = FirebaseAuth.instance.currentUser;
-      if (userToCheck == null) throw Exception("Authentication Failed");
+      if (userToCheck == null) throw Exception("فشل التحقق من الهوية");
 
-      // التحقق من حالة الحساب (Status check)
+      // التحقق من حالة الحساب في المجموعات المختلفة
       var checkDoc = await FirebaseFirestore.instance.collection('consumers').doc(userToCheck.uid).get();
       if (!checkDoc.exists) checkDoc = await FirebaseFirestore.instance.collection('users').doc(userToCheck.uid).get();
       if (!checkDoc.exists) checkDoc = await FirebaseFirestore.instance.collection('sellers').doc(userToCheck.uid).get();
 
       if (checkDoc.exists && checkDoc.data()?['status'] == 'delete_requested') {
         await FirebaseAuth.instance.signOut();
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'هذا الحساب قيد الحذف نهائياً، لا يمكن تسجيل الدخول إليه.';
-        });
-        return;
+        throw Exception('هذا الحساب قيد الحذف نهائياً');
       }
 
-      // 2. إرسال الـ OTP عبر SMS Misr بنظام الـ GET
-      String generatedOtp = (Random().nextInt(9000) + 1000).toString();
+      // 2. إرسال كود تأمين العهدة عبر Firebase (حصرياً)
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: fullPhone,
+        timeout: const Duration(seconds: 60),
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          // في حال التعرف التلقائي على الرسالة
+          await FirebaseAuth.instance.signInWithCredential(credential);
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          setState(() {
+            if (e.code == 'too-many-requests') {
+              _errorMessage = "محاولات كثيرة، تم حظر الجهاز مؤقتاً للأمان";
+            } else {
+              _errorMessage = "فشل إرسال كود الأمان: ${e.message}";
+            }
+          });
+        },
+        codeSent: (String verificationId, int? resendToken) {
+          LoggedInUser loggedUser = LoggedInUser(
+            id: userToCheck.uid,
+            fullname: UserSession.merchantName ?? 'مستخدم أكسب',
+            role: userRole ?? 'seller',
+            phone: searchPhone,
+          );
 
-      // استخدام التمبلت الخاص بـ Your One Time Password (OTP) is...
-      String templateToken = "eb60c2a456825a40a56dd36813e8ba8740b6dbe1c5d6921034bd9508e78d5fac";
+          if (!mounted) return;
 
-      final url = Uri.parse("https://smsmisr.com/api/OTP/").replace(queryParameters: {
-        "environment": "2", // وضع الاختبار
-        "username": "76495914",
-        "password": "p7u(Y9G9e9)",
-        "sender": "603b711e51270830768c8585915d5d179c36209b69994f8e580e060012759885",
-        "mobile": "20$phoneClean",
-        "template": templateToken,
-        "otp": generatedOtp,
-      });
+          // الانتقال لصفحة التأكيد وإرسال الـ verificationId
+          Navigator.of(context).pushNamed(
+            OtpVerificationScreen.routeName,
+            arguments: {
+              'verificationId': verificationId,
+              'user': loggedUser,
+              'isFirebase': true,
+            },
+          );
+        },
+        codeAutoRetrievalTimeout: (String verificationId) {},
+      );
 
-      debugPrint("Requesting OTP: $url");
-      final response = await http.get(url);
-
-      if (response.body.isEmpty) throw Exception("Empty response from SMS server");
-
-      final responseData = jsonDecode(response.body);
-      // تحويل الكود لنص لضمان عدم حدوث Null عند المقارنة
-      final String resultCode = responseData['code']?.toString() ?? "unknown";
-
-      // 3. معالجة النتيجة بناءً على مستندات SMS Misr
-      if (resultCode == "4901") {
-        LoggedInUser loggedUser = LoggedInUser(
-          id: userToCheck.uid,
-          fullname: UserSession.merchantName ?? 'مستخدم أكسب',
-          role: userRole ?? 'seller',
-          phone: phoneClean,
-        );
-
-        if (!mounted) return;
-
-        Navigator.of(context).pushNamed(
-          OtpVerificationScreen.routeName,
-          arguments: {
-            'otp': generatedOtp,
-            'user': loggedUser,
-          },
-        );
-      } else {
-        // ترجمة الأكواد لمنع ظهور (null) للمستخدم
-        String errorDetail;
-        switch (resultCode) {
-          case "4903": errorDetail = "خطأ في بيانات حساب الإرسال"; break;
-          case "4906": errorDetail = "عفواً، رصيد رسائل SMS غير كافٍ"; break;
-          case "4909": errorDetail = "خطأ في توكن القالب (Template Token)"; break;
-          case "4905": errorDetail = "رقم الهاتف غير صحيح"; break;
-          default: errorDetail = "فشل إرسال الكود: (Code $resultCode)";
-        }
-        setState(() => _errorMessage = errorDetail);
-      }
     } catch (e) {
       debugPrint("Aksab Login Error: $e");
-      setState(() => _errorMessage = "تأكد من رقم الهاتف وكلمة المرور");
+      setState(() => _errorMessage = e.toString().replaceAll("Exception:", ""));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -189,7 +172,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         child: _isLoading
           ? const CircularProgressIndicator(color: Colors.white)
           : const Text(
-            'تسجيل الدخول (OTP)',
+            'تأكيد العهدة (OTP)',
             style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)
           ),
       ),
