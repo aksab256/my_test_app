@@ -64,7 +64,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
       // 2. إرسال الـ OTP عبر SMS Misr بنظام الـ GET
       String generatedOtp = (Random().nextInt(9000) + 1000).toString();
-      
+
       // استخدام التمبلت الخاص بـ Your One Time Password (OTP) is...
       String templateToken = "eb60c2a456825a40a56dd36813e8ba8740b6dbe1c5d6921034bd9508e78d5fac";
 
@@ -80,7 +80,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
       debugPrint("Requesting OTP: $url");
       final response = await http.get(url);
-      
+
       if (response.body.isEmpty) throw Exception("Empty response from SMS server");
 
       final responseData = jsonDecode(response.body);
@@ -117,7 +117,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         }
         setState(() => _errorMessage = errorDetail);
       }
-
     } catch (e) {
       debugPrint("Aksab Login Error: $e");
       setState(() => _errorMessage = "تأكد من رقم الهاتف وكلمة المرور");
@@ -190,9 +189,9 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         child: _isLoading
           ? const CircularProgressIndicator(color: Colors.white)
           : const Text(
-              'تسجيل الدخول (OTP)',
-              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)
-            ),
+            'تسجيل الدخول (OTP)',
+            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)
+          ),
       ),
     );
   }
