@@ -1,3 +1,6 @@
+import com.android.build.gradle.internal.api.ApkVariantOutputImpl
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -8,7 +11,7 @@ plugins {
 
 android {
     namespace = "com.aksabeg500"
-    compileSdk = 36 // مطلوب لمكتبات androidx الجديدة
+    compileSdk = 36 
 
     ndkVersion = flutter.ndkVersion
 
@@ -18,6 +21,7 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
+    // ✅ التصحيح لـ Kotlin DSL
     kotlinOptions {
         jvmTarget = "17"
     }
@@ -42,7 +46,7 @@ android {
     }
 
     buildTypes {
-        getByName("release") { // ✅ في الكوتلن نستخدم getByName بدل release مباشرة
+        release {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
