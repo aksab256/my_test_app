@@ -4,8 +4,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:provider/provider.dart'; 
-import 'package:my_test_app/providers/buyer_data_provider.dart'; 
+import 'package:provider/provider.dart';
+import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:facebook_app_events/facebook_app_events.dart';
 
 // تعريف الألوان
@@ -42,6 +42,22 @@ class CheckoutController {
     // 🚀 تعريف كائن فيسبوك للتتبع
     static final facebookAppEvents = FacebookAppEvents();
 
+    // 🌟 دالة مساعدة داخلية لجلب رقم الهاتف بناءً على نوع البائع (سيلر أو سوبر ماركت)
+    static Future<String?> _getSellerPhone(String id, bool isConsumer) async {
+        try {
+            // إذا كان مستهلك، نبحث في كولكشن السوبر ماركت، وإذا كان مشتري نبحث في السيلرز
+            final collectionName = isConsumer ? "deliverySupermarkets" : "sellers";
+            final doc = await FirebaseFirestore.instance.collection(collectionName).doc(id).get();
+            if (doc.exists) {
+                // نبحث عن حقل phone أو mobile حسب التسمية عندك
+                return doc.data()?['phone']?.toString() ?? doc.data()?['mobile']?.toString();
+            }
+        } catch (e) {
+            debugPrint('❌ Error fetching seller phone: $e');
+        }
+        return null;
+    }
+
     static Future<double> fetchCashback(String userId, String userRole) async {
         if (userId.isEmpty) return 0.0;
         final bool isConsumer = (userRole == 'consumer');
@@ -59,9 +75,6 @@ class CheckoutController {
         return 0.0;
     }
 
-    // ----------------------------------------------------
-    // 🎯 دالة تنفيذ تأكيد الطلب (النسخة الكاملة المدمجة)
-    // ----------------------------------------------------
     static Future<bool> placeOrder({
         required BuildContext context,
         required List<Map<String, dynamic>> checkoutOrders,
@@ -73,7 +86,6 @@ class CheckoutController {
         required dynamic selectedPaymentMethod,
         }) async {
 
-        // 🎯 الوصول للبروفايدر لسحب الموقع الفعال
         final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
 
         if (checkoutOrders.isEmpty || loggedUser['id'] == null) {
@@ -82,13 +94,12 @@ class CheckoutController {
             );
             return false;
         }
-        
+
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         final String paymentMethodString = selectedPaymentMethod.toString();
         final Map<String, dynamic> safeLoggedUser = Map<String, dynamic>.from(loggedUser);
 
-        // 🔍 استخراج البيانات بدقة (باستخدام الموقع الفعال من البروفايدر)
-        final String? address = buyerProvider.effectiveAddress; 
+        final String? address = buyerProvider.effectiveAddress;
         final String? repCode = (safeLoggedUser['repCode']?.toString() == 'null') ? null : safeLoggedUser['repCode']?.toString();
         final String? repName = (safeLoggedUser['repName']?.toString() == 'null') ? null : safeLoggedUser['repName']?.toString();
         final String? customerPhone = (safeLoggedUser['phone']?.toString() == 'null') ? null : safeLoggedUser['phone']?.toString();
@@ -105,12 +116,11 @@ class CheckoutController {
         final String usersCollectionName = isConsumer ? "consumers" : "users";
         final String cashbackFieldName = isConsumer ? "cashbackBalance" : "cashback";
 
-        // 🌟🌟 [معالجة الطلبات وحقن بيانات الأقسام لضمان عمل دالة اللامدا] 🌟🌟
         final List<Map<String, dynamic>> processedCheckoutOrders = [];
         for (var order in checkoutOrders) {
             Map<String, dynamic> processedOrder = Map<String, dynamic>.from(order);
             final List<dynamic> rawItems = processedOrder['items'] as List? ?? [];
-            
+
             final List<Map<String, dynamic>> processedItems = [];
             for (var item in rawItems) {
                 Map<String, dynamic> processedItem = Map<String, dynamic>.from(item);
@@ -118,15 +128,14 @@ class CheckoutController {
                 final bool isDeliveryFee = (processedItem['productId'] == 'DELIVERY_FEE' || (processedItem['isDeliveryFee'] ?? false));
 
                 if (price <= 0.0 && !isDeliveryFee) processedItem['isGift'] = true;
-                
                 if (!isConsumer && isDeliveryFee) continue;
 
                 processedItems.add({
                     ...processedItem,
-                    'mainId': processedItem['mainId'],           
-                    'subId': processedItem['subId'],             
-                    'mainCategoryId': processedItem['mainId'],    
-                    'subCategoryId': processedItem['subId'],      
+                    'mainId': processedItem['mainId'],
+                    'subId': processedItem['subId'], 
+                    'mainCategoryId': processedItem['mainId'],
+                    'subCategoryId': processedItem['subId'],
                 });
             }
             processedOrder['items'] = processedItems;
@@ -136,7 +145,7 @@ class CheckoutController {
         final Map<String, Map<String, dynamic>> groupedItems = {
             for (var order in processedCheckoutOrders) order['sellerId'] as String: order
         };
-        
+
         double actualOrderTotal = 0.0;
         for(var order in processedCheckoutOrders) {
             for(var item in (order['items'] as List)) {
@@ -145,7 +154,7 @@ class CheckoutController {
                 }
             }
         }
-        
+
         final double discountUsed = useCashback ? min(actualOrderTotal, currentCashback) : 0.0;
         final bool isGiftEligible = processedCheckoutOrders.any((order) => (order['items'] as List).any((item) => item['isGift'] == true));
         final bool needsSecureProcessing = !isConsumer && (discountUsed > 0 || isGiftEligible);
@@ -153,29 +162,33 @@ class CheckoutController {
         try {
             List<String> successfulOrderIds = [];
             final Map<String, double> commissionRatesCache = {};
+            // 🌟 كاش جديد لتخزين أرقام تليفونات البائعين
+            final Map<String, String?> sellerPhonesCache = {};
 
-            if (!isConsumer) {
-                for (final sellerId in groupedItems.keys) {
+            // جلب البيانات الأساسية (عمولة + أرقام تليفونات) قبل بدء الحلقات
+            for (final sellerId in groupedItems.keys) {
+                // جلب العمولة (للمشترين فقط)
+                if (!isConsumer) {
                     final sellerSnap = await FirebaseFirestore.instance.collection("sellers").doc(sellerId).get();
                     commissionRatesCache[sellerId] = (sellerSnap.data()?['commissionRate'] as num?)?.toDouble() ?? 0.0;
                 }
+                // جلب رقم التليفون (للكل) - الحقنة المطلوبة 💉
+                sellerPhonesCache[sellerId] = await _getSellerPhone(sellerId, isConsumer);
             }
 
             if (needsSecureProcessing) {
-                // ===================================================================================
-                // 🔥🔥 المسار الآمن: API Gateway (لمعالجة الكاش باك والهدايا)
-                // ===================================================================================
                 final List<Map<String, dynamic>> allOrdersData = [];
                 for (final sellerId in groupedItems.keys) {
                     final sellerOrder = groupedItems[sellerId]!;
                     final List<Map<String, dynamic>> safeItems = List<Map<String, dynamic>>.from(sellerOrder['items']);
                     final double subtotalPrice = safeItems.fold(0.0, (sum, item) => (item['isGift'] ?? false) ? sum : sum + ((item['price'] as num).toDouble() * (item['quantity'] as num).toDouble()));
-                    
+
                     double discountPortion = actualOrderTotal > 0 ? (subtotalPrice / actualOrderTotal) * discountUsed : 0.0;
 
                     allOrdersData.add(removeNullValues({
                         'sellerId': sellerId,
-                        'items': safeItems, 
+                        'sellerPhone': sellerPhonesCache[sellerId], // حقن الرقم للباك-إند 🚀
+                        'items': safeItems,
                         'total': subtotalPrice,
                         'paymentMethod': paymentMethodString,
                         'status': 'new-order',
@@ -183,13 +196,13 @@ class CheckoutController {
                         'commissionRateSnapshot': commissionRatesCache[sellerId] ?? 0.0,
                         'cashbackApplied': discountPortion,
                         'isCashbackUsed': discountUsed > 0,
-                      'isFinancialSettled': false,
+                        'isFinancialSettled': false,
                         'isCommissionProcessed': false,
                         'deliveryHandled': false,
-                        'buyer': { 
-                            'id': safeLoggedUser['id'], 'name': customerFullname, 'phone': customerPhone, 
-                            'email': customerEmail, 'address': address, 
-                            'lat': buyerProvider.effectiveLat, 
+                        'buyer': {
+                            'id': safeLoggedUser['id'], 'name': customerFullname, 'phone': customerPhone,
+                            'email': customerEmail, 'address': address,
+                            'lat': buyerProvider.effectiveLat,
                             'lng': buyerProvider.effectiveLng,
                             'repCode': repCode, 'repName': repName
                         },
@@ -214,12 +227,9 @@ class CheckoutController {
                     throw Exception(json.decode(response.body)['message'] ?? 'API Error');
                 }
             } else {
-                // ===================================================================================
-                // 💾 المسار المباشر: Direct Firestore Write
-                // ===================================================================================
                 for (final sellerId in groupedItems.keys) {
                     final sellerOrder = groupedItems[sellerId]!;
-                    final List<Map<String, dynamic>> allPaidItems = List<Map<String, dynamic>>.from(sellerOrder['items']); 
+                    final List<Map<String, dynamic>> allPaidItems = List<Map<String, dynamic>>.from(sellerOrder['items']);
                     double subtotalPrice = allPaidItems.fold(0.0, (sum, item) => (item['isGift'] ?? false) ? sum : sum + ((item['price'] as num).toDouble() * (item['quantity'] as num).toDouble()));
                     double discountPortion = actualOrderTotal > 0 ? (subtotalPrice / actualOrderTotal) * discountUsed : 0.0;
 
@@ -231,30 +241,31 @@ class CheckoutController {
                           'lng': buyerProvider.effectiveLng,
                           'isGpsLocation': buyerProvider.isUsingSessionLocation,
                         },
-                        'supermarketId': sellerId, 'supermarketName': sellerOrder['sellerName'],
-                        'items': allPaidItems, 
-                        'subtotalPrice': subtotalPrice, 
+                        'supermarketId': sellerId, 
+                        'supermarketName': sellerOrder['sellerName'],
+                        'supermarketPhone': sellerPhonesCache[sellerId], // حقن الرقم في الفايربيز للمستهلك 🛒
+                        'items': allPaidItems,
+                        'subtotalPrice': subtotalPrice,
                         'finalAmount': subtotalPrice - discountPortion,
                         'paymentMethod': paymentMethodString, 'status': 'new-order',
                         'orderDate': FieldValue.serverTimestamp(),
                     } : {
-                        'buyer': { 
+                        'buyer': {
                           'id': safeLoggedUser['id'], 'name': customerFullname, 'phone': customerPhone, 'address': address,
                           'lat': buyerProvider.effectiveLat, 'lng': buyerProvider.effectiveLng, 'repCode': repCode,
-'repName': repName,
-
+                          'repName': repName,
                         },
-                        'sellerId': sellerId, 'items': allPaidItems,
-                        'total': subtotalPrice, 
+                        'sellerId': sellerId, 
+                        'sellerPhone': sellerPhonesCache[sellerId], // حقن الرقم في الفايربيز للمشتري 📦
+                        'items': allPaidItems,
+                        'total': subtotalPrice,
                         'paymentMethod': paymentMethodString,
                         'status': 'new-order', 'orderDate': FieldValue.serverTimestamp(),
                         'commissionRate': commissionRatesCache[sellerId] ?? 0.0,
                         'cashbackApplied': discountPortion, 'isCashbackUsed': discountUsed > 0,
-                      'isFinancialSettled': false,
+                        'isFinancialSettled': false,
                         'isCommissionProcessed': false,
                         'deliveryHandled': false,
-                      
-
                     };
 
                     final docRef = await FirebaseFirestore.instance.collection(ordersCollectionName).add(removeNullValues(orderData));
@@ -270,7 +281,6 @@ class CheckoutController {
             }
 
             if (successfulOrderIds.isNotEmpty) {
-                // 🚀 تتبع فيسبوك
                 try {
                     facebookAppEvents.logPurchase(
                         amount: finalTotalAmount,
@@ -284,9 +294,7 @@ class CheckoutController {
                     debugPrint('Facebook Event Error: $fbError');
                 }
 
-                // تنظيف موقع الجلسة
                 buyerProvider.clearSessionLocation();
-
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم إرسال طلبك بنجاح!'), backgroundColor: kPrimaryColor));
                 return true;
             }
@@ -298,3 +306,4 @@ class CheckoutController {
         }
     }
 }
+
