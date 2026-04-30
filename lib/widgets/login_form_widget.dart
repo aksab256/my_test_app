@@ -33,7 +33,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   final AuthService _authService = AuthService();
   final Color primaryGreen = const Color(0xff28a745);
 
-  // دالة تنظيف وتنسيق الرقم
+  // دالة تنظيف وتنسيق الرقم لضمان قبول Firebase له
   String _formatPhoneNumber(String phone) {
     String cleaned = phone.trim().replaceAll(RegExp(r'\s+'), '');
     if (cleaned.startsWith('0')) {
@@ -56,10 +56,10 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     final String formattedPhone = _formatPhoneNumber(_phone);
 
     try {
-      // 1. التحقق من وجود المستخدم أولاً في الماركت (تجار أو مستهلكين أو مستخدمين عامين)
+      // 1. التحقق من وجود المستخدم في كوليكشنات أسواق أكسب
       bool userExists = false;
       final collectionsToSearch = ['consumers', 'users', 'sellers'];
-      
+
       for (var collection in collectionsToSearch) {
         var query = await FirebaseFirestore.instance
             .collection(collection)
@@ -83,7 +83,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       if (!userExists) {
         setState(() {
           _isLoading = false;
-          _errorMessage = 'هذا الرقم غير مسجل لدينا في الماركت.';
+          _errorMessage = 'رقم الهاتف هذا غير مسجل في أسواق أكسب.';
         });
         return;
       }
@@ -92,7 +92,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: formattedPhone,
         verificationCompleted: (PhoneAuthCredential credential) async {
-          // في حال التحقق التلقائي (على بعض الأجهزة)
+          // التحقق التلقائي على بعض الأجهزة
           await _signInWithCredential(credential);
         },
         verificationFailed: (FirebaseAuthException e) {
@@ -112,12 +112,12 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       debugPrint("Pre-Login Error: $e");
       setState(() {
         _isLoading = false;
-        _errorMessage = 'حدث خطأ أثناء الاتصال بالسيرفر';
+        _errorMessage = 'حدث خطأ أثناء الاتصال بالخادم';
       });
     }
   }
 
-  // دالة إظهار ديالوج الكود (OTP)
+  // دالة إظهار ديالوج إدخال كود الـ OTP
   void _showOtpDialog(String verificationId, String phone) {
     final TextEditingController otpController = TextEditingController();
     showDialog(
@@ -135,8 +135,12 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
               controller: otpController,
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
-              letterSpacing: 8,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              // ✅ [تم الإصلاح]: وضع الـ letterSpacing داخل الـ style
+              style: const TextStyle(
+                fontSize: 24, 
+                fontWeight: FontWeight.bold,
+                letterSpacing: 8,
+              ),
               decoration: InputDecoration(
                 hintText: "000000",
                 filled: true,
@@ -149,7 +153,11 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         actions: [
           Center(
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: primaryGreen, minimumSize: const Size(150, 45)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryGreen, 
+                minimumSize: const Size(150, 45),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
               onPressed: () async {
                 String smsCode = otpController.text.trim();
                 if (smsCode.length == 6) {
@@ -169,37 +177,34 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     );
   }
 
-  // الدالة النهائية لإتمام تسجيل الدخول بعد الكود
+  // الدالة النهائية لإتمام تسجيل الدخول وربط الجلسة
   Future<void> _signInWithCredential(PhoneAuthCredential credential) async {
     setState(() => _isLoading = true);
     try {
-      // تسجيل الدخول الفعلي بـ Firebase
       final authResult = await FirebaseAuth.instance.signInWithCredential(credential);
-      
+
       if (authResult.user != null) {
-        // بعد نجاح الـ OTP، نقوم بتسجيل الدخول الكلاسيكي (Email/Pass) بالخلفية لربط الجلسة
-        // ملاحظة: أنت تستخدم نظام @aksab.com للمرور
         String phoneClean = _phone.trim();
         String? userRole;
-        
+
+        // تسجيل الدخول بالخلفية لربط نظام البريد الإلكتروني الافتراضي (@aksab.com)
         try {
           userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aksab.com", _password);
         } catch (e) {
           userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aswaq.com", _password);
         }
 
-        // تحميل الجلسة والبيانات
         await UserSession.loadSession();
 
         if (mounted) {
           await Provider.of<BuyerDataProvider>(context, listen: false).initializeData(
             authResult.user?.uid,
             UserSession.ownerId,
-            UserSession.merchantName ?? "مستخدم رابية"
+            UserSession.merchantName ?? "مستخدم أسواق أكسب"
           );
         }
 
-        // إرسال البيانات لـ AWS
+        // تحديث بيانات التنبيهات على AWS
         _sendNotificationDataToAWS().catchError((e) => debugPrint("AWS Error: $e"));
 
         if (!mounted) return;
@@ -243,8 +248,8 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         await http.post(Uri.parse(apiUrl),
             headers: {"Content-Type": "application/json"},
             body: jsonEncode({
-              "userId": uid,
-              "fcmToken": token,
+              "userId": uid, 
+              "fcmToken": token, 
               "role": UserSession.role ?? "consumer"
             }));
       }
@@ -308,8 +313,8 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           shadowColor: Colors.transparent,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         ),
-        child: _isLoading 
-          ? const CircularProgressIndicator(color: Colors.white) 
+        child: _isLoading
+          ? const CircularProgressIndicator(color: Colors.white)
           : const Text('تسجيل الدخول', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
       ),
     );
