@@ -33,6 +33,17 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   final AuthService _authService = AuthService();
   final Color primaryGreen = const Color(0xff28a745);
 
+  // دالة تنظيف وتنسيق الرقم
+  String _formatPhoneNumber(String phone) {
+    String cleaned = phone.trim().replaceAll(RegExp(r'\s+'), '');
+    if (cleaned.startsWith('0')) {
+      cleaned = '+20${cleaned.substring(1)}';
+    } else if (!cleaned.startsWith('+')) {
+      cleaned = '+20$cleaned';
+    }
+    return cleaned;
+  }
+
   Future<void> _submitLogin() async {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
@@ -42,133 +53,92 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       _errorMessage = null;
     });
 
+    final String formattedPhone = _formatPhoneNumber(_phone);
+
     try {
-      String? userRole;
-      String phoneClean = _phone.trim();
+      // 1. التحقق من وجود المستخدم أولاً في الماركت (تجار أو مستهلكين أو مستخدمين عامين)
+      bool userExists = false;
+      final collectionsToSearch = ['consumers', 'users', 'sellers'];
       
-      try {
-        debugPrint("Attempting login via @aksab.com...");
-        userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aksab.com", _password);
-            } catch (e) {
-        debugPrint("Aksab failed, attempting @aswaq.com...");
-        userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aswaq.com", _password);
-      }
-
-      // 👇 ضيف الكود ده هنا بالظبط 👇
-      final userToCheck = FirebaseAuth.instance.currentUser;
-      if (userToCheck != null) {
-        var checkDoc = await FirebaseFirestore.instance.collection('consumers').doc(userToCheck.uid).get();
-        if (!checkDoc.exists) {
-          checkDoc = await FirebaseFirestore.instance.collection('users').doc(userToCheck.uid).get();
-        }
-        if (!checkDoc.exists) {
-  checkDoc = await FirebaseFirestore.instance.collection('sellers').doc(userToCheck.uid).get();
-}
-
-        if (checkDoc.exists && checkDoc.data()?['status'] == 'delete_requested') {
-          await FirebaseAuth.instance.signOut();
-          if (mounted) {
+      for (var collection in collectionsToSearch) {
+        var query = await FirebaseFirestore.instance
+            .collection(collection)
+            .where('phoneNumber', isEqualTo: formattedPhone)
+            .limit(1)
+            .get();
+        if (query.docs.isNotEmpty) {
+          userExists = true;
+          // التحقق من حالة الحذف
+          if (query.docs.first.data()['status'] == 'delete_requested') {
             setState(() {
               _isLoading = false;
-              _errorMessage = 'هذا الحساب قيد الحذف نهائياً، لا يمكن تسجيل الدخول إليه.';
+              _errorMessage = 'هذا الحساب قيد الحذف نهائياً.';
             });
+            return;
           }
-          return;
-        }
-      }
-      // 👆 نهاية الكود المضاف 👆
-
-      // تحميل بيانات الجلسة في الذاكرة
-      await UserSession.loadSession();
-
-
-      
-      
-      // 🟢 [التعديل السحري]: تحديث البروفايدر فوراً بالبيانات الجديدة المخزنة
-      // هذا السطر يمنع مشكلة "إغلاق وفتح التطبيق" ويجعل العنوان يظهر فوراً
-      if (mounted) {
-        await Provider.of<BuyerDataProvider>(context, listen: false).initializeData(
-          FirebaseAuth.instance.currentUser?.uid,
-          UserSession.ownerId,
-          UserSession.merchantName ?? "مستخدم أكسب"
-        );
-      }
-
-      // منطق الموظفين (Sub Users)
-      if (UserSession.isSubUser) {
-        final subUserDoc = await FirebaseFirestore.instance.collection("subUsers").doc(phoneClean).get();
-        if (subUserDoc.exists && subUserDoc.data()?['mustChangePassword'] == true) {
-          if (mounted) setState(() => _isLoading = false);
-          _showChangePasswordDialog(phoneClean);
-          return;
+          break;
         }
       }
 
-      _sendNotificationDataToAWS().catchError((e) => debugPrint("AWS Silent Error: $e"));
-
-      if (!mounted) return;
-      _navigateToHome(userRole ?? UserSession.role);
-
-    } catch (e) {
-      debugPrint("Core Login Error: $e");
-      if (FirebaseAuth.instance.currentUser != null) {
-        _navigateToHome(UserSession.role);
-        return;
-      }
-      
-      if (mounted) {
+      if (!userExists) {
         setState(() {
           _isLoading = false;
-          if (e.toString().contains('account-not-active')) {
-            _errorMessage = 'هذا الحساب معلق، يرجى التواصل مع الإدارة';
-          } else {
-            _errorMessage = 'رقم الهاتف أو كلمة المرور غير صحيحة';
-          }
+          _errorMessage = 'هذا الرقم غير مسجل لدينا في الماركت.';
         });
+        return;
       }
+
+      // 2. إذا وجدنا المستخدم، نبدأ عملية الـ OTP
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: formattedPhone,
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          // في حال التحقق التلقائي (على بعض الأجهزة)
+          await _signInWithCredential(credential);
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'فشل التحقق: ${e.message}';
+          });
+        },
+        codeSent: (String verificationId, int? resendToken) {
+          setState(() => _isLoading = false);
+          _showOtpDialog(verificationId, formattedPhone);
+        },
+        codeAutoRetrievalTimeout: (String verificationId) {},
+      );
+
+    } catch (e) {
+      debugPrint("Pre-Login Error: $e");
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'حدث خطأ أثناء الاتصال بالسيرفر';
+      });
     }
   }
 
-  void _navigateToHome(String? role) {
-    if (!mounted) return;
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: const Text('✅ تم تسجيل الدخول بنجاح!'), backgroundColor: primaryGreen),
-    );
-    
-    String route;
-    if (role == 'buyer') {
-      route = BuyerHomeScreen.routeName;
-    } else if (role == 'consumer') {
-      route = ConsumerHomeScreen.routeName;
-    } else if (role == 'seller') {
-      route = SellerScreen.routeName;
-    } else {
-      route = SellerScreen.routeName; 
-    }
-    
-    debugPrint("Final Redirect: $route for role: $role");
-    Navigator.of(context).pushNamedAndRemoveUntil(route, (route) => false);
-  }
-
-  void _showChangePasswordDialog(String phone) {
-    final TextEditingController newPassController = TextEditingController();
+  // دالة إظهار ديالوج الكود (OTP)
+  void _showOtpDialog(String verificationId, String phone) {
+    final TextEditingController otpController = TextEditingController();
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("تأمين الحساب", textAlign: TextAlign.center),
+        title: const Text("رمز التفعيل", textAlign: TextAlign.center),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("يرجى تعيين كلمة سر جديدة لحماية حسابك."),
+            Text("تم إرسال كود التحقق إلى\n$phone", textAlign: TextAlign.center),
             const SizedBox(height: 15),
             TextField(
-              controller: newPassController,
-              obscureText: true,
+              controller: otpController,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              letterSpacing: 8,
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               decoration: InputDecoration(
-                hintText: "كلمة السر الجديدة",
+                hintText: "000000",
                 filled: true,
                 fillColor: Colors.grey[100],
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -177,25 +147,91 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           ],
         ),
         actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: primaryGreen),
-            onPressed: () async {
-              if (newPassController.text.length < 6) return;
-              try {
-                await FirebaseAuth.instance.currentUser?.updatePassword(newPassController.text.trim());
-                await FirebaseFirestore.instance.collection("subUsers").doc(phone).update({'mustChangePassword': false});
-                
-                if (!mounted) return;
-                _navigateToHome(UserSession.role);
-              } catch (e) {
-                debugPrint("Pass update error: $e");
-              }
-            },
-            child: const Text("حفظ ودخول", style: TextStyle(color: Colors.white)),
+          Center(
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: primaryGreen, minimumSize: const Size(150, 45)),
+              onPressed: () async {
+                String smsCode = otpController.text.trim();
+                if (smsCode.length == 6) {
+                  PhoneAuthCredential credential = PhoneAuthProvider.credential(
+                    verificationId: verificationId,
+                    smsCode: smsCode,
+                  );
+                  Navigator.pop(context); // إغلاق الديالوج
+                  await _signInWithCredential(credential);
+                }
+              },
+              child: const Text("تحقق ودخول", style: TextStyle(color: Colors.white)),
+            ),
           )
         ],
       ),
     );
+  }
+
+  // الدالة النهائية لإتمام تسجيل الدخول بعد الكود
+  Future<void> _signInWithCredential(PhoneAuthCredential credential) async {
+    setState(() => _isLoading = true);
+    try {
+      // تسجيل الدخول الفعلي بـ Firebase
+      final authResult = await FirebaseAuth.instance.signInWithCredential(credential);
+      
+      if (authResult.user != null) {
+        // بعد نجاح الـ OTP، نقوم بتسجيل الدخول الكلاسيكي (Email/Pass) بالخلفية لربط الجلسة
+        // ملاحظة: أنت تستخدم نظام @aksab.com للمرور
+        String phoneClean = _phone.trim();
+        String? userRole;
+        
+        try {
+          userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aksab.com", _password);
+        } catch (e) {
+          userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aswaq.com", _password);
+        }
+
+        // تحميل الجلسة والبيانات
+        await UserSession.loadSession();
+
+        if (mounted) {
+          await Provider.of<BuyerDataProvider>(context, listen: false).initializeData(
+            authResult.user?.uid,
+            UserSession.ownerId,
+            UserSession.merchantName ?? "مستخدم رابية"
+          );
+        }
+
+        // إرسال البيانات لـ AWS
+        _sendNotificationDataToAWS().catchError((e) => debugPrint("AWS Error: $e"));
+
+        if (!mounted) return;
+        _navigateToHome(userRole ?? UserSession.role);
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = "كود التحقق غير صحيح أو انتهت صلاحيته";
+      });
+    }
+  }
+
+  void _navigateToHome(String? role) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: const Text('✅ تم تسجيل الدخول بنجاح!'), backgroundColor: primaryGreen),
+    );
+
+    String route;
+    if (role == 'buyer') {
+      route = BuyerHomeScreen.routeName;
+    } else if (role == 'consumer') {
+      route = ConsumerHomeScreen.routeName;
+    } else if (role == 'seller') {
+      route = SellerScreen.routeName;
+    } else {
+      route = SellerScreen.routeName;
+    }
+
+    Navigator.of(context).pushNamedAndRemoveUntil(route, (route) => false);
   }
 
   Future<void> _sendNotificationDataToAWS() async {
@@ -206,13 +242,17 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         const String apiUrl = "https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction";
         await http.post(Uri.parse(apiUrl),
             headers: {"Content-Type": "application/json"},
-            body: jsonEncode({"userId": uid, "fcmToken": token, "role": UserSession.role ?? "seller"}));
+            body: jsonEncode({
+              "userId": uid,
+              "fcmToken": token,
+              "role": UserSession.role ?? "consumer"
+            }));
       }
     } catch (e) {
       debugPrint("AWS Error: $e");
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Form(
@@ -268,7 +308,9 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           shadowColor: Colors.transparent,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         ),
-        child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('تسجيل الدخول', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        child: _isLoading 
+          ? const CircularProgressIndicator(color: Colors.white) 
+          : const Text('تسجيل الدخول', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -312,3 +354,4 @@ class _InputGroup extends StatelessWidget {
     );
   }
 }
+
