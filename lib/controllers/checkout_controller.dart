@@ -2,8 +2,8 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart'; // المكتبة الجديدة
 import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:facebook_app_events/facebook_app_events.dart';
@@ -13,10 +13,8 @@ const Color kPrimaryColor = Color(0xFF4CAF50);
 const Color kErrorColor = Color(0xFFE74C3C);
 const Color kDebugColor = Color(0xFFF39C12);
 
-const String CASHBACK_API_ENDPOINT = 'https://l9inzh2wck.execute-api.us-east-1.amazonaws.com/div/cashback';
-
 // ===================================================================
-// دالة مساعدة لتنظيف الكائن (إزالة الحقول التي تحمل null)
+// دالة مساعدة لتنظيف الكائن (إزالة الحقول التي تحمل null) لضمان سلامة البيانات
 // ===================================================================
 Map<String, dynamic> removeNullValues(Map<String, dynamic> obj) {
   final Map<String, dynamic> cleanObj = {};
@@ -39,17 +37,13 @@ Map<String, dynamic> removeNullValues(Map<String, dynamic> obj) {
 }
 
 class CheckoutController {
-    // 🚀 تعريف كائن فيسبوك للتتبع
     static final facebookAppEvents = FacebookAppEvents();
 
-    // 🌟 دالة مساعدة داخلية لجلب رقم الهاتف بناءً على نوع البائع (سيلر أو سوبر ماركت)
     static Future<String?> _getSellerPhone(String id, bool isConsumer) async {
         try {
-            // إذا كان مستهلك، نبحث في كولكشن السوبر ماركت، وإذا كان مشتري نبحث في السيلرز
             final collectionName = isConsumer ? "deliverySupermarkets" : "sellers";
             final doc = await FirebaseFirestore.instance.collection(collectionName).doc(id).get();
             if (doc.exists) {
-                // نبحث عن حقل phone أو mobile حسب التسمية عندك
                 return doc.data()?['phone']?.toString() ?? doc.data()?['mobile']?.toString();
             }
         } catch (e) {
@@ -157,26 +151,28 @@ class CheckoutController {
 
         final double discountUsed = useCashback ? min(actualOrderTotal, currentCashback) : 0.0;
         final bool isGiftEligible = processedCheckoutOrders.any((order) => (order['items'] as List).any((item) => item['isGift'] == true));
+        
+        // 🚀 تحديد ما إذا كان الطلب يتطلب معالجة عهدة أمان (نقاط عهدة)
         final bool needsSecureProcessing = !isConsumer && (discountUsed > 0 || isGiftEligible);
 
         try {
             List<String> successfulOrderIds = [];
             final Map<String, double> commissionRatesCache = {};
-            // 🌟 كاش جديد لتخزين أرقام تليفونات البائعين
             final Map<String, String?> sellerPhonesCache = {};
 
-            // جلب البيانات الأساسية (عمولة + أرقام تليفونات) قبل بدء الحلقات
             for (final sellerId in groupedItems.keys) {
-                // جلب العمولة (للمشترين فقط)
                 if (!isConsumer) {
                     final sellerSnap = await FirebaseFirestore.instance.collection("sellers").doc(sellerId).get();
                     commissionRatesCache[sellerId] = (sellerSnap.data()?['commissionRate'] as num?)?.toDouble() ?? 0.0;
                 }
-                // جلب رقم التليفون (للكل) - الحقنة المطلوبة 💉
                 sellerPhonesCache[sellerId] = await _getSellerPhone(sellerId, isConsumer);
             }
 
             if (needsSecureProcessing) {
+                // 🚀 استدعاء Cloud Function V2 بدلاً من Amazon
+                final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'us-east-1')
+                    .httpsCallable('processOrderInsurance'); // اسم الفانكشن الجديد للعهدة
+
                 final List<Map<String, dynamic>> allOrdersData = [];
                 for (final sellerId in groupedItems.keys) {
                     final sellerOrder = groupedItems[sellerId]!;
@@ -187,46 +183,46 @@ class CheckoutController {
 
                     allOrdersData.add(removeNullValues({
                         'sellerId': sellerId,
-                        'sellerPhone': sellerPhonesCache[sellerId], // حقن الرقم للباك-إند 🚀
+                        'sellerPhone': sellerPhonesCache[sellerId],
                         'items': safeItems,
                         'total': subtotalPrice,
                         'paymentMethod': paymentMethodString,
                         'status': 'new-order',
                         'orderDate': DateTime.now().toUtc().toIso8601String(),
                         'commissionRateSnapshot': commissionRatesCache[sellerId] ?? 0.0,
-                        'cashbackApplied': discountPortion,
+                        'insurance_points': discountPortion, // مسمى لوجستي: نقاط تأمين
                         'isCashbackUsed': discountUsed > 0,
                         'isFinancialSettled': false,
                         'isCommissionProcessed': false,
                         'deliveryHandled': false,
                         'buyer': {
-                            'id': safeLoggedUser['id'], 'name': customerFullname, 'phone': customerPhone,
-                            'email': customerEmail, 'address': address,
+                            'id': safeLoggedUser['id'], 
+                            'name': customerFullname, 
+                            'phone': customerPhone,
+                            'email': customerEmail, 
+                            'address': address,
                             'lat': buyerProvider.effectiveLat,
                             'lng': buyerProvider.effectiveLng,
-                            'repCode': repCode, 'repName': repName
+                            'repCode': repCode, // الحفاظ على حقول المندوب للشفافية
+                            'repName': repName
                         },
                     }));
                 }
 
-                final response = await http.post(
-                    Uri.parse(CASHBACK_API_ENDPOINT),
-                    headers: { 'Content-Type': 'application/json' },
-                    body: json.encode(removeNullValues({
-                        'userId': safeLoggedUser['id'],
-                        'cashbackToReserve': discountUsed,
-                        'ordersData': allOrdersData,
-                        'checkoutId': 'CH-${safeLoggedUser['id']}-${DateTime.now().millisecondsSinceEpoch}',
-                    })),
-                );
+                // تنفيذ الطلب عبر Cloud Function
+                final result = await callable.call(removeNullValues({
+                    'userId': safeLoggedUser['id'],
+                    'total_insurance_points': discountUsed, // تأمين إجمالي العهدة
+                    'ordersData': allOrdersData,
+                    'action': 'lock_assets', // تأكيد حجز العهدة
+                    'checkoutId': 'CH-${safeLoggedUser['id']}-${DateTime.now().millisecondsSinceEpoch}',
+                }));
 
-                if (response.statusCode >= 200 && response.statusCode < 300) {
-                    final result = json.decode(response.body);
-                    if (result['orderIds'] is List) successfulOrderIds.addAll(List<String>.from(result['orderIds']));
-                } else {
-                    throw Exception(json.decode(response.body)['message'] ?? 'API Error');
+                if (result.data['orderIds'] is List) {
+                    successfulOrderIds.addAll(List<String>.from(result.data['orderIds']));
                 }
             } else {
+                // الكود العادي لطلبات الكاش أو المستهلك (Firebase Direct)
                 for (final sellerId in groupedItems.keys) {
                     final sellerOrder = groupedItems[sellerId]!;
                     final List<Map<String, dynamic>> allPaidItems = List<Map<String, dynamic>>.from(sellerOrder['items']);
@@ -243,7 +239,7 @@ class CheckoutController {
                         },
                         'supermarketId': sellerId, 
                         'supermarketName': sellerOrder['sellerName'],
-                        'supermarketPhone': sellerPhonesCache[sellerId], // حقن الرقم في الفايربيز للمستهلك 🛒
+                        'supermarketPhone': sellerPhonesCache[sellerId],
                         'items': allPaidItems,
                         'subtotalPrice': subtotalPrice,
                         'finalAmount': subtotalPrice - discountPortion,
@@ -256,13 +252,14 @@ class CheckoutController {
                           'repName': repName,
                         },
                         'sellerId': sellerId, 
-                        'sellerPhone': sellerPhonesCache[sellerId], // حقن الرقم في الفايربيز للمشتري 📦
+                        'sellerPhone': sellerPhonesCache[sellerId],
                         'items': allPaidItems,
                         'total': subtotalPrice,
                         'paymentMethod': paymentMethodString,
                         'status': 'new-order', 'orderDate': FieldValue.serverTimestamp(),
                         'commissionRate': commissionRatesCache[sellerId] ?? 0.0,
-                        'cashbackApplied': discountPortion, 'isCashbackUsed': discountUsed > 0,
+                        'insurance_points': discountPortion, // استخدام نقاط التأمين
+                        'isCashbackUsed': discountUsed > 0,
                         'isFinancialSettled': false,
                         'isCommissionProcessed': false,
                         'deliveryHandled': false,
@@ -281,6 +278,7 @@ class CheckoutController {
             }
 
             if (successfulOrderIds.isNotEmpty) {
+                // إرسال تنبيهات فيسبوك للتتبع
                 try {
                     facebookAppEvents.logPurchase(
                         amount: finalTotalAmount,
@@ -295,15 +293,14 @@ class CheckoutController {
                 }
 
                 buyerProvider.clearSessionLocation();
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم إرسال طلبك بنجاح!'), backgroundColor: kPrimaryColor));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم تأكيد العهدة وإرسال الطلب!'), backgroundColor: kPrimaryColor));
                 return true;
             }
             return false;
 
         } catch (e) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ فشل الطلب: $e'), backgroundColor: kErrorColor));
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ فشل في تأمين العهدة: $e'), backgroundColor: kErrorColor));
             return false;
         }
     }
 }
-
