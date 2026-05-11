@@ -48,12 +48,14 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
 
+    debugPrint("--- بدء محاولة تسجيل الدخول ---");
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     final String formattedPhone = _formatPhoneNumber(_phone);
+    debugPrint("الرقم المنسق: $formattedPhone");
 
     try {
       // 1. التحقق من وجود المستخدم في كوليكشنات أسواق أكسب
@@ -61,15 +63,20 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       final collectionsToSearch = ['consumers', 'users', 'sellers'];
 
       for (var collection in collectionsToSearch) {
+        debugPrint("البحث في كوليكشن: $collection...");
         var query = await FirebaseFirestore.instance
             .collection(collection)
             .where('phoneNumber', isEqualTo: formattedPhone)
             .limit(1)
             .get();
+        
         if (query.docs.isNotEmpty) {
           userExists = true;
+          debugPrint("تم العثور على المستخدم في $collection");
+          
           // التحقق من حالة الحذف
           if (query.docs.first.data()['status'] == 'delete_requested') {
+            debugPrint("تنبيه: الحساب قيد الحذف");
             setState(() {
               _isLoading = false;
               _errorMessage = 'هذا الحساب قيد الحذف نهائياً.';
@@ -81,6 +88,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       }
 
       if (!userExists) {
+        debugPrint("خطأ: الرقم غير مسجل في قاعدة البيانات");
         setState(() {
           _isLoading = false;
           _errorMessage = 'رقم الهاتف هذا غير مسجل في أسواق أكسب.';
@@ -89,27 +97,32 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       }
 
       // 2. إذا وجدنا المستخدم، نبدأ عملية الـ OTP
+      debugPrint("بدء عملية التحقق عبر Firebase Phone Auth...");
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: formattedPhone,
         verificationCompleted: (PhoneAuthCredential credential) async {
-          // التحقق التلقائي على بعض الأجهزة
+          debugPrint("تم التحقق التلقائي بنجاح (Auto-verification)");
           await _signInWithCredential(credential);
         },
         verificationFailed: (FirebaseAuthException e) {
+          debugPrint("فشل Firebase OTP: ${e.code} - ${e.message}");
           setState(() {
             _isLoading = false;
             _errorMessage = 'فشل التحقق: ${e.message}';
           });
         },
         codeSent: (String verificationId, int? resendToken) {
+          debugPrint("تم إرسال الكود بنجاح. ID العملية: $verificationId");
           setState(() => _isLoading = false);
           _showOtpDialog(verificationId, formattedPhone);
         },
-        codeAutoRetrievalTimeout: (String verificationId) {},
+        codeAutoRetrievalTimeout: (String verificationId) {
+          debugPrint("انتهت مهلة استلام الكود تلقائياً");
+        },
       );
 
     } catch (e) {
-      debugPrint("Pre-Login Error: $e");
+      debugPrint("خطأ حرج قبل الدخول: $e");
       setState(() {
         _isLoading = false;
         _errorMessage = 'حدث خطأ أثناء الاتصال بالخادم';
@@ -135,9 +148,8 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
               controller: otpController,
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
-              // ✅ [تم الإصلاح]: وضع الـ letterSpacing داخل الـ style
               style: const TextStyle(
-                fontSize: 24, 
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 8,
               ),
@@ -154,12 +166,13 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           Center(
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: primaryGreen, 
+                backgroundColor: primaryGreen,
                 minimumSize: const Size(150, 45),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               onPressed: () async {
                 String smsCode = otpController.text.trim();
+                debugPrint("محاولة التحقق بالكود المُدخل: $smsCode");
                 if (smsCode.length == 6) {
                   PhoneAuthCredential credential = PhoneAuthProvider.credential(
                     verificationId: verificationId,
@@ -167,6 +180,8 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
                   );
                   Navigator.pop(context); // إغلاق الديالوج
                   await _signInWithCredential(credential);
+                } else {
+                  debugPrint("خطأ: الكود يجب أن يكون 6 أرقام");
                 }
               },
               child: const Text("تحقق ودخول", style: TextStyle(color: Colors.white)),
@@ -179,24 +194,30 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
   // الدالة النهائية لإتمام تسجيل الدخول وربط الجلسة
   Future<void> _signInWithCredential(PhoneAuthCredential credential) async {
+    debugPrint("بدء الربط النهائي مع Firebase User...");
     setState(() => _isLoading = true);
     try {
       final authResult = await FirebaseAuth.instance.signInWithCredential(credential);
 
       if (authResult.user != null) {
+        debugPrint("نجح Firebase Auth. UID: ${authResult.user?.uid}");
         String phoneClean = _phone.trim();
         String? userRole;
 
-        // تسجيل الدخول بالخلفية لربط نظام البريد الإلكتروني الافتراضي (@aksab.com)
+        // تسجيل الدخول بالخلفية لربط نظام البريد الإلكتروني الافتراضي
         try {
+          debugPrint("محاولة الربط مع النطاق @aksab.com...");
           userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aksab.com", _password);
         } catch (e) {
+          debugPrint("فشل النطاق الأول، تجربة @aswaq.com...");
           userRole = await _authService.signInWithEmailAndPassword("$phoneClean@aswaq.com", _password);
         }
 
+        debugPrint("تم تحديد الصلاحية: $userRole");
         await UserSession.loadSession();
 
         if (mounted) {
+          debugPrint("تهيئة بيانات البروفايدر (BuyerDataProvider)...");
           await Provider.of<BuyerDataProvider>(context, listen: false).initializeData(
             authResult.user?.uid,
             UserSession.ownerId,
@@ -205,12 +226,14 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         }
 
         // تحديث بيانات التنبيهات على AWS
-        _sendNotificationDataToAWS().catchError((e) => debugPrint("AWS Error: $e"));
+        debugPrint("إرسال بيانات التنبيهات إلى AWS...");
+        _sendNotificationDataToAWS().then((_) => debugPrint("تم تحديث AWS بنجاح")).catchError((e) => debugPrint("AWS Error: $e"));
 
         if (!mounted) return;
         _navigateToHome(userRole ?? UserSession.role);
       }
     } catch (e) {
+      debugPrint("فشل التوثيق النهائي: $e");
       setState(() {
         _isLoading = false;
         _errorMessage = "كود التحقق غير صحيح أو انتهت صلاحيته";
@@ -219,6 +242,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   }
 
   void _navigateToHome(String? role) {
+    debugPrint("توجيه المستخدم للواجهة بناءً على الصلاحية: $role");
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -245,16 +269,17 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       String? uid = FirebaseAuth.instance.currentUser?.uid;
       if (token != null && uid != null) {
         const String apiUrl = "https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction";
-        await http.post(Uri.parse(apiUrl),
+        var response = await http.post(Uri.parse(apiUrl),
             headers: {"Content-Type": "application/json"},
             body: jsonEncode({
-              "userId": uid, 
-              "fcmToken": token, 
+              "userId": uid,
+              "fcmToken": token,
               "role": UserSession.role ?? "consumer"
             }));
+        debugPrint("AWS Response Code: ${response.statusCode}");
       }
     } catch (e) {
-      debugPrint("AWS Error: $e");
+      debugPrint("فشل إرسال التوكن لـ AWS: $e");
     }
   }
 
