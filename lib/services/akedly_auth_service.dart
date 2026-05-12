@@ -2,13 +2,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AkedlyAuthService {
-  // الـ API Key الخاص بك من منصة Akedly
+  // الـ API Key الخاص بك من منصة Akedly (محدث)
   final String apiKey = "f032dc4687c452cb7c340a91df69ed419e6a5330c3bb9b2f826828bf381e3624";
   
-  // ملاحظة: Pipeline ID تجده في تبويب OTP Pipelines بداخل حسابك
-  final String pipelineId = "YOUR_PIPELINE_ID"; 
+  // الـ Pipeline ID المستخرج من لوحة التحكم (Aksab Pipeline)
+  final String pipelineId = "6a02edb9dc6f2a6f8749e7943c2c4314"; 
 
-  // دالة إرسال كود التحقق للمندوب أو المستخدم
+  // دالة إرسال كود التحقق للمندوب أو المستخدم لشركة أسواق أكسب
   Future<String?> sendOtp(String phoneNumber) async {
     final url = Uri.parse("https://api.akedly.io/v1/otp/send");
     
@@ -18,11 +18,12 @@ class AkedlyAuthService {
         headers: {
           "Authorization": "Bearer $apiKey",
           "Content-Type": "application/json",
+          "Accept": "application/json",
         },
         body: jsonEncode({
           "pipeline_id": pipelineId,
           "recipient": phoneNumber,
-          "ttl": 300, // الكود صالح لمدة 5 دقائق لضمان وصوله
+          "ttl": 300, // الكود صالح لمدة 5 دقائق لضمان وصوله للمندوب
         }),
       );
 
@@ -32,16 +33,17 @@ class AkedlyAuthService {
         // نرجّح الـ step_id لاستخدامه في عملية التحقق اللاحقة
         return responseData['step_id'];
       } else {
+        // طباعة الرسالة القادمة من السيرفر لتسهيل المعالجة
         print("خطأ من Akedly: ${responseData['message']}");
         return null;
       }
     } catch (error) {
-      print("فشل الاتصال بمزود الخدمة: $error");
+      print("فشل الاتصال بمزود الخدمة في أسواق أكسب: $error");
       return null;
     }
   }
 
-  // دالة التحقق من الكود لفتح "العهدة" وإدارة "نقاط التأمين"
+  // دالة التحقق من الكود لفتح "العهدة" وإدارة "نقاط التأمين" لضمان النقل الآمن
   Future<bool> verifyOtp(String stepId, String code) async {
     final url = Uri.parse("https://api.akedly.io/v1/otp/verify");
 
@@ -51,6 +53,7 @@ class AkedlyAuthService {
         headers: {
           "Authorization": "Bearer $apiKey",
           "Content-Type": "application/json",
+          "Accept": "application/json",
         },
         body: jsonEncode({
           "step_id": stepId,
@@ -59,13 +62,15 @@ class AkedlyAuthService {
       );
 
       if (response.statusCode == 200) {
-        // تم تأكيد الهوية بنجاح
+        // تم تأكيد الهوية بنجاح، يمكن الآن المتابعة لإدارة العهدة
         return true;
       } else {
+        final responseData = jsonDecode(response.body);
+        print("كود التحقق غير صحيح: ${responseData['message']}");
         return false;
       }
     } catch (error) {
-      print("خطأ أثناء عملية التحقق: $error");
+      print("خطأ أثناء عملية التحقق من العهدة: $error");
       return false;
     }
   }
