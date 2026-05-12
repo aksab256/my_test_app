@@ -1,4 +1,3 @@
-// lib/screens/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:my_test_app/widgets/login_form_widget.dart';
 import 'package:flutter/gestures.dart';
@@ -14,7 +13,6 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // حالة الموافقة على الشروط
   bool _isTermsAccepted = true;
 
   @override
@@ -28,11 +26,13 @@ class _LoginScreenState extends State<LoginScreen> {
         textDirection: TextDirection.rtl,
         child: Stack(
           children: [
-            // خلفية جمالية علوية
             Positioned(
               top: -80,
               right: -80,
-              child: CircleAvatar(radius: 120, backgroundColor: primaryGreen.withOpacity(0.05)),
+              child: CircleAvatar(
+                radius: 120, 
+                backgroundColor: primaryGreen.withOpacity(0.05)
+              ),
             ),
             Center(
               child: SingleChildScrollView(
@@ -41,10 +41,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // شعار أسواق أكسب
-                    const Icon(Icons.account_circle, size: 120, color: primaryGreen),
-                    SizedBox(height: 3.h),
+                    const Icon(Icons.account_circle, size: 100, color: primaryGreen),
+                    SizedBox(height: 2.h),
                     Text(
-                      'أهلاً بك في أسواق أكسب', // العودة للاسم الصحيح
+                      'أهلاً بك في أسواق أكسب',
                       style: TextStyle(
                         fontSize: 22.sp,
                         fontWeight: FontWeight.w900,
@@ -54,11 +54,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     SizedBox(height: 1.h),
                     Text(
                       'سجل دخولك برقم الهاتف للمتابعة',
-                      style: TextStyle(fontSize: 12.sp, color: Colors.grey.shade600),
+                      style: TextStyle(fontSize: 11.sp, color: Colors.grey.shade600),
                     ),
-                    SizedBox(height: 5.h),
+                    SizedBox(height: 4.h),
                     
-                    // حاوية الفورم
                     Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
@@ -72,7 +71,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           )
                         ],
                       ),
-                      // تعطيل التفاعل مع الفورم في حال عدم الموافقة على الشروط
                       child: IgnorePointer(
                         ignoring: !_isTermsAccepted,
                         child: Opacity(
@@ -84,7 +82,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     
                     SizedBox(height: 3.h),
                     
-                    // مكون الفوتر (الشروط وإنشاء الحساب)
                     _FooterWidget(
                       isAccepted: _isTermsAccepted,
                       onChanged: (val) {
@@ -123,7 +120,6 @@ class _FooterWidget extends StatelessWidget {
 
     return Column(
       children: [
-        // شروط الاستخدام والخصوصية
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -136,10 +132,10 @@ class _FooterWidget extends StatelessWidget {
               child: Text.rich(
                 TextSpan(
                   text: 'أوافق على ',
-                  style: TextStyle(color: Colors.grey.shade700, fontSize: 11.sp),
+                  style: TextStyle(color: Colors.grey.shade700, fontSize: 10.sp),
                   children: [
                     TextSpan(
-                      text: 'شروط الاستخدام والخصوصية',
+                      text: 'شروط الاستخدام والخصوصية لشركة أسواق أكسب',
                       style: const TextStyle(
                         color: primaryGreen,
                         fontWeight: FontWeight.bold,
@@ -154,17 +150,17 @@ class _FooterWidget extends StatelessWidget {
             ),
           ],
         ),
-        SizedBox(height: 1.h),
-        // إنشاء حساب جديد
+        SizedBox(height: 2.h),
         Text.rich(
           TextSpan(
             text: 'ليس لديك حساب؟ ',
-            style: TextStyle(color: Colors.grey.shade700, fontSize: 13.sp),
+            style: TextStyle(color: Colors.grey.shade700, fontSize: 12.sp),
             children: [
               TextSpan(
                 text: 'إنشاء حساب جديد',
                 style: const TextStyle(color: primaryGreen, fontWeight: FontWeight.bold),
-                recognizer: TapGestureRecognizer()..onTap = () => Navigator.of(context).pushNamed('/register'),
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () => Navigator.of(context).pushNamed('/register'),
               ),
             ],
           ),
@@ -174,4 +170,3 @@ class _FooterWidget extends StatelessWidget {
     );
   }
 }
-

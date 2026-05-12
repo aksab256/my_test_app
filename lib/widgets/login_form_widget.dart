@@ -1,19 +1,13 @@
-// lib/widgets/login_form_widget.dart
 import 'package:flutter/material.dart';
-import 'package:my_test_app/helpers/auth_service.dart';
-import 'package:my_test_app/screens/forgot_password_screen.dart';
+import 'package:my_test_app/services/akedly_auth_service.dart'; // الخدمة الجديدة
 import 'package:my_test_app/services/user_session.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-
-// 🟢 [إضافة دقيقة]: استيراد البروفايدر لربط البيانات لحظياً
 import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
-
-// استيراد الشاشات لجلب الـ routeName الصحيح
 import 'package:my_test_app/screens/buyer/buyer_home_screen.dart';
 import 'package:my_test_app/screens/consumer/consumer_home_screen.dart';
 import 'package:my_test_app/screens/seller_screen.dart';
@@ -27,19 +21,20 @@ class LoginFormWidget extends StatefulWidget {
 class _LoginFormWidgetState extends State<LoginFormWidget> {
   final _formKey = GlobalKey<FormState>();
   String _phone = '';
-  String _password = '';
   bool _isLoading = false;
   String? _errorMessage;
-  final AuthService _authService = AuthService();
+  
+  // استدعاء خدمة Akedly الجديدة
+  final AkedlyAuthService _akedlyService = AkedlyAuthService();
   final Color primaryGreen = const Color(0xff28a745);
 
-  // دالة تنظيف وتنسيق الرقم لضمان قبول Firebase له
   String _formatPhoneNumber(String phone) {
     String cleaned = phone.trim().replaceAll(RegExp(r'\s+'), '');
     if (cleaned.startsWith('0')) {
-      cleaned = '+20${cleaned.substring(1)}';
-    } else if (!cleaned.startsWith('+')) {
-      cleaned = '+20$cleaned';
+      // تحويل 012... إلى 2012... (Akedly يفضل التنسيق الدولي بدون + أحياناً أو به)
+      cleaned = '20${cleaned.substring(1)}';
+    } else if (!cleaned.startsWith('20') && !cleaned.startsWith('+')) {
+      cleaned = '20$cleaned';
     }
     return cleaned;
   }
@@ -58,20 +53,26 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     debugPrint("الرقم المنسق: $formattedPhone");
 
     try {
-      // 1. التحقق من وجود المستخدم في كوليكشنات أسواق أكسب
+      // 1. التأكد من وجود المندوب أو العميل في المنظومة أولاً
       bool userExists = false;
-      final collectionsToSearch = ['consumers', 'users', 'sellers'];
+      String? foundRole;
+      final collections = ['consumers', 'users', 'sellers'];
 
+<<<<<<< HEAD
       for (var collection in collectionsToSearch) {
         debugPrint("البحث في كوليكشن: $collection...");
+=======
+      for (var col in collections) {
+>>>>>>> 426db27 (Integration of Akedly OTP service and removal of password field for Aswaq Aksab)
         var query = await FirebaseFirestore.instance
-            .collection(collection)
-            .where('phoneNumber', isEqualTo: formattedPhone)
+            .collection(col)
+            .where('phoneNumber', isEqualTo: _phone.trim().startsWith('0') ? _phone.trim() : '0${_phone.trim()}') 
             .limit(1)
             .get();
         
         if (query.docs.isNotEmpty) {
           userExists = true;
+<<<<<<< HEAD
           debugPrint("تم العثور على المستخدم في $collection");
           
           // التحقق من حالة الحذف
@@ -83,6 +84,9 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
             });
             return;
           }
+=======
+          foundRole = col == 'users' ? 'buyer' : (col == 'sellers' ? 'seller' : 'consumer');
+>>>>>>> 426db27 (Integration of Akedly OTP service and removal of password field for Aswaq Aksab)
           break;
         }
       }
@@ -91,11 +95,12 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         debugPrint("خطأ: الرقم غير مسجل في قاعدة البيانات");
         setState(() {
           _isLoading = false;
-          _errorMessage = 'رقم الهاتف هذا غير مسجل في أسواق أكسب.';
+          _errorMessage = 'عذراً، هذا الرقم غير مسجل في منظومة رابية أحلى.';
         });
         return;
       }
 
+<<<<<<< HEAD
       // 2. إذا وجدنا المستخدم، نبدأ عملية الـ OTP
       debugPrint("بدء عملية التحقق عبر Firebase Phone Auth...");
       await FirebaseAuth.instance.verifyPhoneNumber(
@@ -123,19 +128,34 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
     } catch (e) {
       debugPrint("خطأ حرج قبل الدخول: $e");
+=======
+      // 2. إرسال الكود عبر Akedly
+      debugPrint("--- [Akedly]: محاولة إرسال كود التحقق لـ $formattedPhone ---");
+      String? stepId = await _akedlyService.sendOtp(formattedPhone);
+
+      setState(() => _isLoading = false);
+
+      if (stepId != null) {
+        _showOtpDialog(stepId, formattedPhone, foundRole!);
+      } else {
+        setState(() => _errorMessage = 'فشل إرسال الكود، يرجى المحاولة لاحقاً.');
+      }
+
+    } catch (e) {
+>>>>>>> 426db27 (Integration of Akedly OTP service and removal of password field for Aswaq Aksab)
       setState(() {
         _isLoading = false;
-        _errorMessage = 'حدث خطأ أثناء الاتصال بالخادم';
+        _errorMessage = 'حدث خطأ في الاتصال بالخادم.';
       });
     }
   }
 
-  // دالة إظهار ديالوج إدخال كود الـ OTP
-  void _showOtpDialog(String verificationId, String phone) {
+  void _showOtpDialog(String stepId, String phone, String role) {
     final TextEditingController otpController = TextEditingController();
     showDialog(
       context: context,
       barrierDismissible: false,
+<<<<<<< HEAD
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text("رمز التفعيل", textAlign: TextAlign.center),
@@ -152,16 +172,56 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 8,
+=======
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text("تأكيد الهوية", textAlign: TextAlign.center),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text("أدخل الكود المرسل للرقم\n$phone", textAlign: TextAlign.center),
+              const SizedBox(height: 20),
+              TextField(
+                controller: otpController,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                maxLength: 6,
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 10),
+                decoration: InputDecoration(
+                  counterText: "",
+                  hintText: "000000",
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+>>>>>>> 426db27 (Integration of Akedly OTP service and removal of password field for Aswaq Aksab)
               ),
-              decoration: InputDecoration(
-                hintText: "000000",
-                filled: true,
-                fillColor: Colors.grey[100],
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            ],
+          ),
+          actions: [
+            Center(
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryGreen,
+                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () async {
+                  String code = otpController.text.trim();
+                  if (code.length == 6) {
+                    Navigator.pop(context); // إغلاق الديالوج
+                    _verifyAndLogin(stepId, code, role);
+                  }
+                },
+                child: const Text("دخول للنظام", style: TextStyle(color: Colors.white)),
               ),
             ),
+            const SizedBox(height: 10),
           ],
         ),
+<<<<<<< HEAD
         actions: [
           Center(
             child: ElevatedButton(
@@ -188,17 +248,24 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
             ),
           )
         ],
+=======
+>>>>>>> 426db27 (Integration of Akedly OTP service and removal of password field for Aswaq Aksab)
       ),
     );
   }
 
+<<<<<<< HEAD
   // الدالة النهائية لإتمام تسجيل الدخول وربط الجلسة
   Future<void> _signInWithCredential(PhoneAuthCredential credential) async {
     debugPrint("بدء الربط النهائي مع Firebase User...");
+=======
+  Future<void> _verifyAndLogin(String stepId, String code, String role) async {
+>>>>>>> 426db27 (Integration of Akedly OTP service and removal of password field for Aswaq Aksab)
     setState(() => _isLoading = true);
-    try {
-      final authResult = await FirebaseAuth.instance.signInWithCredential(credential);
+    
+    bool isVerified = await _akedlyService.verifyOtp(stepId, code);
 
+<<<<<<< HEAD
       if (authResult.user != null) {
         debugPrint("نجح Firebase Auth. UID: ${authResult.user?.uid}");
         String phoneClean = _phone.trim();
@@ -234,32 +301,47 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       }
     } catch (e) {
       debugPrint("فشل التوثيق النهائي: $e");
+=======
+    if (isVerified) {
+      // محاكاة تسجيل دخول للفيربيز لضمان عمل الـ Listeners
+      try { await FirebaseAuth.instance.signInAnonymously(); } catch (_) {}
+
+      await UserSession.loadSession(); // تحميل الجلسة لقراءة العهدة ونقاط الأمان
+
+      if (mounted) {
+        await Provider.of<BuyerDataProvider>(context, listen: false).initializeData(
+          FirebaseAuth.instance.currentUser?.uid,
+          UserSession.ownerId,
+          UserSession.merchantName ?? "مستخدم رابية أحلى"
+        );
+        
+        _sendNotificationDataToAWS().catchError((e) => debugPrint("AWS Error: $e"));
+        _navigateToHome(role);
+      }
+    } else {
+>>>>>>> 426db27 (Integration of Akedly OTP service and removal of password field for Aswaq Aksab)
       setState(() {
         _isLoading = false;
-        _errorMessage = "كود التحقق غير صحيح أو انتهت صلاحيته";
+        _errorMessage = "كود التحقق غير صحيح، حاول مرة أخرى.";
       });
     }
   }
 
+<<<<<<< HEAD
   void _navigateToHome(String? role) {
     debugPrint("توجيه المستخدم للواجهة بناءً على الصلاحية: $role");
+=======
+  void _navigateToHome(String role) {
+>>>>>>> 426db27 (Integration of Akedly OTP service and removal of password field for Aswaq Aksab)
     if (!mounted) return;
-
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: const Text('✅ تم تسجيل الدخول بنجاح!'), backgroundColor: primaryGreen),
+      SnackBar(content: const Text('✅ أهلاً بك في رابية أحلى'), backgroundColor: primaryGreen),
     );
-
-    String route;
-    if (role == 'buyer') {
-      route = BuyerHomeScreen.routeName;
-    } else if (role == 'consumer') {
-      route = ConsumerHomeScreen.routeName;
-    } else if (role == 'seller') {
-      route = SellerScreen.routeName;
-    } else {
-      route = SellerScreen.routeName;
-    }
-
+    
+    String route = SellerScreen.routeName;
+    if (role == 'buyer') route = BuyerHomeScreen.routeName;
+    else if (role == 'consumer') route = ConsumerHomeScreen.routeName;
+    
     Navigator.of(context).pushNamedAndRemoveUntil(route, (route) => false);
   }
 
@@ -271,6 +353,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         const String apiUrl = "https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction";
         var response = await http.post(Uri.parse(apiUrl),
             headers: {"Content-Type": "application/json"},
+<<<<<<< HEAD
             body: jsonEncode({
               "userId": uid,
               "fcmToken": token,
@@ -281,6 +364,11 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     } catch (e) {
       debugPrint("فشل إرسال التوكن لـ AWS: $e");
     }
+=======
+            body: jsonEncode({"userId": uid, "fcmToken": token, "role": UserSession.role ?? "consumer"}));
+      }
+    } catch (e) { debugPrint("AWS Error: $e"); }
+>>>>>>> 426db27 (Integration of Akedly OTP service and removal of password field for Aswaq Aksab)
   }
 
   @override
@@ -291,31 +379,16 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         children: [
           _InputGroup(
             icon: Icons.phone_android,
-            hintText: 'رقم الهاتف',
+            hintText: 'رقم الهاتف (01xxxxxxxxx)',
             keyboardType: TextInputType.phone,
-            validator: (value) => (value == null || value.isEmpty) ? 'مطلوب' : null,
+            validator: (value) => (value == null || value.isEmpty) ? 'يرجى إدخال الرقم' : null,
             onSaved: (value) => _phone = value!,
           ),
-          const SizedBox(height: 18),
-          _InputGroup(
-            icon: Icons.lock_outline,
-            hintText: 'كلمة المرور',
-            isPassword: true,
-            validator: (value) => (value == null || value.length < 6) ? 'قصيرة جداً' : null,
-            onSaved: (value) => _password = value!,
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (context) => const ForgotPasswordScreen())),
-              child: Text('نسيت كلمة المرور؟', style: TextStyle(color: primaryGreen)),
-            ),
-          ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 25),
           _buildSubmitButton(),
           if (_errorMessage != null)
             Padding(
-              padding: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.only(top: 15),
               child: Text(_errorMessage!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
             ),
         ],
@@ -340,7 +413,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         ),
         child: _isLoading
           ? const CircularProgressIndicator(color: Colors.white)
-          : const Text('تسجيل الدخول', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          : const Text('إرسال كود التفعيل', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -349,7 +422,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 class _InputGroup extends StatelessWidget {
   final IconData icon;
   final String hintText;
-  final bool isPassword;
   final TextInputType keyboardType;
   final FormFieldValidator<String> validator;
   final FormFieldSetter<String> onSaved;
@@ -359,14 +431,12 @@ class _InputGroup extends StatelessWidget {
     required this.hintText,
     required this.validator,
     required this.onSaved,
-    this.isPassword = false,
     this.keyboardType = TextInputType.text,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextFormField(
-      obscureText: isPassword,
       textAlign: TextAlign.right,
       keyboardType: keyboardType,
       decoration: InputDecoration(
@@ -384,4 +454,3 @@ class _InputGroup extends StatelessWidget {
     );
   }
 }
-
