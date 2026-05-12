@@ -6,7 +6,7 @@ class AkedlyAuthService {
   final String apiKey = "f032dc4687c452cb7c340a91df69ed419e6a5330c3bb9b2f826828bf381e3624";
   
   // الـ Pipeline ID المستخرج من لوحة التحكم (Aksab Pipeline)
-  final String pipelineId = "6a02edb9dc6f2a6f8749e7943c2c4314"; 
+  final String pipelineId = "6a02edb9dc826dd83e860ad1"; 
 
   // دالة إرسال كود التحقق للمندوب أو المستخدم لشركة أسواق أكسب
   Future<String?> sendOtp(String phoneNumber) async {
