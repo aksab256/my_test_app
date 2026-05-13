@@ -1,55 +1,57 @@
-import 'package:akedly/akedly.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class AkedlyAuthService {
   final String _apiKey = "f032dc4687c452cb7c340a91df69ed419e6a5330c3bb9b2f826828bf381e3624";
   final String _pipelineId = "6a02edb9dc826dd83e860ad1";
-
-  late final AkedlyClient _akedly;
-
-  AkedlyAuthService() {
-    _akedly = AkedlyClient(
-      apiKey: _apiKey,
-      pipelineId: _pipelineId,
-    );
-  }
+  final String _baseUrl = "https://api.akedly.io/api/v1.2"; // المسار اللي السيرفر طلبه
 
   Future<AuthResult> sendOtpDetailed(String phoneNumber) async {
     String p = phoneNumber.trim();
-    if (p.startsWith('0')) { p = '2$p'; } 
-    else if (!p.startsWith('2') && !p.startsWith('+')) { p = '2$p'; }
-
+    if (p.startsWith('0')) { p = '2$p'; }
+    
     try {
-      // التعديل الجوهري: بعتنا الـ p والـ _pipelineId عشان نحل خطأ الـ "2 required"
-      final verificationId = await _akedly.sendOTP(p, _pipelineId);
-      
-      if (verificationId != null) {
-        return AuthResult.success(data: verificationId);
+      final response = await http.post(
+        Uri.parse('$_baseUrl/transactions'),
+        headers: {
+          'X-API-KEY': _apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'pipeline_id': _pipelineId,
+          'phone_number': p,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return AuthResult.success(data: data['step_id'] ?? data['transaction_id']);
       } else {
-        return AuthResult.failure(message: 'Failed to send OTP');
+        return AuthResult.failure(message: data['message'] ?? 'فشل الإرسال');
       }
-    } on AkedlyException catch (e) {
-      return AuthResult.failure(message: e.message);
     } catch (e) {
-      return AuthResult.failure(message: 'Network error: ${e.toString()}');
+      return AuthResult.failure(message: e.toString());
     }
   }
 
-  Future<bool> verifyOtp(String verificationId, String otp) async {
+  Future<bool> verifyOtp(String stepId, String otp) async {
     try {
-      // التأكد من تمرير المعاملات بالترتيب الصح (ID ثم الكود)
-      final isValid = await _akedly.verifyOTP(verificationId, otp);
-      return isValid;
+      final response = await http.post(
+        Uri.parse('$_baseUrl/transactions/verify'),
+        headers: {
+          'X-API-KEY': _apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'pipeline_id': _pipelineId,
+          'step_id': stepId,
+          'otp': otp,
+        }),
+      );
+      return response.statusCode == 200;
     } catch (e) {
       return false;
     }
   }
-}
-
-// كلاس النتيجة زي ما هو في المثال عشان التنظيم
-class AuthResult {
-  final bool isSuccess;
-  final String? message;
-  final String? data;
-  AuthResult.success({this.data}) : isSuccess = true, message = null;
-  AuthResult.failure({required this.message}) : isSuccess = false, data = null;
 }
