@@ -98,20 +98,20 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
       _updateDebug("📡 جاري إرسال OTP عبر Akedly...");
       
-      // مناداة الدالة الجديدة واستلام الرد التفصيلي
+      // مناداة الدالة الجديدة واستلام الرد التفصيلي كـ AuthResult Object
       final result = await _akedlyService.sendOtpDetailed(formattedPhone);
       
       setState(() => _isLoading = false);
 
-      if (result['success']) {
-        final data = jsonDecode(result['body']);
-        String stepId = data['step_id'];
-        _updateDebug("✅ تم الإرسال بنجاح!\nStepId: $stepId\nResponse: ${result['body']}");
+      if (result.isSuccess) {
+        // الوصول للبيانات من خلال خصائص الـ Object (result.data) بدلاً من Map keys
+        String stepId = result.data ?? "";
+        _updateDebug("✅ تم الإرسال بنجاح!\nStepId: $stepId");
         _showOtpDialog(stepId, formattedPhone, foundRole!);
       } else {
-        // عرض الرد الخام في حالة الفشل (مهم جداً لكشف حظر ميتا)
+        // عرض رسالة الخطأ المخزنة في الـ Object
         _updateDebug(
-          "⚠️ فشل الإرسال (Status: ${result['status']})\nالرد الخام من السيرفر:\n${result['body']}", 
+          "⚠️ فشل الإرسال\nالسبب: ${result.message}", 
           isError: true
         );
       }
