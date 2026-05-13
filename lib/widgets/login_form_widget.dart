@@ -13,6 +13,7 @@ import 'package:my_test_app/screens/seller_screen.dart';
 
 class LoginFormWidget extends StatefulWidget {
   const LoginFormWidget({super.key});
+
   @override
   State<LoginFormWidget> createState() => _LoginFormWidgetState();
 }
@@ -22,22 +23,23 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   String _phone = '';
   bool _isLoading = false;
   
-  // متغيرات لعرض رسائل الكونسول على الواجهة
+  // متغيرات لعرض رسائل الكونسول على الواجهة لتشخيص الأعطال لايف
   String? _errorMessage;
   String? _debugInfo; 
 
   final AkedlyAuthService _akedlyService = AkedlyAuthService();
   final Color primaryGreen = const Color(0xff28a745);
 
-  // تحديث حالة الرسائل على الشاشة
+  // تحديث حالة الرسائل على الشاشة لمتابعة ردود السيرفر
   void _updateDebug(String info, {bool isError = false}) {
     setState(() {
       _debugInfo = info;
-      if (isError) _errorMessage = info;
+      _errorMessage = isError ? info : null;
     });
-    debugPrint(info); // بتطبع في الكونسول برضه للاحتياط
+    debugPrint(info);
   }
 
+  // تنسيق الرقم ليكون دولياً (بداية بـ 2) لضمان قبول Akedly
   String _formatPhoneNumber(String phone) {
     String cleaned = phone.trim().replaceAll(RegExp(r'\s+'), '');
     if (cleaned.startsWith('0')) {
@@ -66,6 +68,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       String? foundRole;
       final collections = ['consumers', 'users', 'sellers'];
 
+      // تنويعات البحث لضمان العثور على الرقم بأي صيغة في Firestore
       final String phoneWithZero = _phone.trim().startsWith('0') ? _phone.trim() : '0${_phone.trim()}';
       final String phoneWithoutZero = _phone.trim().startsWith('0') ? _phone.trim().substring(1) : _phone.trim();
       final List<String> searchVariations = [phoneWithZero, phoneWithoutZero, formattedPhone];
@@ -82,34 +85,40 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         if (query.docs.isNotEmpty) {
           userExists = true;
           foundRole = col == 'users' ? 'buyer' : (col == 'sellers' ? 'seller' : 'consumer');
-          _updateDebug("تم العثور على المستخدم في مجموعة: $col برتبة: $foundRole");
+          _updateDebug("✅ تم العثور على المستخدم في مجموعة: $col برتبة: $foundRole");
           break;
         }
       }
 
       if (!userExists) {
         setState(() => _isLoading = false);
-        _updateDebug("خطأ: الرقم $phoneWithZero غير مسجل في أي مجموعة.", isError: true);
+        _updateDebug("❌ خطأ: الرقم $phoneWithZero غير مسجل في أي مجموعة.", isError: true);
         return;
       }
 
-      _updateDebug("جاري إرسال OTP لـ Akedly...");
+      _updateDebug("📡 جاري إرسال OTP عبر Akedly...");
       
-      // إرسال الكود عبر Akedly
-      String? stepId = await _akedlyService.sendOtp(formattedPhone);
+      // مناداة الدالة الجديدة واستلام الرد التفصيلي
+      final result = await _akedlyService.sendOtpDetailed(formattedPhone);
       
       setState(() => _isLoading = false);
 
-      if (stepId != null) {
-        _updateDebug("تم إرسال الكود بنجاح. StepId: $stepId");
+      if (result['success']) {
+        final data = jsonDecode(result['body']);
+        String stepId = data['step_id'];
+        _updateDebug("✅ تم الإرسال بنجاح!\nStepId: $stepId\nResponse: ${result['body']}");
         _showOtpDialog(stepId, formattedPhone, foundRole!);
       } else {
-        _updateDebug("فشل Akedly في الإرسال. تأكد من الـ Pipeline Active والرصيد.", isError: true);
+        // عرض الرد الخام في حالة الفشل (مهم جداً لكشف حظر ميتا)
+        _updateDebug(
+          "⚠️ فشل الإرسال (Status: ${result['status']})\nالرد الخام من السيرفر:\n${result['body']}", 
+          isError: true
+        );
       }
 
     } catch (e) {
       setState(() => _isLoading = false);
-      _updateDebug("حدث استثناء (Exception): ${e.toString()}", isError: true);
+      _updateDebug("💥 حدث استثناء برمجي: ${e.toString()}", isError: true);
     }
   }
 
@@ -171,14 +180,14 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
   Future<void> _verifyAndLogin(String stepId, String code, String role) async {
     setState(() => _isLoading = true);
-    _updateDebug("جاري التحقق من الكود: $code");
+    _updateDebug("🔄 جاري التحقق من الكود: $code");
 
     bool isVerified = await _akedlyService.verifyOtp(stepId, code);
 
     if (isVerified) {
-      _updateDebug("تم التحقق بنجاح! جاري تسجيل الدخول...");
+      _updateDebug("🎉 تم التحقق بنجاح! جاري تسجيل الدخول...");
       try { await FirebaseAuth.instance.signInAnonymously(); } catch (e) {
-        _updateDebug("فشل الـ Anonymous Login: $e");
+        _updateDebug("⚠️ فشل الـ Anonymous Login: $e");
       }
       
       await UserSession.loadSession(); 
@@ -187,21 +196,21 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         await Provider.of<BuyerDataProvider>(context, listen: false).initializeData(
           FirebaseAuth.instance.currentUser?.uid,
           UserSession.ownerId,
-          UserSession.merchantName ?? "مستخدم أسواق أكسب"
+          UserSession.merchantName ?? "مستخدم رابية أحلى"
         );
-        _updateDebug("تم تحميل بيانات الجلسة والتوجه للرئيسية.");
+        _updateDebug("🚀 تم تحميل بيانات الجلسة. جاري التوجه للرئيسية.");
         _navigateToHome(role);
       }
     } else {
       setState(() => _isLoading = false);
-      _updateDebug("كود التحقق خاطئ أو منتهي الصلاحية.", isError: true);
+      _updateDebug("❌ كود التحقق خاطئ أو منتهي الصلاحية.", isError: true);
     }
   }
 
   void _navigateToHome(String role) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: const Text('✅ أهلاً بك في أسواق أكسب'), backgroundColor: primaryGreen),
+      SnackBar(content: const Text('✅ أهلاً بك في رابية أحلى'), backgroundColor: primaryGreen),
     );
     String route = SellerScreen.routeName;
     if (role == 'buyer') route = BuyerHomeScreen.routeName;
@@ -225,22 +234,25 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           const SizedBox(height: 25),
           _buildSubmitButton(),
           
-          // --- منطقة عرض رسايل الكونسول على الواجهة ---
+          // --- منطقة تشخيص الأعطال (Live Debug Console) ---
           if (_debugInfo != null)
             Container(
               margin: const EdgeInsets.only(top: 20),
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(12),
               width: double.infinity,
               decoration: BoxDecoration(
-                color: (_errorMessage != null ? Colors.red : Colors.blue).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: (_errorMessage != null ? Colors.red : Colors.blue).withOpacity(0.3)),
+                color: (_errorMessage != null ? Colors.red : Colors.blue).withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: (_errorMessage != null ? Colors.red : Colors.blue).withOpacity(0.3),
+                  width: 1.5
+                ),
               ),
               child: SelectableText(
-                "📡 Console Log:\n$_debugInfo",
+                "🛰️ Akedly Live Log:\n$_debugInfo",
                 style: TextStyle(
-                  color: _errorMessage != null ? Colors.red : Colors.blue[900],
-                  fontSize: 10,
+                  color: _errorMessage != null ? Colors.red[900] : Colors.blue[900],
+                  fontSize: 11,
                   fontWeight: FontWeight.bold,
                   fontFamily: 'monospace'
                 ),
@@ -268,7 +280,11 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         ),
         child: _isLoading
-          ? const CircularProgressIndicator(color: Colors.white)
+          ? const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)
+            )
           : const Text('إرسال كود التفعيل', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
       ),
     );
