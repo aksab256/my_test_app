@@ -1,7 +1,6 @@
 import 'package:akedly/akedly.dart';
 
 class AkedlyAuthService {
-  // بياناتك اللي في الكود القديم (مظبوطة)
   final String _apiKey = "f032dc4687c452cb7c340a91df69ed419e6a5330c3bb9b2f826828bf381e3624";
   final String _pipelineId = "6a02edb9dc826dd83e860ad1";
 
@@ -14,50 +13,43 @@ class AkedlyAuthService {
     );
   }
 
-  /// إرسال طلب OTP (التعديل هنا حسب التوثيق الجديد)
-  Future<Map<String, dynamic>> sendOtpDetailed(String phoneNumber) async {
+  Future<AuthResult> sendOtpDetailed(String phoneNumber) async {
     String p = phoneNumber.trim();
-    if (p.startsWith('0')) {
-      p = '2$p'; 
-    } else if (!p.startsWith('2') && !p.startsWith('+')) {
-      p = '2$p';
-    }
+    if (p.startsWith('0')) { p = '2$p'; } 
+    else if (!p.startsWith('2') && !p.startsWith('+')) { p = '2$p'; }
 
     try {
-      // الاسم الصحيح حسب الصورة: sendOTP (كلها كابيتال في الآخر)
-      final verificationId = await _akedly.sendOTP(p);
+      // التعديل الجوهري: بعتنا الـ p والـ _pipelineId عشان نحل خطأ الـ "2 required"
+      final verificationId = await _akedly.sendOTP(p, _pipelineId);
       
       if (verificationId != null) {
-        return {
-          "status": 200,
-          "verificationId": verificationId,
-          "success": true
-        };
+        return AuthResult.success(data: verificationId);
       } else {
-        return {
-          "status": 400,
-          "body": "فشل إرسال الكود، تحقق من الرصيد أو الرقم",
-          "success": false
-        };
+        return AuthResult.failure(message: 'Failed to send OTP');
       }
+    } on AkedlyException catch (e) {
+      return AuthResult.failure(message: e.message);
     } catch (e) {
-      return {
-        "status": 500,
-        "body": "خطأ تقني: ${e.toString()}",
-        "success": false
-      };
+      return AuthResult.failure(message: 'Network error: ${e.toString()}');
     }
   }
 
-  /// التحقق من الكود (التعديل هنا حسب التوثيق الجديد)
-  Future<bool> verifyOtp(String verificationId, String code) async {
+  Future<bool> verifyOtp(String verificationId, String otp) async {
     try {
-      // الاسم الصحيح حسب الصورة: verifyOTP
-      final isValid = await _akedly.verifyOTP(verificationId, code);
+      // التأكد من تمرير المعاملات بالترتيب الصح (ID ثم الكود)
+      final isValid = await _akedly.verifyOTP(verificationId, otp);
       return isValid;
     } catch (e) {
-      print('OTP verification failed: $e');
       return false;
     }
   }
+}
+
+// كلاس النتيجة زي ما هو في المثال عشان التنظيم
+class AuthResult {
+  final bool isSuccess;
+  final String? message;
+  final String? data;
+  AuthResult.success({this.data}) : isSuccess = true, message = null;
+  AuthResult.failure({required this.message}) : isSuccess = false, data = null;
 }
