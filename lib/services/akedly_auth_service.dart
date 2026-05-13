@@ -1,68 +1,54 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:akedly/akedly.dart';
 
 class AkedlyAuthService {
+  // بياناتك الحقيقية من الداشبورد
   final String _apiKey = "f032dc4687c452cb7c340a91df69ed419e6a5330c3bb9b2f826828bf381e3624";
   final String _pipelineId = "6a02edb9dc826dd83e860ad1";
-  final String _baseUrl = "https://api.akedly.io/api/v1.2";
+  
+  // تعريف الكلاينت من المكتبة اللي إنت منزلها
+  late final AkedlyClient _akedly;
+
+  AkedlyAuthService() {
+    _akedly = AkedlyClient(
+      apiKey: _apiKey,
+      pipelineId: _pipelineId,
+    );
+  }
 
   Future<AuthResult> sendOtpDetailed(String phoneNumber) async {
-    String p = phoneNumber.trim();
-    if (p.startsWith('0')) { p = '2$p'; }
-    
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/transactions'),
-        headers: {
-          'X-API-KEY': _apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'pipeline_id': _pipelineId,
-          'phone_number': p,
-        }),
-      );
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        // بنرجع الـ ID اللي جاي من السيرفر
-        return AuthResult.success(data: (data['step_id'] ?? data['transaction_id']).toString());
+      // هنا المكتبة هي اللي بتبعت الـ OTP وبتتعامل مع الـ v1.2 داخلياً
+      final verificationId = await _akedly.sendOTP(phoneNumber);
+      
+      if (verificationId != null) {
+        // بنرجع الـ ID عشان نستخدمه في خطوة التأكيد
+        return AuthResult.success(data: verificationId);
       } else {
-        return AuthResult.failure(message: data['message'] ?? 'فشل الإرسال');
+        return AuthResult.failure(message: 'فشل إرسال كود التفعيل، تأكد من الرقم');
       }
     } catch (e) {
-      return AuthResult.failure(message: e.toString());
+      return AuthResult.failure(message: 'خطأ: ${e.toString()}');
     }
   }
 
-  Future<bool> verifyOtp(String stepId, String otp) async {
+  Future<bool> verifyOtp(String verificationId, String otp) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/transactions/verify'),
-        headers: {
-          'X-API-KEY': _apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'pipeline_id': _pipelineId,
-          'step_id': stepId,
-          'otp': otp,
-        }),
-      );
-      return response.statusCode == 200;
+      // التأكيد برضه عن طريق المكتبة
+      final isValid = await _akedly.verifyOTP(verificationId, otp);
+      return isValid;
     } catch (e) {
+      print('OTP verification failed: $e');
       return false;
     }
   }
 }
 
-// --- إضافة هذا الجزء لحل مشكلة الـ Compiler ---
+// الكلاس ده بنسيبه عشان شاشات الـ Login متعرفة عليه
 class AuthResult {
   final bool isSuccess;
-  final String? data;
   final String? message;
+  final String? data;
 
   AuthResult.success({this.data}) : isSuccess = true, message = null;
-  AuthResult.failure({this.message}) : isSuccess = false, data = null;
+  AuthResult.failure({required this.message}) : isSuccess = false, data = null;
 }
