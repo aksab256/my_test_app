@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 class AkedlyAuthService {
   final String _apiKey = "f032dc4687c452cb7c340a91df69ed419e6a5330c3bb9b2f826828bf381e3624";
   final String _pipelineId = "6a02edb9dc826dd83e860ad1";
-  final String _baseUrl = "https://api.akedly.io/api/v1.2"; // المسار اللي السيرفر طلبه
+  final String _baseUrl = "https://api.akedly.io/api/v1.2";
 
   Future<AuthResult> sendOtpDetailed(String phoneNumber) async {
     String p = phoneNumber.trim();
@@ -26,7 +26,8 @@ class AkedlyAuthService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        return AuthResult.success(data: data['step_id'] ?? data['transaction_id']);
+        // بنرجع الـ ID اللي جاي من السيرفر
+        return AuthResult.success(data: (data['step_id'] ?? data['transaction_id']).toString());
       } else {
         return AuthResult.failure(message: data['message'] ?? 'فشل الإرسال');
       }
@@ -54,4 +55,14 @@ class AkedlyAuthService {
       return false;
     }
   }
+}
+
+// --- إضافة هذا الجزء لحل مشكلة الـ Compiler ---
+class AuthResult {
+  final bool isSuccess;
+  final String? data;
+  final String? message;
+
+  AuthResult.success({this.data}) : isSuccess = true, message = null;
+  AuthResult.failure({this.message}) : isSuccess = false, data = null;
 }
