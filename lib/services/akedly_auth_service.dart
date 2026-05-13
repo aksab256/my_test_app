@@ -1,18 +1,23 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:akedly/akedly.dart';
 
 class AkedlyAuthService {
-  // البيانات المستخرجة من لوحة تحكم Akedly
-  final String apiKey = "f032dc4687c452cb7c340a91df69ed419e6a5330c3bb9b2f826828bf381e3624";
-  final String pipelineId = "6a02edb9dc826dd83e860ad1"; 
+  // البيانات اللي استخرجناها من لوحة التحكم (مظبوطة وجاهزة)
+  final String _apiKey = "f032dc4687c452cb7c340a91df69ed419e6a5330c3bb9b2f826828bf381e3624";
+  final String _pipelineId = "6a02edb9dc826dd83e860ad1";
 
-  /// إرسال طلب OTP واستلام الرد التفصيلي
-  /// تم تحديث المسار إلى /create بناءً على توثيق V1.0 لحل مشكلة 404
+  // تعريف الكلاينت الجديد بتاع الـ SDK
+  late final AkedlyClient _akedlyClient;
+
+  AkedlyAuthService() {
+    _akedlyClient = AkedlyClient(
+      apiKey: _apiKey,
+      pipelineId: _pipelineId,
+    );
+  }
+
+  /// إرسال طلب OTP (متوافق مع V1.2 ونظام الدرع)
   Future<Map<String, dynamic>> sendOtpDetailed(String phoneNumber) async {
-    // المسار الصحيح لنسخة V1.0 هو create لإنشاء طلب التحقق
-    final url = Uri.parse("https://api.akedly.io/v1/otp/create");
-    
-    // تنسيق الرقم لضمان وصوله بشكل دولي سليم (مثال: 201021070462)
+    // تنسيق الرقم لضمان وصوله بشكل دولي (أهم خطوة)
     String p = phoneNumber.trim();
     if (p.startsWith('0')) {
       p = '2$p'; // تحويل 010 إلى 2010
@@ -21,57 +26,35 @@ class AkedlyAuthService {
     }
 
     try {
-      final response = await http.post(
-        url,
-        headers: {
-          "Authorization": "Bearer $apiKey",
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-        },
-        body: jsonEncode({
-          "pipeline_id": pipelineId,
-          "recipient": p,
-          "ttl": 300, // مدة صلاحية الكود 5 دقائق
-        }),
-      );
-
-      // نرسل تفاصيل الرد كاملة لكي تظهر في صندوق الـ Live Log بالواجهة
-      // النجاح في Akedly V1.0 غالباً ما يكون Code 200 أو 201
-      bool isSuccess = response.statusCode == 200 || response.statusCode == 201;
+      // استخدام الـ SDK بدل الـ POST Request اليدوي
+      // الـ SDK بيتعامل تلقائياً مع الـ Endpoints الجديدة والـ Shield
+      final response = await _akedlyClient.sendOtp(p);
 
       return {
-        "status": response.statusCode,
-        "body": response.body, 
-        "success": isSuccess
+        "status": 200, 
+        "verificationId": response.verificationId, // الـ ID المهم للتأكيد
+        "success": true
       };
     } catch (e) {
       return {
-        "status": 500, 
-        "body": "خطأ في الاتصال بالسيرفر: ${e.toString()}", 
+        "status": 500,
+        "body": "خطأ في الاتصال بالسيرفر أو الـ Shield: ${e.toString()}",
         "success": false
       };
     }
   }
 
   /// التحقق من الكود الذي أدخله المستخدم
-  Future<bool> verifyOtp(String stepId, String code) async {
-    final url = Uri.parse("https://api.akedly.io/v1/otp/verify");
+  Future<bool> verifyOtp(String verificationId, String code) async {
     try {
-      final response = await http.post(
-        url,
-        headers: {
-          "Authorization": "Bearer $apiKey",
-          "Content-Type": "application/json",
-        },
-        body: jsonEncode({
-          "step_id": stepId, 
-          "code": code
-        }),
+      final isVerified = await _akedlyClient.verifyOtp(
+        verificationId: verificationId,
+        otpCode: code,
       );
       
-      // إذا كان الرد 200 يعني الكود صحيح
-      return response.statusCode == 200;
+      return isVerified;
     } catch (e) {
+      print("Verify Error: $e");
       return false;
     }
   }

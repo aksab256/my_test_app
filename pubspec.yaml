@@ -69,6 +69,7 @@ dependencies:
   connectivity_plus: ^7.0.0
   google_maps_flutter: ^2.17.0
   cloud_functions: ^6.2.0
+  akedly: ^0.0.4
 
 dev_dependencies:
   flutter_test:
