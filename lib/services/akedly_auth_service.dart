@@ -1,28 +1,41 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:akedly_shield/akedly_shield.dart'; // تأكد من إضافة هذه المكتبة في pubspec
+import 'package:crypto/crypto.dart'; // للعمليات الحسابية
 
 class AkedlyAuthService {
   final String _apiKey = "f032dc4687c452cb7c340a91df69ed419e6a5330c3bb9b2f826828bf381e3624";
   final String _pipelineId = "6a02edb9dc826dd83e860ad1";
 
+  // دالة حل التحدي يدوياً (بديل للمكتبة الخارجية)
+  int _solveChallenge(String challenge, int difficulty) {
+    int nonce = 0;
+    String target = '0' * difficulty;
+    while (true) {
+      String input = "$challenge:$nonce";
+      String hash = sha256.convert(utf8.encode(input)).toString();
+      if (hash.startsWith(target)) {
+        return nonce;
+      }
+      nonce++;
+    }
+  }
+
   Future<AuthResult> sendOtpDetailed(String phoneNumber) async {
     try {
-      // الخطوة 1: طلب التحدي (Get Challenge)
+      // 1. Get Challenge
       final challengeRes = await http.get(
         Uri.parse('https://api.akedly.io/api/v1.2/transactions/challenge?APIKey=$_apiKey&pipelineID=$_pipelineId'),
       );
       
       final challengeData = jsonDecode(challengeRes.body)['data'];
       
-      // الخطوة 2: حل التحدي باستخدام Shield SDK
-      // الـ SDK بيعمل SHA256 للـ challenge مع nonce لحد ما يوصل للصعوبة المطلوبة
-      final solution = await AkedlyShield.solvePow(
+      // 2. Solve Challenge (Manual)
+      final nonce = _solveChallenge(
         challengeData['challenge'], 
         challengeData['difficulty']
       );
 
-      // الخطوة 3: إرسال الـ OTP مع حل التحدي
+      // 3. Send OTP
       final response = await http.post(
         Uri.parse('https://api.akedly.io/api/v1.2/transactions/send'),
         headers: {'Content-Type': 'application/json'},
@@ -32,7 +45,7 @@ class AkedlyAuthService {
           'verificationAddress': {'phoneNumber': phoneNumber},
           'powSolution': {
             'challengeToken': challengeData['challengeToken'],
-            'nonce': solution.nonce,
+            'nonce': nonce,
           },
         }),
       );
@@ -48,14 +61,17 @@ class AkedlyAuthService {
     }
   }
 
-  // خطوة التحقق (Verify) كما هي في الخطوة 4 بالمانيوال
   Future<bool> verifyOtp(String transactionReqID, String otp) async {
-    final response = await http.post(
-      Uri.parse('https://api.akedly.io/api/v1.2/transactions/verify'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'transactionReqID': transactionReqID, 'otp': otp}),
-    );
-    return response.statusCode == 200;
+    try {
+      final response = await http.post(
+        Uri.parse('https://api.akedly.io/api/v1.2/transactions/verify'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'transactionReqID': transactionReqID, 'otp': otp}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
   }
 }
 
