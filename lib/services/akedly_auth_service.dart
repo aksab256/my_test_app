@@ -1,20 +1,23 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+/// خدمة التحقق من الهوية عبر Akedly لمنصة "رابيه أحلى"
+/// تُستخدم لإدارة "العهدة" وتأمين "نقاط الأمان" للمناديب والموردين.
 class AkedlyAuthService {
   // الـ API Key المحدث من لوحة تحكم Akedly
   final String apiKey = "f032dc4687c452cb7c340a91df69ed419e6a5330c3bb9b2f826828bf381e3624";
   
-  // الـ Pipeline ID الخاص بـ Aksab (المستخرج من الصورة)
+  // الـ Pipeline ID الخاص بـ Aksab (المستخرج من لوحة التحكم)
   final String pipelineId = "6a02edb9dc826dd83e860ad1"; 
 
-  // دالة إرسال كود التحقق
+  /// إرسال كود التحقق (OTP) لبدء عملية استلام العهدة
   Future<String?> sendOtp(String phoneNumber) async {
     final url = Uri.parse("https://api.akedly.io/v1/otp/send");
     
-    print("--- محاولة إرسال OTP لشركة رابية أحلى ---");
-    print("Recipient: $phoneNumber");
-    print("Pipeline ID: $pipelineId");
+    // --- رسائل الكونسول لتتبع العملية ---
+    print("--- [رابيه أحلى] محاولة إرسال OTP ---");
+    print("المستلم (Recipient): $phoneNumber");
+    print("مسار العملية (Pipeline ID): $pipelineId");
 
     try {
       final response = await http.post(
@@ -27,35 +30,36 @@ class AkedlyAuthService {
         body: jsonEncode({
           "pipeline_id": pipelineId,
           "recipient": phoneNumber,
-          "ttl": 300,
+          "ttl": 300, // صالح لمدة 5 دقائق لضمان وصوله للمندوب في الميدان
         }),
       );
 
-      print("Status Code: ${response.statusCode}");
-      print("Raw Response Body: ${response.body}"); // ده أهم سطر في الكونسول حالياً
+      // طباعة الرد الكامل من السيرفر للتشخيص (Critical Logs)
+      print("كود حالة الرد (Status Code): ${response.statusCode}");
+      print("محتوى الرد الخام (Raw Body): ${response.body}");
 
       final responseData = jsonDecode(response.body);
       
       if (response.statusCode == 200 || response.statusCode == 201) {
-        print("نجاح: تم استلام step_id: ${responseData['step_id']}");
+        print("✅ نجاح: تم إرسال الكود. Step ID المستلم: ${responseData['step_id']}");
         return responseData['step_id'];
       } else {
-        // تشخيص دقيق للخطأ بناءً على رد السيرفر
-        print("تنبيه Akedly: ${responseData['message'] ?? 'خطأ غير معروف'}");
+        // طباعة الرسالة القادمة من Akedly لتحديد سبب الرفض (رصيد، رقم خطأ، إلخ)
+        print("❌ تنبيه من Akedly: ${responseData['message'] ?? 'فشل مجهول'}");
         return null;
       }
     } catch (error) {
-      print("فشل اتصال شبكة (Network Exception): $error");
+      print("⚠️ خطأ في الاتصال بالشبكة (Aksab-OTP-Error): $error");
       return null;
     }
   }
 
-  // دالة التحقق من الكود لإدارة العهدة ونقاط الأمان
+  /// التحقق من الكود لإتمام "تأكيد العهدة" وتخصيص "نقاط التأمين"
   Future<bool> verifyOtp(String stepId, String code) async {
     final url = Uri.parse("https://api.akedly.io/v1/otp/verify");
     
-    print("--- محاولة التحقق من الكود لفتح العهدة ---");
-    print("Step ID: $stepId | Code: $code");
+    print("--- [رابيه أحلى] محاولة تأكيد العهدة ---");
+    print("المعرف (Step ID): $stepId | الكود المدخل: $code");
 
     try {
       final response = await http.post(
@@ -71,19 +75,19 @@ class AkedlyAuthService {
         }),
       );
 
-      print("Verify Status Code: ${response.statusCode}");
-      print("Verify Response Body: ${response.body}");
+      print("حالة تأكيد العهدة (Verify Status): ${response.statusCode}");
+      print("رد تأكيد العهدة (Verify Body): ${response.body}");
 
       if (response.statusCode == 200) {
-        print("تم تأكيد العهدة بنجاح ✅");
+        print("✅ تم تأكيد العهدة بنجاح. سيتم الآن تخصيص نقاط الأمان.");
         return true;
       } else {
         final responseData = jsonDecode(response.body);
-        print("فشل التحقق: ${responseData['message']}");
+        print("❌ فشل التحقق من العهدة: ${responseData['message']}");
         return false;
       }
     } catch (error) {
-      print("خطأ أثناء عملية التحقق من العهدة: $error");
+      print("⚠️ خطأ تقني أثناء تأكيد العهدة: $error");
       return false;
     }
   }
