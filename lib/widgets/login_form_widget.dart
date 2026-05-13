@@ -1,6 +1,8 @@
+// lib/widgets/login_form_widget.dart
 import 'package:flutter/material.dart';
 import 'package:my_test_app/services/akedly_auth_service.dart';
 import 'package:my_test_app/services/user_session.dart';
+import 'package:my_test_app/helpers/auth_service.dart'; // 👈 استيراد الخدمة الأساسية
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -22,15 +24,14 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   final _formKey = GlobalKey<FormState>();
   String _phone = '';
   bool _isLoading = false;
-  
-  // متغيرات لعرض رسائل الكونسول على الواجهة لتشخيص الأعطال لايف
-  String? _errorMessage;
-  String? _debugInfo; 
 
+  String? _errorMessage;
+  String? _debugInfo;
+  
   final AkedlyAuthService _akedlyService = AkedlyAuthService();
+  final AuthService _authService = AuthService(); // 👈 تفعيل المحرك الأساسي
   final Color primaryGreen = const Color(0xff28a745);
 
-  // تحديث حالة الرسائل على الشاشة لمتابعة ردود السيرفر
   void _updateDebug(String info, {bool isError = false}) {
     setState(() {
       _debugInfo = info;
@@ -39,7 +40,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     debugPrint(info);
   }
 
-  // تنسيق الرقم ليكون دولياً (بداية بـ 2) لضمان قبول Akedly
   String _formatPhoneNumber(String phone) {
     String cleaned = phone.trim().replaceAll(RegExp(r'\s+'), '');
     if (cleaned.startsWith('0')) {
@@ -53,7 +53,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   Future<void> _submitLogin() async {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
-
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -61,64 +60,46 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     });
 
     final String formattedPhone = _formatPhoneNumber(_phone);
-    _updateDebug("الرقم بعد التنسيق: $formattedPhone");
 
     try {
       bool userExists = false;
       String? foundRole;
-      final collections = ['consumers', 'users', 'sellers'];
+      final collections = ['consumers', 'users', 'sellers', 'pendingSellers'];
 
-      // تنويعات البحث لضمان العثور على الرقم بأي صيغة في Firestore
       final String phoneWithZero = _phone.trim().startsWith('0') ? _phone.trim() : '0${_phone.trim()}';
       final String phoneWithoutZero = _phone.trim().startsWith('0') ? _phone.trim().substring(1) : _phone.trim();
       final List<String> searchVariations = [phoneWithZero, phoneWithoutZero, formattedPhone];
 
-      _updateDebug("جاري البحث في Firestore عن: $searchVariations");
-
       for (var col in collections) {
         var query = await FirebaseFirestore.instance
             .collection(col)
-            .where('phoneNumber', whereIn: searchVariations) 
+            .where('phone', whereIn: searchVariations) // 👈 تم توحيد الحقل لـ phone
             .limit(1)
             .get();
-        
         if (query.docs.isNotEmpty) {
           userExists = true;
-          foundRole = col == 'users' ? 'buyer' : (col == 'sellers' ? 'seller' : 'consumer');
-          _updateDebug("✅ تم العثور على المستخدم في مجموعة: $col برتبة: $foundRole");
+          foundRole = col == 'users' ? 'buyer' : (col == 'sellers' ? 'seller' : col == 'consumers' ? 'consumer' : 'pending');
           break;
         }
       }
 
       if (!userExists) {
         setState(() => _isLoading = false);
-        _updateDebug("❌ خطأ: الرقم $phoneWithZero غير مسجل في أي مجموعة.", isError: true);
+        _updateDebug("❌ خطأ: الرقم غير مسجل في رابية أحلى.", isError: true);
         return;
       }
 
-      _updateDebug("📡 جاري إرسال OTP عبر Akedly...");
-      
-      // مناداة الدالة الجديدة واستلام الرد التفصيلي كـ AuthResult Object
       final result = await _akedlyService.sendOtpDetailed(formattedPhone);
-      
       setState(() => _isLoading = false);
 
       if (result.isSuccess) {
-        // الوصول للبيانات من خلال خصائص الـ Object (result.data) بدلاً من Map keys
-        String stepId = result.data ?? "";
-        _updateDebug("✅ تم الإرسال بنجاح!\nStepId: $stepId");
-        _showOtpDialog(stepId, formattedPhone, foundRole!);
+        _showOtpDialog(result.data ?? "", formattedPhone, foundRole!);
       } else {
-        // عرض رسالة الخطأ المخزنة في الـ Object
-        _updateDebug(
-          "⚠️ فشل الإرسال\nالسبب: ${result.message}", 
-          isError: true
-        );
+        _updateDebug("⚠️ فشل الإرسال: ${result.message}", isError: true);
       }
-
     } catch (e) {
       setState(() => _isLoading = false);
-      _updateDebug("💥 حدث استثناء برمجي: ${e.toString()}", isError: true);
+      _updateDebug("💥 حدث استثناء: ${e.toString()}", isError: true);
     }
   }
 
@@ -162,10 +143,9 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: () async {
-                  String code = otpController.text.trim();
-                  if (code.length == 6) {
+                  if (otpController.text.trim().length == 6) {
                     Navigator.pop(context);
-                    _verifyAndLogin(stepId, code, role);
+                    _verifyAndLogin(stepId, otpController.text.trim(), phone);
                   }
                 },
                 child: const Text("دخول للنظام", style: TextStyle(color: Colors.white)),
@@ -178,32 +158,40 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     );
   }
 
-  Future<void> _verifyAndLogin(String stepId, String code, String role) async {
+  Future<void> _verifyAndLogin(String stepId, String code, String phone) async {
     setState(() => _isLoading = true);
-    _updateDebug("🔄 جاري التحقق من الكود: $code");
+    _updateDebug("🔄 جاري التحقق وتسجيل الدخول...");
 
     bool isVerified = await _akedlyService.verifyOtp(stepId, code);
 
     if (isVerified) {
-      _updateDebug("🎉 تم التحقق بنجاح! جاري تسجيل الدخول...");
-      try { await FirebaseAuth.instance.signInAnonymously(); } catch (e) {
-        _updateDebug("⚠️ فشل الـ Anonymous Login: $e");
-      }
-      
-      await UserSession.loadSession(); 
+      try {
+        // ✨ تطبيق المعادلة الذكية المتفق عليها
+        final String cleanPhone = _phone.trim().startsWith('0') ? _phone.trim() : '0${_phone.trim()}';
+        final String smartEmail = "$cleanPhone@aksab.com";
+        final String generatedPass = "Rabia_$cleanPhone";
 
-      if (mounted) {
-        await Provider.of<BuyerDataProvider>(context, listen: false).initializeData(
-          FirebaseAuth.instance.currentUser?.uid,
-          UserSession.ownerId,
-          UserSession.merchantName ?? "مستخدم رابية أحلى"
-        );
-        _updateDebug("🚀 تم تحميل بيانات الجلسة. جاري التوجه للرئيسية.");
-        _navigateToHome(role);
+        // ✅ تسجيل الدخول الرسمي وحفظ كافة البيانات في الذاكرة الموقتة والدائمة
+        String finalRole = await _authService.signInWithEmailAndPassword(smartEmail, generatedPass);
+
+        if (mounted) {
+          // تحميل البيانات في الـ Provider الخاص بالمشتري (الرادار والطلبات)
+          await Provider.of<BuyerDataProvider>(context, listen: false).initializeData(
+            FirebaseAuth.instance.currentUser?.uid,
+            UserSession.ownerId,
+            UserSession.merchantName ?? "مستخدم رابية أحلى"
+          );
+
+          _updateDebug("🚀 تم تحميل الجلسة بنجاح.");
+          _navigateToHome(finalRole);
+        }
+      } catch (e) {
+        setState(() => _isLoading = false);
+        _updateDebug("❌ فشل الدخول: $e", isError: true);
       }
     } else {
       setState(() => _isLoading = false);
-      _updateDebug("❌ كود التحقق خاطئ أو منتهي الصلاحية.", isError: true);
+      _updateDebug("❌ كود التحقق خاطئ.", isError: true);
     }
   }
 
@@ -212,9 +200,11 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: const Text('✅ أهلاً بك في رابية أحلى'), backgroundColor: primaryGreen),
     );
+    
     String route = SellerScreen.routeName;
     if (role == 'buyer') route = BuyerHomeScreen.routeName;
     else if (role == 'consumer') route = ConsumerHomeScreen.routeName;
+    
     Navigator.of(context).pushNamedAndRemoveUntil(route, (route) => false);
   }
 
@@ -233,8 +223,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           ),
           const SizedBox(height: 25),
           _buildSubmitButton(),
-          
-          // --- منطقة تشخيص الأعطال (Live Debug Console) ---
           if (_debugInfo != null)
             Container(
               margin: const EdgeInsets.only(top: 20),
@@ -243,19 +231,11 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
               decoration: BoxDecoration(
                 color: (_errorMessage != null ? Colors.red : Colors.blue).withOpacity(0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: (_errorMessage != null ? Colors.red : Colors.blue).withOpacity(0.3),
-                  width: 1.5
-                ),
+                border: Border.all(color: (_errorMessage != null ? Colors.red : Colors.blue).withOpacity(0.3), width: 1.5),
               ),
               child: SelectableText(
-                "🛰️ Akedly Live Log:\n$_debugInfo",
-                style: TextStyle(
-                  color: _errorMessage != null ? Colors.red[900] : Colors.blue[900],
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'monospace'
-                ),
+                "🛰️ System Log:\n$_debugInfo",
+                style: TextStyle(color: _errorMessage != null ? Colors.red[900] : Colors.blue[900], fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -274,18 +254,8 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       ),
       child: ElevatedButton(
         onPressed: _isLoading ? null : _submitLogin,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        ),
-        child: _isLoading
-          ? const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)
-            )
-          : const Text('إرسال كود التفعيل', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+        child: _isLoading ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)) : const Text('إرسال كود التفعيل', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -298,13 +268,7 @@ class _InputGroup extends StatelessWidget {
   final FormFieldValidator<String> validator;
   final FormFieldSetter<String> onSaved;
 
-  const _InputGroup({
-    required this.icon,
-    required this.hintText,
-    required this.validator,
-    required this.onSaved,
-    this.keyboardType = TextInputType.text,
-  });
+  const _InputGroup({required this.icon, required this.hintText, required this.validator, required this.onSaved, this.keyboardType = TextInputType.text});
 
   @override
   Widget build(BuildContext context) {
@@ -326,3 +290,4 @@ class _InputGroup extends StatelessWidget {
     );
   }
 }
+

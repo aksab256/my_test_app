@@ -22,12 +22,12 @@ class _NewClientScreenState extends State<NewClientScreen> {
   String _selectedCountry = 'egypt';
   String _selectedUserType = '';
 
-  // ✨ إضافة ownerName هنا لضمان وجود متحكم له
+  // ✨ الحفاظ على جميع المتحكمات لضمان التوافق مع DataSource
   final Map<String, TextEditingController> _controllers = {
     'fullname': TextEditingController(),
-    'ownerName': TextEditingController(), // حقل اسم صاحب النشاط
+    'ownerName': TextEditingController(),
     'phone': TextEditingController(),
-    'password': TextEditingController(),
+    'password': TextEditingController(), // سيتم توليده تلقائياً
     'confirmPassword': TextEditingController(),
     'address': TextEditingController(),
     'merchantName': TextEditingController(),
@@ -38,7 +38,7 @@ class _NewClientScreenState extends State<NewClientScreen> {
   String? _logoUrl;
   String? _crUrl;
   String? _tcUrl;
-  
+
   Map<String, double>? _location;
   int _currentStep = 1;
   bool _isSaving = false;
@@ -77,12 +77,12 @@ class _NewClientScreenState extends State<NewClientScreen> {
         child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
           icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF2D9E68), size: 70),
-          title: Text('تم التسجيل بنجاح!', 
+          title: Text('تم التسجيل بنجاح!',
             style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68))),
           content: Text(
             isSeller
-                ? "شكراً لانضمامك لأسرة أكسب. طلبك قيد المراجعة حالياً، وسنقوم بتفعيل حسابك خلال 24 ساعة كحد أقصى."
-                : "أهلاً بك في أكسب! حسابك جاهز الآن، ابدأ رحلة توفيرك وجمع نقاطك من اليوم.",
+                ? "شكراً لانضمامك لأسرة رابية أحلى. طلبك قيد المراجعة حالياً، وسنقوم بتفعيل حسابك خلال 24 ساعة كحد أقصى."
+                : "أهلاً بك في رابية أحلى! حسابك جاهز الآن، ابدأ رحلة توفيرك وجمع نقاطك من اليوم.",
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13.sp, color: Colors.black87),
           ),
@@ -107,35 +107,33 @@ class _NewClientScreenState extends State<NewClientScreen> {
 
   Future<void> _handleRegistration() async {
     final phoneValue = _controllers['phone']!.text.trim();
-    final pass = _controllers['password']!.text;
-    final confirmPass = _controllers['confirmPassword']!.text;
+    
+    // ✅ توليد كلمة مرور تلقائية متوافقة مع OTP لضمان التسجيل في Firebase
+    final String generatedPass = "Rabia_$phoneValue";
+    _controllers['password']!.text = generatedPass;
+    _controllers['confirmPassword']!.text = generatedPass;
 
     if (phoneValue.isEmpty || phoneValue.length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ يرجى إدخال رقم هاتف صحيح')));
       return;
     }
-    
-    String smartEmail = "$phoneValue@aksab.com";
 
-    if (pass != confirmPass) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ كلمة المرور غير متطابقة')));
-      return;
-    }
+    String smartEmail = "$phoneValue@aksab.com";
 
     setState(() => _isSaving = true);
     try {
-      // ✨ تم تمرير ownerName هنا ليصل إلى الـ DataSource ومنه لفايربيز
+      // ✅ إرسال البيانات للـ DataSource مع الاحتفاظ بكل الحقول دون اختصار
       await _dataSource.registerClient(
         fullname: _controllers['fullname']!.text,
-        ownerName: _controllers['ownerName']!.text, 
+        ownerName: _controllers['ownerName']!.text,
         email: smartEmail,
         phone: phoneValue,
-        password: pass,
+        password: generatedPass, // تمرير الباسورد المولدة تلقائياً
         address: _controllers['address']!.text,
         country: _selectedCountry,
         userType: _selectedUserType,
         location: _location,
-        logoUrl: _logoUrl, 
+        logoUrl: _logoUrl,
         crUrl: _crUrl,
         tcUrl: _tcUrl,
         merchantName: _controllers['merchantName']!.text,
@@ -292,7 +290,7 @@ class _LogoHeader extends StatelessWidget {
             style: TextStyle(
                 fontSize: 22.sp, fontWeight: FontWeight.w900, color: const Color(0xFF1A1A1A))),
         SizedBox(height: 0.5.h),
-        Text('خطوات بسيطة وتبدأ تجربتك الفريدة مع أكسب',
+        Text('خطوات بسيطة وتبدأ تجربتك الفريدة مع رابية أحلى',
             style: TextStyle(fontSize: 11.sp, color: Colors.grey.shade600)),
       ],
     );
@@ -323,3 +321,4 @@ class _Footer extends StatelessWidget {
     );
   }
 }
+

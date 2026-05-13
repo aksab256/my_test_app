@@ -46,7 +46,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   LatLng _selectedPosition = const LatLng(31.2001, 29.9187); // الإسكندرية كمركز افتراضي
   bool _locationPicked = false;
   bool _isUploading = false;
-  bool _obscurePassword = true;
   bool _termsAgreed = false;
   String? _selectedBusinessType;
   File? _logoPreview, _crPreview, _tcPreview;
@@ -69,7 +68,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     super.dispose();
   }
 
-  // ✅ البحث الذكي باستخدام Google Places
   Future<void> _searchAddress(String query, StateSetter setModalState) async {
     if (query.isEmpty) return;
     final url =
@@ -104,7 +102,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
               title: const Text("تحديد موقع النشاط",
                   style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
               content: const Text(
-                "يقوم تطبيق أكسب بجمع بيانات الموقع الجغرافي لتحديد عنوان نشاطك التجاري بدقة على الخريطة، مما يسهل وصول المناديب والعملاء إليك.",
+                "يقوم تطبيق رابية أحلى بجمع بيانات الموقع الجغرافي لتحديد عنوان نشاطك التجاري بدقة على الخريطة، مما يسهل وصول المناديب والعملاء إليك.",
                 style: TextStyle(fontFamily: 'Cairo'),
               ),
               actions: [
@@ -143,7 +141,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       }
     } catch (e) {
       debugPrint("Map error: $e");
-      _openMapPicker(); // فتح الخريطة حتى لو فشل جلب الموقع الحالي
+      _openMapPicker();
     }
   }
 
@@ -247,12 +245,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
 
   Future<void> _updateAddressText(LatLng position) async {
     try {
-      // ✅ تعديل localeIdentifier لضمان جلب العنوان بالعربية
-      final placemarks = await geo.placemarkFromCoordinates(
-  position.latitude, 
-  position.longitude
-); // حذفنا localeIdentifier نهائياً
-
+      final placemarks = await geo.placemarkFromCoordinates(position.latitude, position.longitude);
       if (placemarks.isNotEmpty) {
         final place = placemarks.first;
         String formattedAddress =
@@ -373,9 +366,6 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
               _buildLocationPickerButton(),
               _buildInputField('address', 'عنوان النشاط (حدد من الخريطة)', Icons.location_on_rounded,
                   isReadOnly: true, onTap: _handleMapOpeningSequence),
-              _buildSectionHeader('الأمان', Icons.security_rounded),
-              _buildInputField('password', 'كلمة المرور', Icons.lock_open_rounded, isPassword: true),
-              _buildInputField('confirmPassword', 'تأكيد كلمة المرور', Icons.lock_rounded, isPassword: true),
               if (widget.selectedUserType == 'seller') ...[SizedBox(height: 2.h), _buildSellerSpecificFields()],
               SizedBox(height: 2.h),
               _buildTermsCheckbox(),
@@ -416,15 +406,13 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
   }
 
   Widget _buildInputField(String key, String label, IconData icon,
-      {bool isPassword = false,
-      bool isReadOnly = false,
+      {bool isReadOnly = false,
       VoidCallback? onTap,
       TextInputType keyboardType = TextInputType.text}) {
     return Padding(
       padding: EdgeInsets.only(bottom: 1.5.h),
       child: TextFormField(
         controller: widget.controllers[key],
-        obscureText: isPassword && _obscurePassword,
         keyboardType: keyboardType,
         readOnly: isReadOnly,
         onTap: onTap,
@@ -433,18 +421,12 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
             if (key == 'ownerName') return null;
             return isReadOnly ? "يرجى التحديد من الخريطة" : "هذا الحقل مطلوب";
           }
-          if (key == 'confirmPassword' && value != widget.controllers['password']?.text) return "كلمتا المرور غير متطابقتين";
           return null;
         },
         decoration: InputDecoration(
           labelText: label,
           labelStyle: const TextStyle(fontFamily: 'Cairo'),
           prefixIcon: Icon(icon, color: const Color(0xFF2D9E68)),
-          suffixIcon: isPassword
-              ? IconButton(
-                  icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword))
-              : null,
           filled: true,
           fillColor: isReadOnly ? Colors.grey.shade50 : Colors.white,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
@@ -570,6 +552,10 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
                   return;
                 }
                 if (_formKey.currentState?.validate() ?? false) {
+                  // ✅ تعيين باسوورد تلقائية خلف الكواليس لضمان عمل Firebase Auth بـ OTP
+                  final phone = widget.controllers['phone']?.text ?? "0000";
+                  widget.controllers['password']?.text = "Rabia_$phone";
+                  
                   try {
                     await facebookAppEvents.logCompletedRegistration(registrationMethod: widget.selectedUserType);
                   } catch (e) {
