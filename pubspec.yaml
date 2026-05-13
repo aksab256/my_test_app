@@ -69,7 +69,11 @@ dependencies:
   connectivity_plus: ^7.0.0
   google_maps_flutter: ^2.17.0
   cloud_functions: ^6.2.0
-  akedly: ^0.0.4
+
+  # Akedly V1.2 Shield SDK (Final Implementation)
+  akedly_shield:
+    git:
+      url: https://github.com/akedly/akedly-shield-flutter.git
 
 dev_dependencies:
   flutter_test:
@@ -103,4 +107,3 @@ flutter:
     - assets/
     - assets/images/
     - assets/images/shira_logo.png
-
