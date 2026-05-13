@@ -1,60 +1,62 @@
 import 'package:akedly/akedly.dart';
 
 class AkedlyAuthService {
-  // البيانات اللي استخرجناها من لوحة التحكم (مظبوطة وجاهزة)
+  // بياناتك اللي في الكود القديم (مظبوطة)
   final String _apiKey = "f032dc4687c452cb7c340a91df69ed419e6a5330c3bb9b2f826828bf381e3624";
   final String _pipelineId = "6a02edb9dc826dd83e860ad1";
 
-  // تعريف الكلاينت الجديد بتاع الـ SDK
-  late final AkedlyClient _akedlyClient;
+  late final AkedlyClient _akedly;
 
   AkedlyAuthService() {
-    _akedlyClient = AkedlyClient(
+    _akedly = AkedlyClient(
       apiKey: _apiKey,
       pipelineId: _pipelineId,
     );
   }
 
-  /// إرسال طلب OTP (متوافق مع V1.2 ونظام الدرع)
+  /// إرسال طلب OTP (التعديل هنا حسب التوثيق الجديد)
   Future<Map<String, dynamic>> sendOtpDetailed(String phoneNumber) async {
-    // تنسيق الرقم لضمان وصوله بشكل دولي (أهم خطوة)
     String p = phoneNumber.trim();
     if (p.startsWith('0')) {
-      p = '2$p'; // تحويل 010 إلى 2010
+      p = '2$p'; 
     } else if (!p.startsWith('2') && !p.startsWith('+')) {
       p = '2$p';
     }
 
     try {
-      // استخدام الـ SDK بدل الـ POST Request اليدوي
-      // الـ SDK بيتعامل تلقائياً مع الـ Endpoints الجديدة والـ Shield
-      final response = await _akedlyClient.sendOtp(p);
-
-      return {
-        "status": 200, 
-        "verificationId": response.verificationId, // الـ ID المهم للتأكيد
-        "success": true
-      };
+      // الاسم الصحيح حسب الصورة: sendOTP (كلها كابيتال في الآخر)
+      final verificationId = await _akedly.sendOTP(p);
+      
+      if (verificationId != null) {
+        return {
+          "status": 200,
+          "verificationId": verificationId,
+          "success": true
+        };
+      } else {
+        return {
+          "status": 400,
+          "body": "فشل إرسال الكود، تحقق من الرصيد أو الرقم",
+          "success": false
+        };
+      }
     } catch (e) {
       return {
         "status": 500,
-        "body": "خطأ في الاتصال بالسيرفر أو الـ Shield: ${e.toString()}",
+        "body": "خطأ تقني: ${e.toString()}",
         "success": false
       };
     }
   }
 
-  /// التحقق من الكود الذي أدخله المستخدم
+  /// التحقق من الكود (التعديل هنا حسب التوثيق الجديد)
   Future<bool> verifyOtp(String verificationId, String code) async {
     try {
-      final isVerified = await _akedlyClient.verifyOtp(
-        verificationId: verificationId,
-        otpCode: code,
-      );
-      
-      return isVerified;
+      // الاسم الصحيح حسب الصورة: verifyOTP
+      final isValid = await _akedly.verifyOTP(verificationId, code);
+      return isValid;
     } catch (e) {
-      print("Verify Error: $e");
+      print('OTP verification failed: $e');
       return false;
     }
   }
