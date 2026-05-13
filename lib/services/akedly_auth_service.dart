@@ -2,15 +2,21 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AkedlyAuthService {
+  // البيانات مطابقة للصور: Pipeline ID و API Key
   final String apiKey = "f032dc4687c452cb7c340a91df69ed419e6a5330c3bb9b2f826828bf381e3624";
   final String pipelineId = "6a02edb9dc826dd83e860ad1"; 
 
-  // تأكد من تغيير الاسم هنا ليكون sendOtpDetailed
+  /// إرسال طلب OTP واستلام الرد الخام لعرضه في الـ UI
   Future<Map<String, dynamic>> sendOtpDetailed(String phoneNumber) async {
     final url = Uri.parse("https://api.akedly.io/v1/otp/send");
     
+    // تنسيق الرقم لضمان وصوله لـ Akedly بشكل دولي سليم
     String p = phoneNumber.trim();
-    if (p.startsWith('0')) p = '2' + p;
+    if (p.startsWith('0')) {
+      p = '2$p'; // تحويل 010 إلى 2010
+    } else if (!p.startsWith('2') && !p.startsWith('+')) {
+      p = '2$p';
+    }
 
     try {
       final response = await http.post(
@@ -27,17 +33,22 @@ class AkedlyAuthService {
         }),
       );
 
-      // بنرجع الرد الكامل بدون أي تعديل ليرسمه الـ UI
+      // نرسل الـ StatusCode والـ Body كما هما لتشخيص أي مشكلة (مثل حظر ميتا)
       return {
         "status": response.statusCode,
         "body": response.body, 
         "success": response.statusCode == 200 || response.statusCode == 201
       };
     } catch (e) {
-      return {"status": 500, "body": "Network Error: ${e.toString()}", "success": false};
+      return {
+        "status": 500, 
+        "body": "خطأ في الاتصال: ${e.toString()}", 
+        "success": false
+      };
     }
   }
 
+  /// التحقق من الكود المدخل
   Future<bool> verifyOtp(String stepId, String code) async {
     final url = Uri.parse("https://api.akedly.io/v1/otp/verify");
     try {
@@ -47,7 +58,10 @@ class AkedlyAuthService {
           "Authorization": "Bearer $apiKey",
           "Content-Type": "application/json",
         },
-        body: jsonEncode({"step_id": stepId, "code": code}),
+        body: jsonEncode({
+          "step_id": stepId, 
+          "code": code
+        }),
       );
       return response.statusCode == 200;
     } catch (e) {
