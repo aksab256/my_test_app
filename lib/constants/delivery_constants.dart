@@ -1,8 +1,8 @@
 // lib/constants/delivery_constants.dart
 
-// 🔥🔥🔥 AWS API GATEWAY ENDPOINT 🔥🔥🔥
+// 🔥🔥🔥 Firebase Cloud Function Endpoint (تم التحديث للجزيرة المستقلة) 🔥🔥🔥
 const String API_GATEWAY_ENDPOINT = 
-    'https://h9iaac7jee.execute-api.us-east-1.amazonaws.com/div/updateloction';
+    'https://us-central1-aksab-erp.cloudfunctions.net/updateLocation';
 
 // مسار ملف GeoJSON الذي يحتوي على حدود المناطق الإدارية
 // في Flutter، يجب أن يكون الملف داخل مجلد assets ويتم الإعلان عنه في pubspec.yaml
@@ -11,4 +11,3 @@ const String GEOJSON_FILE_PATH =
 
 // الثابتة المستخدمة لتحديد حقل مناطق التوصيل في Firestore
 const String FIRESTORE_DELIVERY_AREAS_FIELD = 'deliveryAreas';
-

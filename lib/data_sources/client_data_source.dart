@@ -90,7 +90,7 @@ class ClientDataSource {
       final fcmToken = await _fcm.getToken();
       if (fcmToken == null) return;
       await http.post(
-        Uri.parse("https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction"),
+        Uri.parse("https://us-central1-aksab-erp.cloudfunctions.net/registerFCMToken"),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'userId': userId, 

@@ -10,8 +10,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_test_app/services/user_session.dart';
 
 class AuthService {
+  // 💡 تم تحديث الرابط الميت هنا ليكون متوافقاً مع رابط الـ Firebase Cloud Function الجديد المرفوع بنجاح
   final String _notificationApiEndpoint =
-      "https://5uex7vzy64.execute-api.us-east-1.amazonaws.com/V2/new_nofiction";
+      "https://us-central1-aksab-erp.cloudfunctions.net/registerFCMToken";
+      
   late final FirebaseAuth _auth;
   late final FirebaseFirestore _db;
 

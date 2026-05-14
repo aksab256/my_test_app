@@ -16,7 +16,7 @@ class PointsLoyaltyScreen extends StatefulWidget {
 
 class _PointsLoyaltyScreenState extends State<PointsLoyaltyScreen> {
   bool _isRedeeming = false;
-  final String _redeemApiUrl = "https://mtvpdys0o9.execute-api.us-east-1.amazonaws.com/dev/redeempoint";
+  final String _redeemApiUrl = "https://us-central1-aksab-erp.cloudfunctions.net/pointsRedemption";
 
   final Color primaryBlue = const Color(0xFF2196F3);
   final Color successGreen = const Color(0xFF4CAF50);

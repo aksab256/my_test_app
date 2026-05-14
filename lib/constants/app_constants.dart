@@ -25,7 +25,7 @@ const String SELLER_ID_FIELD = 'sellerId';
 // ثوابت واجهة برمجة التطبيقات (APIs) - مُستخلصة من كود HTML
 // ----------------------------------------------------------------------
 // AWS API Gateway Endpoint
-const String API_GATEWAY_ENDPOINT = 'https://h9iaac7jee.execute-api.us-east-1.amazonaws.com/div/updateloction';
+const String API_GATEWAY_ENDPOINT = 'https://updatelocation-tmfag3rhdq-uc.a.run.app';
 // مسار ملف GeoJSON للمناطق الإدارية
 const String GEOJSON_FILE_PATH = 'OSMB-bc319d822a17aa9ad1089fc05e7d4e752460f877.geojson';
 // مفتاح الوصول لـ Mapbox
