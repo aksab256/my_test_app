@@ -244,7 +244,7 @@ class _OffersDataFetcherState extends State<OffersDataFetcher> {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2, 
-                  childAspectRatio: 0.7, 
+                  childAspectRatio: 0.58, // 🎯 تم تعديل النسبة وتكبير الكارت عمودياً لضمان عدم قص الصورة وظهورها كاملة
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
                 ),
