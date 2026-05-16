@@ -26,18 +26,16 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   bool _isLoading = false;
 
   String? _errorMessage;
-  String? _debugInfo;
   
   final AkedlyAuthService _akedlyService = AkedlyAuthService();
   final AuthService _authService = AuthService(); // 👈 تفعيل المحرك الأساسي
   final Color primaryGreen = const Color(0xff28a745);
 
-  void _updateDebug(String info, {bool isError = false}) {
+  void _handleError(String message) {
     setState(() {
-      _debugInfo = info;
-      _errorMessage = isError ? info : null;
+      _errorMessage = message;
     });
-    debugPrint(info);
+    debugPrint("System Log Error: $message");
   }
 
   String _formatPhoneNumber(String phone) {
@@ -56,7 +54,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
-      _debugInfo = "جاري بدء عملية التحقق...";
     });
 
     final String formattedPhone = _formatPhoneNumber(_phone);
@@ -85,7 +82,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
       if (!userExists) {
         setState(() => _isLoading = false);
-        _updateDebug("❌ خطأ: الرقم غير مسجل في رابية أحلى.", isError: true);
+        _handleError("❌ خطأ: الرقم غير مسجل في رابية أحلى.");
         return;
       }
 
@@ -95,11 +92,11 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       if (result.isSuccess) {
         _showOtpDialog(result.data ?? "", formattedPhone, foundRole!);
       } else {
-        _updateDebug("⚠️ فشل الإرسال: ${result.message}", isError: true);
+        _handleError("⚠️ فشل إرسال كود التفعيل: ${result.message}");
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      _updateDebug("💥 حدث استثناء: ${e.toString()}", isError: true);
+      _handleError("💥 حدث استثناء أثناء معالجة الطلب.");
     }
   }
 
@@ -160,7 +157,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
   Future<void> _verifyAndLogin(String stepId, String code, String phone) async {
     setState(() => _isLoading = true);
-    _updateDebug("🔄 جاري التحقق وتسجيل الدخول...");
 
     bool isVerified = await _akedlyService.verifyOtp(stepId, code);
 
@@ -182,16 +178,15 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
             UserSession.merchantName ?? "مستخدم رابية أحلى"
           );
 
-          _updateDebug("🚀 تم تحميل الجلسة بنجاح.");
           _navigateToHome(finalRole);
         }
       } catch (e) {
         setState(() => _isLoading = false);
-        _updateDebug("❌ فشل الدخول: $e", isError: true);
+        _handleError("❌ فشل الدخول: عذراً، لم نتمكن من إتمام العملية.");
       }
     } else {
       setState(() => _isLoading = false);
-      _updateDebug("❌ كود التحقق خاطئ.", isError: true);
+      _handleError("❌ كود التحقق خاطئ.");
     }
   }
 
@@ -223,19 +218,19 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           ),
           const SizedBox(height: 25),
           _buildSubmitButton(),
-          if (_debugInfo != null)
+          if (_errorMessage != null)
             Container(
               margin: const EdgeInsets.only(top: 20),
               padding: const EdgeInsets.all(12),
               width: double.infinity,
               decoration: BoxDecoration(
-                color: (_errorMessage != null ? Colors.red : Colors.blue).withOpacity(0.08),
+                color: Colors.red.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: (_errorMessage != null ? Colors.red : Colors.blue).withOpacity(0.3), width: 1.5),
+                border: Border.all(color: Colors.red.withOpacity(0.3), width: 1.5),
               ),
-              child: SelectableText(
-                "🛰️ System Log:\n$_debugInfo",
-                style: TextStyle(color: _errorMessage != null ? Colors.red[900] : Colors.blue[900], fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+              child: Text(
+                _errorMessage!,
+                style: TextStyle(color: Colors.red[900], fontSize: 13, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -290,4 +285,3 @@ class _InputGroup extends StatelessWidget {
     );
   }
 }
-
