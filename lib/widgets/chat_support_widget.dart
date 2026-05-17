@@ -74,7 +74,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 500),
-          curve: Curves.easeOutPoly,
+          curve: Curves.easeOutQuart,
         );
       }
     });
