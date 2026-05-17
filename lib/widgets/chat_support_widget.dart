@@ -184,10 +184,27 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
                     controller: _scrollController,
                     padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
                     itemCount: _messages.length,
-                    itemBuilder: (context, i) => _buildMessageBubble(_messages[i]['text']!, _messages[i]['role'] == 'user'),
+                    itemBuilder: (context, i) {
+                      // 👇 تحسين بصري هائل: تأثير الـ Fade & Slide الناعم عند ظهور أي رسالة
+                      return TweenAnimationBuilder<double>(
+                        tween: Tween<double>(begin: 0.0, end: 1.0),
+                        duration: const Duration(milliseconds: 400),
+                        curve: Curves.easeOutBack,
+                        builder: (context, value, child) {
+                          return Opacity(
+                            opacity: value,
+                            child: Transform.translate(
+                              offset: Offset(0, (1 - value) * 15),
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: _buildMessageBubble(_messages[i]['text']!, _messages[i]['role'] == 'user'),
+                      );
+                    },
                   ),
                 ),
-                if (_isTyping) _buildTypingIndicator(),
+                if (_isTyping) _buildCustomTypingIndicator(), // مؤشر الكتابة المطور والناعم
                 _buildInputSection(),
               ],
             ),
@@ -228,8 +245,8 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("شـيرا | Shira AI", style: TextStyle(fontSize: 15.0.sp, fontWeight: FontWeight.w900, color: const Color(0xff1a237e), fontFamily: 'Cairo')),
-                  Text("إدارة العهدة والخدمات اللوجستية الذكية", style: TextStyle(fontSize: 8.8.sp, fontWeight: FontWeight.w700, color: Colors.black54, fontFamily: 'Cairo')),
+                  Text("شـيرا | Shira AI", style: TextStyle(fontSize: 16.0.sp, fontWeight: FontWeight.w900, color: const Color(0xff1a237e), fontFamily: 'Cairo')),
+                  Text("إدارة العهدة والخدمات اللوجستية الذكية", style: TextStyle(fontSize: 9.5.sp, fontWeight: FontWeight.w700, color: Colors.black54, fontFamily: 'Cairo')),
                 ],
               ),
             ],
@@ -251,7 +268,6 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
               decoration: BoxDecoration(
-                // مظهر زجاجي كحلي للمستخدم، ومظهر زجاجي أبيض مصنفر لـ شيرا مع ظلال ناعمة
                 color: isUser ? const Color(0xff1a237e).withOpacity(0.88) : Colors.white.withOpacity(0.95),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(22),
@@ -275,28 +291,28 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
                   ? Text(
                       text,
                       style: TextStyle(
-                        fontSize: 13.5.sp, // تكبير الخط ليكون مريح وواضح جداً للمستخدم
+                        fontSize: 14.5.sp, // تكبير الخط ليكون مريح ومقروء جداً للمستخدم
                         fontWeight: FontWeight.w600,
                         fontFamily: 'Cairo',
                         color: Colors.white,
                         height: 1.45,
                       ),
                     )
-                  : MarkdownBody( // تحويل رد شيرا لـ Markdown لمعالجة النجوم المزدوجة باحترافية
+                  : MarkdownBody( 
                       data: text,
                       styleSheet: MarkdownStyleSheet(
                         p: TextStyle(
-                          fontSize: 14.0.sp, // خط شيرا كبير ومقروء بوضوح في شاشة الموبايل
+                          fontSize: 15.0.sp, // خط ردود شـيرا كبير وواضح بالكامل لمنع التداخل
                           fontWeight: FontWeight.w500,
                           fontFamily: 'Cairo',
                           color: Colors.black87,
-                          height: 1.55, // تباعد أسطر ممتاز ومريح يمنع تداخل الكلمات اللوجستية
+                          height: 1.55, 
                         ),
                         strong: TextStyle(
-                          fontSize: 14.5.sp, 
-                          fontWeight: FontWeight.w800, // إعطاء سمك ممتاز للكلمات الفنية والعهد اللوجستية
+                          fontSize: 15.5.sp, 
+                          fontWeight: FontWeight.w800, 
                           fontFamily: 'Cairo',
-                          color: const Color(0xff1a237e), // تمييز نقاط التأمين والعهد بلون الهوية الكحلي
+                          color: const Color(0xff1a237e), 
                         ),
                       ),
                     ),
@@ -324,20 +340,41 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
     );
   }
 
-  Widget _buildTypingIndicator() {
+  // 👇 الأنيميشن المطور والناعم للنقاط المتحركة (Bouncing Dots) ليعطي طابعاً حياً لتفكير شـيرا اللوجستي
+  Widget _buildCustomTypingIndicator() {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 1.2.h),
+      padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 1.5.h),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
-          const SizedBox(
-            width: 16, 
-            height: 16, 
-            child: CircularProgressIndicator(strokeWidth: 2.2, color: Color(0xff1a237e))
-          ),
-          const SizedBox(width: 12),
-          Text(
-            "تحديث حالة العهدة والبيانات...", 
-            style: TextStyle(fontSize: 10.0.sp, fontWeight: FontWeight.w700, color: Colors.blueGrey[800], fontFamily: 'Cairo')
+          _buildBotAvatar(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.9),
+              borderRadius: const BorderRadius.all(Radius.circular(20)),
+              border: Border.all(color: Colors.white.withOpacity(0.6)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2.0, color: Color(0xff1a237e))
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  "شـيرا تحلل وتحدث بيانات العهدة...",
+                  style: TextStyle(
+                    fontSize: 11.5.sp, 
+                    fontWeight: FontWeight.w700, 
+                    color: const Color(0xff1a237e), 
+                    fontFamily: 'Cairo'
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -346,42 +383,73 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
 
   Widget _buildInputSection() {
     return Container(
-      padding: EdgeInsets.fromLTRB(4.w, 1.5.h, 4.w, 3.5.h),
+      // تحويل الـ Input Section إلى Floating Bar فخم مرتفع عن الحافة بدلاً من التصميق التقليدي
+      margin: EdgeInsets.only(left: 4.w, right: 4.w, bottom: 3.0.h, top: 0.8.h),
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.55), 
-        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.45), width: 1.2)),
+        color: Colors.white.withOpacity(0.92), 
+        borderRadius: BorderRadius.circular(35),
+        border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Expanded(
             child: TextField(
               controller: _controller,
-              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600, fontSize: 11.5.sp),
+              textDirection: TextDirection.rtl, // بقاء اتجاه الكتابة عربي مظبوط ومحاذاة ممتازة
+              // تكبير خط الإدخال الذي يكتبه المستخدم ليكون فخماً وواضحاً ومريحاً للعين تماماً
+              style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600, fontSize: 15.0, color: Colors.black87),
               decoration: InputDecoration(
                 hintText: "استفسر عن نقاط التأمين أو حالة الشحنة...",
-                hintStyle: TextStyle(color: Colors.black38, fontSize: 10.8.sp),
+                hintTextDirection: TextDirection.rtl,
+                hintStyle: const TextStyle(color: Colors.black38, fontSize: 13.5, fontFamily: 'Cairo'),
                 filled: true,
-                fillColor: Colors.white.withOpacity(0.85), 
+                fillColor: Colors.transparent, 
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               ),
               onSubmitted: (_) => _sendMessage(),
             ),
           ),
-          const SizedBox(width: 12),
-          GestureDetector(
-            onTap: _sendMessage,
-            child: Container(
-              padding: const EdgeInsets.all(13),
-              decoration: BoxDecoration(
-                color: const Color(0xff1a237e).withOpacity(0.92), 
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(color: const Color(0xff1a237e).withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 4))
-                ]
-              ),
-              child: const Icon(Icons.send_rounded, color: Colors.white, size: 25),
-            ),
+          const SizedBox(width: 8),
+          // 👇 مراقبة حية للتكست لتفعيل أنيميشن الـ Scale & Color لزر الإرسال
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _controller,
+            builder: (context, value, child) {
+              final hasText = value.text.trim().isNotEmpty;
+              return AnimatedScale(
+                scale: hasText ? 1.0 : 0.9,
+                duration: const Duration(milliseconds: 200),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  decoration: BoxDecoration(
+                    color: hasText ? const Color(0xff1a237e) : Colors.grey[400], 
+                    shape: BoxShape.circle,
+                    boxShadow: hasText ? [
+                      BoxShadow(
+                        color: const Color(0xff1a237e).withOpacity(0.3), 
+                        blurRadius: 8, 
+                        offset: const Offset(0, 3)
+                      )
+                    ] : [],
+                  ),
+                  child: GestureDetector(
+                    onTap: _sendMessage,
+                    child: const Padding(
+                      padding: EdgeInsets.all(12.0),
+                      child: Icon(Icons.send_rounded, color: Colors.white, size: 22),
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
