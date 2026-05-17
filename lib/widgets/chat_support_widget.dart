@@ -1,4 +1,3 @@
-// lib/widgets/chat_support_widget.dart
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -7,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sizer/sizer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_markdown/flutter_markdown.dart'; // المكتبة الحديثة لتنسيق الردود بذكاء
 
 class ChatSupportWidget extends StatefulWidget {
   const ChatSupportWidget({super.key});
@@ -162,16 +162,15 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16), // زيادة الضبابية لإعطاء مظهر زجاجي حقيقي
+      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20), // زيادة التأثير الزجاجي الفخم لمظهر متناسق
       child: Container(
         height: 88.h, 
         decoration: BoxDecoration(
-          // دمج الشفافية مع خلفية بيضاء خفيفة لمحاكاة تأثير المات أو الزجاج المصنفر
-          color: Colors.white.withOpacity(0.75), 
+          color: Colors.white.withOpacity(0.72), 
           borderRadius: const BorderRadius.vertical(top: Radius.circular(35)),
-          border: Border.all(color: Colors.white.withOpacity(0.4), width: 1.5),
+          border: Border.all(color: Colors.white.withOpacity(0.45), width: 1.5),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 30, spreadRadius: 5)
+            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 35, spreadRadius: 5)
           ],
         ),
         child: SafeArea(
@@ -200,14 +199,14 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
 
   Widget _buildHeader() {
     return Container(
-      padding: EdgeInsets.symmetric(vertical: 2.h),
+      padding: EdgeInsets.symmetric(vertical: 1.8.h),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.4),
-        border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.5), width: 1.5)),
+        color: Colors.white.withOpacity(0.35),
+        border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.4), width: 1.2)),
       ),
       child: Column(
         children: [
-          Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10))),
+          Container(width: 45, height: 5, decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10))),
           SizedBox(height: 1.5.h),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -215,10 +214,10 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
               ScaleTransition(
                 scale: _scaleAnimation,
                 child: Container(
-                  width: 55, height: 55,
+                  width: 58, height: 58,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    boxShadow: [BoxShadow(color: const Color(0xff1a237e).withOpacity(0.15), blurRadius: 10)],
+                    boxShadow: [BoxShadow(color: const Color(0xff1a237e).withOpacity(0.12), blurRadius: 12)],
                   ),
                   child: ClipOval(
                     child: Image.asset('assets/images/shira_logo.png', fit: BoxFit.contain),
@@ -229,8 +228,8 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("شـيرا | Shira AI", style: TextStyle(fontSize: 14.5.sp, fontWeight: FontWeight.w900, color: const Color(0xff1a237e), fontFamily: 'Cairo')),
-                  Text("إدارة العهدة والخدمات اللوجستية الذكية", style: TextStyle(fontSize: 8.5.sp, fontWeight: FontWeight.w600, color: Colors.black54, fontFamily: 'Cairo')),
+                  Text("شـيرا | Shira AI", style: TextStyle(fontSize: 15.0.sp, fontWeight: FontWeight.w900, color: const Color(0xff1a237e), fontFamily: 'Cairo')),
+                  Text("إدارة العهدة والخدمات اللوجستية الذكية", style: TextStyle(fontSize: 8.8.sp, fontWeight: FontWeight.w700, color: Colors.black54, fontFamily: 'Cairo')),
                 ],
               ),
             ],
@@ -242,7 +241,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
 
   Widget _buildMessageBubble(String text, bool isUser) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -250,34 +249,57 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
           if (!isUser) _buildBotAvatar(),
           Flexible(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
               decoration: BoxDecoration(
-                // فقاعة المستخدم زجاج بلون كحلي داكن، والرد زجاج شفاف ناصع
-                color: isUser ? const Color(0xff1a237e).withOpacity(0.85) : Colors.white.withOpacity(0.9),
+                // مظهر زجاجي كحلي للمستخدم، ومظهر زجاجي أبيض مصنفر لـ شيرا مع ظلال ناعمة
+                color: isUser ? const Color(0xff1a237e).withOpacity(0.88) : Colors.white.withOpacity(0.95),
                 borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(20),
-                  topRight: const Radius.circular(20),
-                  bottomLeft: Radius.circular(isUser ? 20 : 4),
-                  bottomRight: Radius.circular(isUser ? 4 : 20),
+                  topLeft: const Radius.circular(22),
+                  topRight: const Radius.circular(22),
+                  bottomLeft: Radius.circular(isUser ? 22 : 4),
+                  bottomRight: Radius.circular(isUser ? 4 : 22),
                 ),
                 border: Border.all(
-                  color: isUser ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.6),
-                  width: 1
+                  color: isUser ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.7),
+                  width: 1.2
                 ),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2))
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03), 
+                    blurRadius: 6, 
+                    offset: const Offset(0, 3)
+                  )
                 ],
               ),
-              child: Text(
-                text,
-                style: TextStyle(
-                  fontSize: 13.sp, 
-                  fontWeight: isUser ? FontWeight.w600 : FontWeight.w500,
-                  fontFamily: 'Cairo',
-                  color: isUser ? Colors.white : Colors.black87,
-                  height: 1.4,
-                ),
-              ),
+              child: isUser 
+                  ? Text(
+                      text,
+                      style: TextStyle(
+                        fontSize: 13.5.sp, // تكبير الخط ليكون مريح وواضح جداً للمستخدم
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'Cairo',
+                        color: Colors.white,
+                        height: 1.45,
+                      ),
+                    )
+                  : MarkdownBody( // تحويل رد شيرا لـ Markdown لمعالجة النجوم المزدوجة باحترافية
+                      data: text,
+                      styleSheet: MarkdownStyleSheet(
+                        p: TextStyle(
+                          fontSize: 14.0.sp, // خط شيرا كبير ومقروء بوضوح في شاشة الموبايل
+                          fontWeight: FontWeight.w500,
+                          fontFamily: 'Cairo',
+                          color: Colors.black87,
+                          height: 1.55, // تباعد أسطر ممتاز ومريح يمنع تداخل الكلمات اللوجستية
+                        ),
+                        strong: TextStyle(
+                          fontSize: 14.5.sp, 
+                          fontWeight: FontWeight.w800, // إعطاء سمك ممتاز للكلمات الفنية والعهد اللوجستية
+                          fontFamily: 'Cairo',
+                          color: const Color(0xff1a237e), // تمييز نقاط التأمين والعهد بلون الهوية الكحلي
+                        ),
+                      ),
+                    ),
             ),
           ),
           if (isUser) const SizedBox(width: 5),
@@ -288,12 +310,12 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
 
   Widget _buildBotAvatar() {
     return Padding(
-      padding: const EdgeInsets.only(left: 0, right: 8, bottom: 2),
+      padding: const EdgeInsets.only(left: 0, right: 10, bottom: 2),
       child: Container(
-        width: 30, height: 30,
+        width: 32, height: 32,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: const Color(0xff1a237e).withOpacity(0.15)),
+          border: Border.all(color: const Color(0xff1a237e).withOpacity(0.18)),
         ),
         child: ClipOval(
           child: Image.asset('assets/images/shira_logo.png', fit: BoxFit.contain),
@@ -304,12 +326,19 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
 
   Widget _buildTypingIndicator() {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 1.h),
+      padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 1.2.h),
       child: Row(
         children: [
-          const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xff1a237e))),
+          const SizedBox(
+            width: 16, 
+            height: 16, 
+            child: CircularProgressIndicator(strokeWidth: 2.2, color: Color(0xff1a237e))
+          ),
           const SizedBox(width: 12),
-          Text("تحديث حالة العهدة والبيانات...", style: TextStyle(fontSize: 9.5.sp, fontWeight: FontWeight.w600, color: Colors.blueGrey[800], fontFamily: 'Cairo')),
+          Text(
+            "تحديث حالة العهدة والبيانات...", 
+            style: TextStyle(fontSize: 10.0.sp, fontWeight: FontWeight.w700, color: Colors.blueGrey[800], fontFamily: 'Cairo')
+          ),
         ],
       ),
     );
@@ -319,37 +348,39 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
     return Container(
       padding: EdgeInsets.fromLTRB(4.w, 1.5.h, 4.w, 3.5.h),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.5), // بار إدخال زجاجي جزئي ليعكس ما خلفه
-        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.4), width: 1.5)),
+        color: Colors.white.withOpacity(0.55), 
+        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.45), width: 1.2)),
       ),
       child: Row(
         children: [
           Expanded(
             child: TextField(
               controller: _controller,
-              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600, fontSize: 11.sp),
+              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600, fontSize: 11.5.sp),
               decoration: InputDecoration(
                 hintText: "استفسر عن نقاط التأمين أو حالة الشحنة...",
-                hintStyle: TextStyle(color: Colors.black38, fontSize: 10.5.sp),
+                hintStyle: TextStyle(color: Colors.black38, fontSize: 10.8.sp),
                 filled: true,
-                fillColor: Colors.white.withOpacity(0.8), // إدخال ناصع ومقروء
+                fillColor: Colors.white.withOpacity(0.85), 
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               ),
               onSubmitted: (_) => _sendMessage(),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           GestureDetector(
             onTap: _sendMessage,
             child: Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
-                color: const Color(0xff1a237e).withOpacity(0.9), 
+                color: const Color(0xff1a237e).withOpacity(0.92), 
                 shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: const Color(0xff1a237e).withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 3))]
+                boxShadow: [
+                  BoxShadow(color: const Color(0xff1a237e).withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 4))
+                ]
               ),
-              child: const Icon(Icons.send_rounded, color: Colors.white, size: 24),
+              child: const Icon(Icons.send_rounded, color: Colors.white, size: 25),
             ),
           ),
         ],
