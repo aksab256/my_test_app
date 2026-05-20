@@ -6,7 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart'; 
 import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
-import 'package:facebook_app_events/facebook_app_events.dart'; [cite: 2026-02-03]
+import 'package:facebook_app_events/facebook_app_events.dart';
 
 // تعريف الألوان
 const Color kPrimaryColor = Color(0xFF4CAF50);
@@ -37,11 +37,11 @@ Map<String, dynamic> removeNullValues(Map<String, dynamic> obj) {
 }
 
 class CheckoutController {
-    static final facebookAppEvents = FacebookAppEvents(); [cite: 2026-02-03]
+    static final facebookAppEvents = FacebookAppEvents();
 
     static Future<String?> _getSellerPhone(String id, bool isConsumer) async {
         try {
-            final collectionName = isConsumer ? "deliverySupermarkets" : "sellers"; [cite: 2025-10-03]
+            final collectionName = isConsumer ? "deliverySupermarkets" : "sellers";
             final doc = await FirebaseFirestore.instance.collection(collectionName).doc(id).get();
             if (doc.exists) {
                 return doc.data()?['phone']?.toString() ?? doc.data()?['mobile']?.toString();
@@ -106,7 +106,7 @@ class CheckoutController {
         }
 
         final bool isConsumer = (safeLoggedUser['role'] == 'consumer');
-        final String ordersCollectionName = isConsumer ? "consumerorders" : "orders"; [cite: 2026-02-03]
+        final String ordersCollectionName = isConsumer ? "consumerorders" : "orders";
         final String usersCollectionName = isConsumer ? "consumers" : "users";
         final String cashbackFieldName = isConsumer ? "cashbackBalance" : "cashback";
 
@@ -169,7 +169,7 @@ class CheckoutController {
             }
 
             if (needsSecureProcessing) {
-                // 🚀 تعديل: توجيه الطلب إلى المنطقة الموحدة واسم الدالة الصحيح الموجود بالسيرفر
+                // توجيه الطلب إلى المنطقة الموحدة واسم الدالة الصحيح الموجود بالسيرفر
                 final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
                     .httpsCallable('createOrdersWithPromos'); 
 
@@ -190,7 +190,7 @@ class CheckoutController {
                         'status': 'new-order',
                         'orderDate': DateTime.now().toUtc().toIso8601String(),
                         'commissionRateSnapshot': commissionRatesCache[sellerId] ?? 0.0,
-                        'insurance_points': discountPortion, // مسمى لوجستي: نقاط تأمين للحساب المزدوج [cite: 2026-02-25]
+                        'insurance_points': discountPortion, 
                         'isCashbackUsed': discountUsed > 0,
                         'isFinancialSettled': false,
                         'isCommissionProcessed': false,
@@ -203,16 +203,16 @@ class CheckoutController {
                             'address': address,
                             'lat': buyerProvider.effectiveLat,
                             'lng': buyerProvider.effectiveLng,
-                            'repCode': repCode, // الحفاظ على حقول المندوب للشفافية [cite: 2026-02-26]
+                            'repCode': repCode, 
                             'repName': repName
                         },
                     }));
                 }
 
-                // تنفيذ الطلب عبر Cloud Function وتمرير البارامترات المطلوبة بدقة بالسيرفر
+                // تنفيذ الطلب عبر Cloud Function وتمرير البارامترات المطابقة للسيرفر بالملي
                 final result = await callable.call(removeNullValues({
                     'userId': safeLoggedUser['id'],
-                    'cashbackToReserve': discountUsed, // الحقل المطابق تماماً لما ينتظره السيرفر بالملي
+                    'cashbackToReserve': discountUsed, 
                     'ordersData': allOrdersData,
                 }));
 
@@ -256,7 +256,7 @@ class CheckoutController {
                         'paymentMethod': paymentMethodString,
                         'status': 'new-order', 'orderDate': FieldValue.serverTimestamp(),
                         'commissionRate': commissionRatesCache[sellerId] ?? 0.0,
-                        'insurance_points': discountPortion, // مسمى لوجستي: نقاط تأمين [cite: 2026-02-25]
+                        'insurance_points': discountPortion, 
                         'isCashbackUsed': discountUsed > 0,
                         'isFinancialSettled': false,
                         'isCommissionProcessed': false,
@@ -276,9 +276,8 @@ class CheckoutController {
             }
 
             if (successfulOrderIds.isNotEmpty) {
-                // إرسال تنبيهات فيسبوك للتتبع [cite: 2026-02-03]
                 try {
-                    facebookAppEvents.logPurchase( [cite: 2026-02-03]
+                    facebookAppEvents.logPurchase(
                         amount: finalTotalAmount,
                         currency: "EGP",
                         parameters: {
