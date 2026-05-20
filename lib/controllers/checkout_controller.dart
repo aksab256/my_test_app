@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart'; 
+import 'package:cloud_functions/cloud_functions.dart'; // المكتبة الجديدة
 import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:facebook_app_events/facebook_app_events.dart';
@@ -169,7 +169,7 @@ class CheckoutController {
             }
 
             if (needsSecureProcessing) {
-                // توجيه الطلب إلى المنطقة الموحدة واسم الدالة الصحيح الموجود بالسيرفر
+                // 🚀 تعديل الإقليم واسم الدالة فقط مع الحفاظ على الكود الأصلي بالملي
                 final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
                     .httpsCallable('createOrdersWithPromos'); 
 
@@ -190,7 +190,7 @@ class CheckoutController {
                         'status': 'new-order',
                         'orderDate': DateTime.now().toUtc().toIso8601String(),
                         'commissionRateSnapshot': commissionRatesCache[sellerId] ?? 0.0,
-                        'insurance_points': discountPortion, 
+                        'insurance_points': discountPortion, // مسمى لوجستي: نقاط تأمين
                         'isCashbackUsed': discountUsed > 0,
                         'isFinancialSettled': false,
                         'isCommissionProcessed': false,
@@ -203,17 +203,19 @@ class CheckoutController {
                             'address': address,
                             'lat': buyerProvider.effectiveLat,
                             'lng': buyerProvider.effectiveLng,
-                            'repCode': repCode, 
+                            'repCode': repCode, // الحفاظ على حقول المندوب للشفافية
                             'repName': repName
                         },
                     }));
                 }
 
-                // تنفيذ الطلب عبر Cloud Function وتمرير البارامترات المطابقة للسيرفر بالملي
+                // تنفيذ الطلب عبر Cloud Function
                 final result = await callable.call(removeNullValues({
                     'userId': safeLoggedUser['id'],
-                    'cashbackToReserve': discountUsed, 
+                    'total_insurance_points': discountUsed, // تأمين إجمالي العهدة
                     'ordersData': allOrdersData,
+                    'action': 'lock_assets', // تأكيد حجز العهدة
+                    'checkoutId': 'CH-${safeLoggedUser['id']}-${DateTime.now().millisecondsSinceEpoch}',
                 }));
 
                 if (result.data['orderIds'] is List) {
@@ -256,7 +258,7 @@ class CheckoutController {
                         'paymentMethod': paymentMethodString,
                         'status': 'new-order', 'orderDate': FieldValue.serverTimestamp(),
                         'commissionRate': commissionRatesCache[sellerId] ?? 0.0,
-                        'insurance_points': discountPortion, 
+                        'insurance_points': discountPortion, // استخدام نقاط التأمين
                         'isCashbackUsed': discountUsed > 0,
                         'isFinancialSettled': false,
                         'isCommissionProcessed': false,
@@ -276,6 +278,7 @@ class CheckoutController {
             }
 
             if (successfulOrderIds.isNotEmpty) {
+                // إرسال تنبيهات فيسبوك للتتبع
                 try {
                     facebookAppEvents.logPurchase(
                         amount: finalTotalAmount,
