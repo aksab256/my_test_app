@@ -27,7 +27,7 @@ dependencies:
   intl: ^0.20.2
   fl_chart: ^1.1.1
   sizer: ^3.1.3
-  flutter_markdown: ^0.7.5 # تم إضافتها هنا لتنسيق ردود شـيرا اللوجستية بدقة [cite: 2026-01-27, 2026-02-25]
+  flutter_markdown: ^0.7.5 # تم إضافتها هنا لتنسيق ردود شـيرا اللوجستية بدقة
 
   # Printing & PDF
   pdf: ^3.11.3
@@ -49,7 +49,7 @@ dependencies:
   shared_preferences: ^2.5.3
 
   # Marketing & Tracking
-  facebook_app_events: ^0.26.0 [cite: 2026-02-03]
+  facebook_app_events: ^0.26.0
 
   # Fonts
   google_fonts: ^8.0.2
@@ -80,7 +80,7 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.4
   flutter_native_splash: ^2.4.0
 
-# 🚀 إعدادات الأيقونة الاحترافية (خلفية بيضاء)
+# إعدادات الأيقونة الاحترافية (خلفية بيضاء)
 flutter_launcher_icons:
   android: true
   ios: true
@@ -89,7 +89,7 @@ flutter_launcher_icons:
   adaptive_icon_foreground: "assets/flutter_logo.png"
   adaptive_icon_foreground_inset: 0
 
-# 🚀 إعدادات شاشة الافتتاحية (لمنع الرمشة السوداء)
+# إعدادات شاشة الافتتاحية (لمنع الرمشة السوداء)
 flutter_native_splash:
   color: "#FFFFFF"
   image: "assets/flutter_logo.png"
@@ -105,6 +105,6 @@ flutter:
     - assets/images/
     - assets/images/shira_logo.png
 
-# 🛠️ إجبار فلاتر على استخدام النسخة المصلحة والمستقرة لمنع خطأ الـ final class بالملي
+# تخطي مشكلة إصدار الأيقونات ليتوافق مع كود فلاتر المستقر في الـ Pipeline
 dependency_overrides:
   material_design_icons_flutter: 7.0.7297
