@@ -212,7 +212,7 @@ class CheckoutController {
                 // تنفيذ الطلب عبر Cloud Function
                 final result = await callable.call(removeNullValues({
                     'userId': safeLoggedUser['id'],
-                    'total_insurance_points': discountUsed, // تأمين إجمالي العهدة
+                    'cashbackToReserve': discountUsed, // تأمين إجمالي العهدة
                     'ordersData': allOrdersData,
                     'action': 'lock_assets', // تأكيد حجز العهدة
                     'checkoutId': 'CH-${safeLoggedUser['id']}-${DateTime.now().millisecondsSinceEpoch}',

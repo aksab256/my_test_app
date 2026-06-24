@@ -56,7 +56,6 @@ dependencies:
 
   # Material 3 & icons
   dynamic_color: ^1.8.1
-  material_design_icons_flutter: ^7.0.7296
   lucide_icons: ^0.257.0
 
   # Images & network
@@ -107,4 +106,4 @@ flutter:
 
 # تخطي مشكلة إصدار الأيقونات ليتوافق مع كود فلاتر المستقر في الـ Pipeline
 dependency_overrides:
-  material_design_icons_flutter: 7.0.7297
+  material_design_icons_flutter: any

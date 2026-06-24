@@ -164,7 +164,7 @@ class _BuyerMainContentWidgetState extends State<BuyerMainContentWidget> {
                       errorBuilder: (c, o, s) => Container(                                       
                         // تم إزالة height: 80
                         color: Colors.grey.shade200,                                              
-                        child: const Center(child: Icon(FontAwesomeIcons.image, size: 30, color: Colors.grey)),                                   
+                        child: Center(child: FaIcon(FontAwesomeIcons.image, size: 30, color: Colors.grey)),                                   
                       ),
                     ),
                   ),

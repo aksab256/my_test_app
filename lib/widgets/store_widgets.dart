@@ -380,7 +380,6 @@ class SidebarItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       title: Text(title, textAlign: TextAlign.right),
-      trailing: FaIcon(icon, size: 20),
       leading: count > 0
           ? CircleAvatar(
               radius: 10,
@@ -391,6 +390,7 @@ class SidebarItem extends StatelessWidget {
               ),
             )
           : null,
+      trailing: Icon(icon, size: 20),
       onTap: onTap,
     );
   }
@@ -484,7 +484,7 @@ class StoreMobileNav extends StatelessWidget {
 
 class _MobileNavItem extends StatelessWidget {
   final String title;
-  final IconData icon;
+  final FaIconData icon;
   final String route;
   final bool isActive;
   final bool showDot;
@@ -595,7 +595,7 @@ class _MobileCartItem extends StatelessWidget {
 // ----------------------------------------------------
 class StoreSectionTitle extends StatelessWidget {
   final String title;
-  final IconData icon;
+  final FaIconData icon;
   const StoreSectionTitle({super.key, required this.title, required this.icon});
 
   @override
