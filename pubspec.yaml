@@ -1,7 +1,7 @@
 name: my_test_app
 description: A new Flutter project.
 publish_to: 'none'
-# تم تحديث الإصدار ليكون Build 3 جاهز للرفع النهائي
+# تم تحديث الإصدار ليكون Build 21 جاهز للرفع النهائي لتطبيق ربيع أحلى
 version: 1.0.2+21
 
 environment:
@@ -56,7 +56,7 @@ dependencies:
 
   # Material 3 & icons
   dynamic_color: ^1.8.1
-  material_design_icons_flutter: any
+  material_design_icons_flutter: ^7.0.7296 # إجبار النسخة الرسمية المستقرة والمتوافقة مع نواة فلاتر الحديثة
   lucide_icons: ^0.257.0
 
   # Images & network
@@ -110,6 +110,6 @@ flutter:
     - assets/images/
     - assets/images/shira_logo.png
 
-# تخطي مشكلة إصدار الأيقونات ليتوافق مع كود فلاتر المستقر في الـ Pipeline
+# تخطي وإلغاء كاش الإصدار القديم تماماً لإجبار جيت هاب بيبلاين على الالتزام بالإصدار الحديث
 dependency_overrides:
-  material_design_icons_flutter: any
+  material_design_icons_flutter: ^7.0.7296
