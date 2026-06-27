@@ -1,7 +1,6 @@
 // المسار: lib/widgets/quantity_control.dart
 
 import 'package:flutter/material.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:google_fonts/google_fonts.dart'; 
 import 'package:sizer/sizer.dart'; // 🚀 استيراد Sizer
 
@@ -107,7 +106,7 @@ class _QuantityControlState extends State<QuantityControl> {
           // 1. زر الإنقاص (-)
           _buildButton(
             context,                                                
-            icon: MdiIcons.minus, 
+            icon: Icons.remove,
             onPressed: _decrement, // 🟢 تم تصحيح هذا
             isEnabled: canDecrease,
             isStart: true, 
@@ -152,7 +151,7 @@ class _QuantityControlState extends State<QuantityControl> {
           // 3. زر الزيادة (+)
           _buildButton(                                             
             context,
-            icon: MdiIcons.plus,
+            icon: Icons.add,
             onPressed: _increment, // 🟢 تم تصحيح هذا
             isEnabled: canIncrease,                                 
             isStart: false,

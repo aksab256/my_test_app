@@ -56,7 +56,7 @@ dependencies:
 
   # Material 3 & icons
   dynamic_color: ^1.8.1
-  material_design_icons_flutter: ^7.0.7296 # إجبار النسخة الرسمية المستقرة والمتوافقة مع نواة فلاتر الحديثة
+   # إجبار النسخة الرسمية المستقرة والمتوافقة مع نواة فلاتر الحديثة
   lucide_icons: ^0.257.0
 
   # Images & network
@@ -111,5 +111,3 @@ flutter:
     - assets/images/shira_logo.png
 
 # تخطي وإلغاء كاش الإصدار القديم تماماً لإجبار جيت هاب بيبلاين على الالتزام بالإصدار الحديث
-dependency_overrides:
-  material_design_icons_flutter: ^7.0.7296

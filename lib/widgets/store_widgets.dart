@@ -484,11 +484,7 @@ class StoreMobileNav extends StatelessWidget {
 
 class _MobileNavItem extends StatelessWidget {
   final String title;
-<<<<<<< HEAD
   final FaIconData icon;
-=======
-  final dynamic icon;
->>>>>>> local-fix-branch
   final String route;
   final bool isActive;
   final bool showDot;
@@ -598,11 +594,7 @@ class _MobileCartItem extends StatelessWidget {
 // ----------------------------------------------------
 class StoreSectionTitle extends StatelessWidget {
   final String title;
-<<<<<<< HEAD
   final FaIconData icon;
-=======
-  final dynamic icon;
->>>>>>> local-fix-branch
   const StoreSectionTitle({super.key, required this.title, required this.icon});
 
   @override
