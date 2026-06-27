@@ -56,10 +56,7 @@ dependencies:
 
   # Material 3 & icons
   dynamic_color: ^1.8.1
-<<<<<<< HEAD
-=======
   material_design_icons_flutter: any
->>>>>>> local-fix-branch
   lucide_icons: ^0.257.0
 
   # Images & network
