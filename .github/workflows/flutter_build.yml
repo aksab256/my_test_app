@@ -12,59 +12,57 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 🧩 Checkout Code
-        [cite_start]uses: actions/checkout@v4 [cite: 1]
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: ☕️ Setup Java
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          [cite_start]distribution: 'zulu' [cite: 1]
-          [cite_start]java-version: '17' [cite: 2]
+          distribution: 'zulu'
+          java-version: '17'
 
-      - name: 🔧 Setup Flutter
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          [cite_start]channel: 'stable' [cite: 2]
-          cache: true # تفعيل الكاش لزيادة سرعة البناء في المرات القادمة
+          channel: 'stable'
+          cache: true
 
-      - name: 📦 Install Dependencies
+      - name: Install Dependencies
         run: |
           flutter clean
-          flutter pub get [cite: 2]
+          flutter pub get
 
-      - name: 🔑 Decode Keystore
+      - name: Decode Keystore
         env:
-          [cite_start]RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }} [cite: 3]
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
         run: |
-          echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > android/app/release-keystore.jks [cite: 3]
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > android/app/release-keystore.jks
 
-      - name: 🏗️ Build APK & AAB
+      - name: Build APK & AAB
         env:
-          [cite_start]STORE_PASSWORD: ${{ secrets.KEY_PASSWORD }} [cite: 3]
-          [cite_start]KEY_ALIAS: ${{ secrets.ALIAS_NAME }} [cite: 3]
-          [cite_start]KEY_PASSWORD: ${{ secrets.KEY_PASSWORD_ALIAS }} [cite: 3]
-          [cite_start]KEYSTORE_PATH: "release-keystore.jks" [cite: 3]
+          STORE_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ALIAS_NAME }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD_ALIAS }}
+          KEYSTORE_PATH: "release-keystore.jks"
         run: |
-          # بناء الـ APK أولاً [cite: 4]
-          flutter build apk --release [cite: 4]
-          # بناء الـ AAB (المطلوب للمتجر) [cite: 4]
-          flutter build appbundle --release [cite: 4]
+          flutter build apk --release
+          flutter build appbundle --release
 
-      - name: 📤 Upload Signed APK
-        [cite_start]uses: actions/upload-artifact@v4 [cite: 4]
+      - name: Upload Signed APK
+        uses: actions/upload-artifact@v4
         with:
           name: RabiaAhla-Release-APK
-          [cite_start]path: build/app/outputs/flutter-apk/app-release.apk [cite: 5]
+          path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: 📤 Upload Signed AAB (Google Play)
-        [cite_start]uses: actions/upload-artifact@v4 [cite: 5]
+      - name: Upload Signed AAB (Google Play)
+        uses: actions/upload-artifact@v4
         with:
           name: RabiaAhla-Release-AAB-Bundle
-          [cite_start]path: build/app/outputs/bundle/release/app-release.aab [cite: 5]
+          path: build/app/outputs/bundle/release/app-release.aab
 
-      - name: 🔍 Verify Build Success
+      - name: Verify Build Success
         run: |
-          echo "Checking if files exist..." [cite: 6]
-          ls -lh build/app/outputs/flutter-apk/app-release.apk [cite: 6]
-          ls -lh build/app/outputs/bundle/release/app-release.aab [cite: 6]
-          echo "Builds completed and verified successfully!" [cite: 6]
+          echo "Checking if files exist..."
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
+          ls -lh build/app/outputs/bundle/release/app-release.aab
+          echo "Builds completed and verified successfully!"
