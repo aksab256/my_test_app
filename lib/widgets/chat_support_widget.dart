@@ -21,7 +21,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
   List<Map<String, String>> _messages = [];
   bool _isTyping = false;
   
-  // الرابط الخاص بـ AWS Lambda اللي رابطينه بـ Gemini
+  // الرابط الخاص بـ  Lambda اللي رابطينه بـ Gemini
   final String apiGatewayUrl = "https://us-central1-aksab-erp.cloudfunctions.net/shiraChat";
 
   late AnimationController _pulseController;

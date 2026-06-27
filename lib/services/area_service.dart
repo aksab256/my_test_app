@@ -25,11 +25,11 @@ class AreaService {
   }
 
   // ----------------------------------------------------------------------
-  // 2. استدعاء AWS Lambda لمزامنة العروض
+  // 2. استدعاء وظيفة السيرفر لمزامنة العروض (Cloud Function / Run)
   // ----------------------------------------------------------------------
-  /// يستدعي AWS Lambda لإخبارها بتحديث العروض المرتبطة بالبائع
-  Future<int?> callLambdaToUpdateOffers(String sellerId) async {
-    print("-> Calling AWS Lambda for offer sync...");
+  /// تستدعي الدالة السحابية لتحديث العروض المرتبطة بالبائع جغرافياً
+  Future<int?> callCloudFunctionToUpdateOffers(String sellerId) async {
+    print("-> Calling Serverless Cloud Function for offer sync...");
     try {
       final response = await http.post(
         Uri.parse(API_GATEWAY_ENDPOINT),
@@ -38,8 +38,8 @@ class AreaService {
       );
 
       if (!response.statusCode.toString().startsWith('2')) {
-        // إذا كان هناك خطأ في API Gateway
-        throw Exception('Lambda API failed with status ${response.statusCode}');
+        // إذا كان هناك خطأ في استجابة السيرفر
+        throw Exception('Cloud Function API failed with status ${response.statusCode}');
       }
       
       final Map<String, dynamic> successBody = json.decode(response.body);
@@ -48,7 +48,7 @@ class AreaService {
       return successBody['updatedCount'] as int? ?? 0;
       
     } catch (error) {
-      print('❌ Failed to call Lambda: $error');
+      print('❌ Failed to call Cloud Function: $error');
       // عند فشل الاستدعاء، نمرر القيمة null
       return null; 
     }
@@ -57,7 +57,7 @@ class AreaService {
   // ----------------------------------------------------------------------
   // 3. حفظ مناطق التوصيل
   // ----------------------------------------------------------------------
-  /// يحفظ المناطق المختارة في Firestore و يستدعي AWS Lambda
+  /// يحفظ المناطق المختارة في Firestore و يستدعي الدالة السحابية للتحديث فوراً
   Future<Map<String, dynamic>> saveSellerAreas({
     required String sellerId,
     required List<String> selectedAreaNames,
@@ -70,8 +70,8 @@ class AreaService {
         FIRESTORE_DELIVERY_AREAS_FIELD: selectedAreaNames,
       });
 
-      // الخطوة 2: المحفز! استدعاء Lambda
-      final updatedCount = await callLambdaToUpdateOffers(sellerId);
+      // الخطوة 2: المحفز! استدعاء الدالة السحابية للمزامنة التلقائية
+      final updatedCount = await callCloudFunctionToUpdateOffers(sellerId);
 
       if (updatedCount != null) {
         return {'success': true, 'message': 'تم الحفظ بنجاح! تم تحديث $updatedCount عروض مرتبطة.'};
@@ -86,4 +86,3 @@ class AreaService {
     }
   }
 }
-

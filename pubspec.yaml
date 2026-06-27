@@ -55,7 +55,7 @@ dependencies:
 
   # Material 3 & icons
   dynamic_color: ^1.8.1
-  material_design_icons_flutter: ^7.0.7296
+  material_design_icons_flutter: any
   lucide_icons: ^0.257.0
 
   # Images & network
@@ -74,6 +74,11 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  
+  # 🎯 أداة فحص واختبار التطبيق بالكامل وتأكيد التدفقات التلقائية
+  integration_test:
+    sdk: flutter
+
   flutter_lints: ^6.0.0
   # أدوات توليد الأيقونات والـ Splash
   flutter_launcher_icons: ^0.14.4

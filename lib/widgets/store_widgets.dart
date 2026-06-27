@@ -246,16 +246,16 @@ class BannerSliderSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dataService = Provider.of<StoreDataService>(context);
-
     if (dataService.banners.isEmpty) {
-      return const SizedBox.shrink(); // إخفاء القسم إذا لم يكن هناك بانرات
+      return const SizedBox.shrink();
+      // إخفاء القسم إذا لم يكن هناك بانرات
     }
 
     return Padding(
       padding: const EdgeInsets.only(top: 30.0, bottom: 20.0, left: 15.0, right: 15.0),
       child: Column(
         children: [
-          StoreSectionTitle(title: 'عروض مميزة', icon: FontAwesomeIcons.bullhorn),
+          const StoreSectionTitle(title: 'عروض مميزة', icon: FontAwesomeIcons.bullhorn),
           const SizedBox(height: 10),
           Container(
             height: 180,
@@ -364,7 +364,7 @@ class SidebarHeaderWidget extends StatelessWidget {
 
 class SidebarItem extends StatelessWidget {
   final String title;
-  final IconData icon;
+  final dynamic icon;
   final VoidCallback onTap;
   final int count;
 
@@ -440,7 +440,7 @@ class StoreMobileNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dataService = Provider.of<StoreDataService>(context);
-    // 💡 افتراض: استخدام RouteName لمعرفة أي زر هو النشط حاليًا (سيبدو معقدًا هنا، سنفترض النشاط مؤقتاً)
+    // 💡 إفتراض: استخدام RouteName لمعرفة أي زر هو النشط حاليًا (سيبدو معقدًا هنا، سنفترض النشاط مؤقتاً)
     const currentRoute = '/buyer-home';
     final cartCount = dataService.cartCount;
     final hasOrderChanges = dataService.hasOrderChanges;
@@ -460,7 +460,7 @@ class StoreMobileNav extends StatelessWidget {
           ),
           _MobileNavItem(
             title: 'البحث',
-            icon: FontAwesomeIcons.search,
+            icon: FontAwesomeIcons.magnifyingGlass,
             route: '/search',
             isActive: currentRoute == '/search',
             onTap: () => Navigator.of(context).pushNamed('/search-merchants'), // مسار Find.html
@@ -484,7 +484,7 @@ class StoreMobileNav extends StatelessWidget {
 
 class _MobileNavItem extends StatelessWidget {
   final String title;
-  final IconData icon;
+  final dynamic icon;
   final String route;
   final bool isActive;
   final bool showDot;
@@ -502,7 +502,6 @@ class _MobileNavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = isActive ? Colors.green.shade600 : Colors.grey.shade600;
-
     return InkWell(
       onTap: onTap,
       child: Padding(
@@ -557,7 +556,7 @@ class _MobileCartItem extends StatelessWidget {
           children: <Widget>[
             Stack(
               children: <Widget>[
-                FaIcon(FontAwesomeIcons.shoppingCart, size: 20, color: Colors.grey.shade600),
+                FaIcon(FontAwesomeIcons.cartShopping, size: 20, color: Colors.grey.shade600),
                 if (count > 0)
                   Positioned(
                     right: 0,
@@ -595,7 +594,7 @@ class _MobileCartItem extends StatelessWidget {
 // ----------------------------------------------------
 class StoreSectionTitle extends StatelessWidget {
   final String title;
-  final IconData icon;
+  final dynamic icon;
   const StoreSectionTitle({super.key, required this.title, required this.icon});
 
   @override

@@ -3,12 +3,12 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart'; // المكتبة الجديدة
+import 'package:cloud_functions/cloud_functions.dart'; 
 import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:facebook_app_events/facebook_app_events.dart';
 
-// تعريف الألوان
+// تعريف الألوان والثوابت البصرية للمنصة
 const Color kPrimaryColor = Color(0xFF4CAF50);
 const Color kErrorColor = Color(0xFFE74C3C);
 const Color kDebugColor = Color(0xFFF39C12);
@@ -81,7 +81,8 @@ class CheckoutController {
         }) async {
 
         final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
-
+        
+        // التحقق من سلامة البيانات لمنع تمرير قيم null للسيرفر
         if (checkoutOrders.isEmpty || loggedUser['id'] == null) {
             ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('خطأ: قائمة الطلبات فارغة أو بيانات المستخدم ناقصة.'), backgroundColor: kErrorColor)
@@ -99,7 +100,7 @@ class CheckoutController {
         final String? customerPhone = (safeLoggedUser['phone']?.toString() == 'null') ? null : safeLoggedUser['phone']?.toString();
         final String? customerEmail = (safeLoggedUser['email']?.toString() == 'null') ? null : safeLoggedUser['email']?.toString();
         final String? customerFullname = (safeLoggedUser['fullname']?.toString() == 'null') ? null : safeLoggedUser['fullname']?.toString();
-
+        
         if (address == null) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('الرجاء إكمال بيانات العنوان.'), backgroundColor: kErrorColor));
             return false;
@@ -120,10 +121,10 @@ class CheckoutController {
                 Map<String, dynamic> processedItem = Map<String, dynamic>.from(item);
                 final double price = (processedItem['price'] as num?)?.toDouble() ?? 0.0;
                 final bool isDeliveryFee = (processedItem['productId'] == 'DELIVERY_FEE' || (processedItem['isDeliveryFee'] ?? false));
-
+                
                 if (price <= 0.0 && !isDeliveryFee) processedItem['isGift'] = true;
                 if (!isConsumer && isDeliveryFee) continue;
-
+                
                 processedItems.add({
                     ...processedItem,
                     'mainId': processedItem['mainId'],
@@ -139,7 +140,7 @@ class CheckoutController {
         final Map<String, Map<String, dynamic>> groupedItems = {
             for (var order in processedCheckoutOrders) order['sellerId'] as String: order
         };
-
+        
         double actualOrderTotal = 0.0;
         for(var order in processedCheckoutOrders) {
             for(var item in (order['items'] as List)) {
@@ -152,14 +153,14 @@ class CheckoutController {
         final double discountUsed = useCashback ? min(actualOrderTotal, currentCashback) : 0.0;
         final bool isGiftEligible = processedCheckoutOrders.any((order) => (order['items'] as List).any((item) => item['isGift'] == true));
         
-        // 🚀 تحديد ما إذا كان الطلب يتطلب معالجة عهدة أمان (نقاط عهدة)
+        // تفعيل المعالجة الآمنة للعهدة اللوجستية وتأمين نقاط التأمين للتاجر والتاجر بالتجزئة
         final bool needsSecureProcessing = !isConsumer && (discountUsed > 0 || isGiftEligible);
-
+        
         try {
             List<String> successfulOrderIds = [];
             final Map<String, double> commissionRatesCache = {};
             final Map<String, String?> sellerPhonesCache = {};
-
+            
             for (final sellerId in groupedItems.keys) {
                 if (!isConsumer) {
                     final sellerSnap = await FirebaseFirestore.instance.collection("sellers").doc(sellerId).get();
@@ -169,18 +170,17 @@ class CheckoutController {
             }
 
             if (needsSecureProcessing) {
-                // 🚀 استدعاء Cloud Function V2 بدلاً من Amazon
-                final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'us-east-1')
-                    .httpsCallable('processOrderInsurance'); // اسم الفانكشن الجديد للعهدة
+                // استدعاء السيرفر الإقليمي والـ Cloud Function المعتمدة لخصم وضبط عهدة الطلبات وهداياها
+                final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+                    .httpsCallable('createOrdersWithPromos');
 
                 final List<Map<String, dynamic>> allOrdersData = [];
                 for (final sellerId in groupedItems.keys) {
                     final sellerOrder = groupedItems[sellerId]!;
                     final List<Map<String, dynamic>> safeItems = List<Map<String, dynamic>>.from(sellerOrder['items']);
                     final double subtotalPrice = safeItems.fold(0.0, (sum, item) => (item['isGift'] ?? false) ? sum : sum + ((item['price'] as num).toDouble() * (item['quantity'] as num).toDouble()));
-
                     double discountPortion = actualOrderTotal > 0 ? (subtotalPrice / actualOrderTotal) * discountUsed : 0.0;
-
+                    
                     allOrdersData.add(removeNullValues({
                         'sellerId': sellerId,
                         'sellerPhone': sellerPhonesCache[sellerId],
@@ -190,7 +190,7 @@ class CheckoutController {
                         'status': 'new-order',
                         'orderDate': DateTime.now().toUtc().toIso8601String(),
                         'commissionRateSnapshot': commissionRatesCache[sellerId] ?? 0.0,
-                        'insurance_points': discountPortion, // مسمى لوجستي: نقاط تأمين
+                        'insurance_points': discountPortion, // تخصيص نقاط أمان للعهدة بشكل لوجستي معتمد
                         'isCashbackUsed': discountUsed > 0,
                         'isFinancialSettled': false,
                         'isCommissionProcessed': false,
@@ -203,26 +203,27 @@ class CheckoutController {
                             'address': address,
                             'lat': buyerProvider.effectiveLat,
                             'lng': buyerProvider.effectiveLng,
-                            'repCode': repCode, // الحفاظ على حقول المندوب للشفافية
+                            'repCode': repCode, 
                             'repName': repName
                         },
                     }));
                 }
 
-                // تنفيذ الطلب عبر Cloud Function
+                // تمرير المعرفات والمصفوفات بالأسماء المطابقة تماماً لكود الـ Cloud Function المسترجع لضمان النجاح المالي
                 final result = await callable.call(removeNullValues({
-                    'userId': safeLoggedUser['id'],
-                    'total_insurance_points': discountUsed, // تأمين إجمالي العهدة
+                    'userId': safeLoggedUser['id'], 
                     'ordersData': allOrdersData,
-                    'action': 'lock_assets', // تأكيد حجز العهدة
+                    'cashbackToReserve': discountUsed, // نقاط التأمين / الكاش باك المراد حجزها وإدارتها بالسيرفر
+                    'total_insurance_points': discountUsed, 
+                    'action': 'lock_assets', 
                     'checkoutId': 'CH-${safeLoggedUser['id']}-${DateTime.now().millisecondsSinceEpoch}',
                 }));
 
-                if (result.data['orderIds'] is List) {
+                if (result.data != null && result.data['orderIds'] is List) {
                     successfulOrderIds.addAll(List<String>.from(result.data['orderIds']));
                 }
             } else {
-                // الكود العادي لطلبات الكاش أو المستهلك (Firebase Direct)
+                // المعالجة المباشرة العادية للعمليات النقدية أو طلبات المستهلكين (Firebase Direct)
                 for (final sellerId in groupedItems.keys) {
                     final sellerOrder = groupedItems[sellerId]!;
                     final List<Map<String, dynamic>> allPaidItems = List<Map<String, dynamic>>.from(sellerOrder['items']);
@@ -258,13 +259,13 @@ class CheckoutController {
                         'paymentMethod': paymentMethodString,
                         'status': 'new-order', 'orderDate': FieldValue.serverTimestamp(),
                         'commissionRate': commissionRatesCache[sellerId] ?? 0.0,
-                        'insurance_points': discountPortion, // استخدام نقاط التأمين
+                        'insurance_points': discountPortion, // نقاط التأمين لضمان النقل الآمن
                         'isCashbackUsed': discountUsed > 0,
                         'isFinancialSettled': false,
                         'isCommissionProcessed': false,
                         'deliveryHandled': false,
                     };
-
+                    
                     final docRef = await FirebaseFirestore.instance.collection(ordersCollectionName).add(removeNullValues(orderData));
                     successfulOrderIds.add(docRef.id);
                     await docRef.update({'orderId': docRef.id});
@@ -278,7 +279,7 @@ class CheckoutController {
             }
 
             if (successfulOrderIds.isNotEmpty) {
-                // إرسال تنبيهات فيسبوك للتتبع
+                // تتبع وتوثيق التحويلات عبر SDK الخاص بفيسبوك
                 try {
                     facebookAppEvents.logPurchase(
                         amount: finalTotalAmount,
@@ -297,7 +298,6 @@ class CheckoutController {
                 return true;
             }
             return false;
-
         } catch (e) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ فشل في تأمين العهدة: $e'), backgroundColor: kErrorColor));
             return false;
