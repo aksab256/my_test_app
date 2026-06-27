@@ -21,8 +21,13 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProvid
   List<Map<String, String>> _messages = [];
   bool _isTyping = false;
   
+<<<<<<< HEAD
   // ✅ الرابط الرسمي والمؤكد المأخوذ من الفايربيس كونسول مباشرة
   final String apiGatewayUrl = "https://shirachat-tmfag3rhdq-uc.a.run.app";
+=======
+  // الرابط الخاص بـ  Lambda اللي رابطينه بـ Gemini
+  final String apiGatewayUrl = "https://us-central1-aksab-erp.cloudfunctions.net/shiraChat";
+>>>>>>> local-fix-branch
 
   late AnimationController _pulseController;
   late Animation<double> _scaleAnimation;

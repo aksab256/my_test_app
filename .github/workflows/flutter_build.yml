@@ -1,4 +1,4 @@
-name: Build Aksab (APK & AAB)
+name: Build Rabia Ahla (APK & AAB)
 
 on:
   push:
@@ -13,57 +13,58 @@ jobs:
 
     steps:
       - name: 🧩 Checkout Code
-        uses: actions/checkout@v4
+        [cite_start]uses: actions/checkout@v4 [cite: 1]
 
       - name: ☕️ Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
-          java-version: '17'
+          [cite_start]distribution: 'zulu' [cite: 1]
+          [cite_start]java-version: '17' [cite: 2]
 
       - name: 🔧 Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          [cite_start]channel: 'stable' [cite: 2]
+          cache: true # تفعيل الكاش لزيادة سرعة البناء في المرات القادمة
 
       - name: 📦 Install Dependencies
-        run: flutter pub get
+        run: |
+          flutter clean
+          flutter pub get [cite: 2]
 
       - name: 🔑 Decode Keystore
         env:
-          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          [cite_start]RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }} [cite: 3]
         run: |
-          echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > android/app/release-keystore.jks
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > android/app/release-keystore.jks [cite: 3]
 
       - name: 🏗️ Build APK & AAB
         env:
-          STORE_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ALIAS_NAME }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD_ALIAS }}
-          KEYSTORE_PATH: "release-keystore.jks"
+          [cite_start]STORE_PASSWORD: ${{ secrets.KEY_PASSWORD }} [cite: 3]
+          [cite_start]KEY_ALIAS: ${{ secrets.ALIAS_NAME }} [cite: 3]
+          [cite_start]KEY_PASSWORD: ${{ secrets.KEY_PASSWORD_ALIAS }} [cite: 3]
+          [cite_start]KEYSTORE_PATH: "release-keystore.jks" [cite: 3]
         run: |
-          # بناء الـ APK أولاً
-          flutter build apk --release
-          # بناء الـ AAB (المطلوب للمتجر)
-          flutter build appbundle --release
+          # بناء الـ APK أولاً [cite: 4]
+          flutter build apk --release [cite: 4]
+          # بناء الـ AAB (المطلوب للمتجر) [cite: 4]
+          flutter build appbundle --release [cite: 4]
 
       - name: 📤 Upload Signed APK
-        uses: actions/upload-artifact@v4
+        [cite_start]uses: actions/upload-artifact@v4 [cite: 4]
         with:
-          name: Aksab-Release-APK # اسم مميز للـ APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: RabiaAhla-Release-APK
+          [cite_start]path: build/app/outputs/flutter-apk/app-release.apk [cite: 5]
 
       - name: 📤 Upload Signed AAB (Google Play)
-        uses: actions/upload-artifact@v4
+        [cite_start]uses: actions/upload-artifact@v4 [cite: 5]
         with:
-          name: Aksab-Release-AAB-Bundle # اسم مميز للـ AAB
-          path: build/app/outputs/bundle/release/app-release.aab
+          name: RabiaAhla-Release-AAB-Bundle
+          [cite_start]path: build/app/outputs/bundle/release/app-release.aab [cite: 5]
 
-      # تم تصحيح خطأ التحقق عبر استخدام أداة محاذاة أندرويد الرسمية
       - name: 🔍 Verify Build Success
         run: |
-          echo "Checking if files exist..."
-          ls -lh build/app/outputs/flutter-apk/app-release.apk
-          ls -lh build/app/outputs/bundle/release/app-release.aab
-          echo "Builds completed and verified successfully!"
-
+          echo "Checking if files exist..." [cite: 6]
+          ls -lh build/app/outputs/flutter-apk/app-release.apk [cite: 6]
+          ls -lh build/app/outputs/bundle/release/app-release.aab [cite: 6]
+          echo "Builds completed and verified successfully!" [cite: 6]

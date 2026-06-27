@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 // ثوابت Firestore للمجموعات (تم تصحيح التسمية لـ SCREAMING_SNAKE_CASE)
 // ----------------------------------------------------------------------
 const String SELLERS_COLLECTION = 'sellers'; // المتاجر والبائعين
-const String STORES_COLLECTION = 'stores';
-const String OFFERS_COLLECTION = 'offers';
+const String STORES_COLLECTION = 'users';
+const String OFFERS_COLLECTION = 'productOffers';
 const String REPORTS_COLLECTION = 'reports';
 const String GIFT_PROMO_COLLECTION = 'giftPromos';
 
@@ -24,12 +24,12 @@ const String SELLER_ID_FIELD = 'sellerId';
 // ----------------------------------------------------------------------
 // ثوابت واجهة برمجة التطبيقات (APIs) - مُستخلصة من كود HTML
 // ----------------------------------------------------------------------
-// AWS API Gateway Endpoint
+//  API Gateway Endpoint
 const String API_GATEWAY_ENDPOINT = 'https://updatelocation-tmfag3rhdq-uc.a.run.app';
 // مسار ملف GeoJSON للمناطق الإدارية
 const String GEOJSON_FILE_PATH = 'OSMB-bc319d822a17aa9ad1089fc05e7d4e752460f877.geojson';
-// مفتاح الوصول لـ Mapbox
-const String MAPBOX_ACCESS_TOKEN = 'pk.eyJ1IjoiYW1yc2hpcGwiLCJhIjoiY21lajRweGdjMDB0eDJsczdiemdzdXV6biJ9.E--si9vOB93NGcAq7uVgGw';
+
+
 
 // الإحداثيات الافتراضية لمركز الخريطة
 const double MAP_CENTER_LAT = 28.5;
