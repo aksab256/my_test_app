@@ -164,18 +164,12 @@ class _BuyerMainContentWidgetState extends State<BuyerMainContentWidget> {
                       // تم إزالة height: 80 والاعتماد على Expanded
                       width: double.infinity,
                       fit: BoxFit.cover,          
-                      errorBuilder: (c, o, s) => Container(                                       
+                      errorBuilder: (context, error, stackTrace) => Container(                                       
                         // تم إزالة height: 80
-<<<<<<< HEAD
-                        color: Colors.grey.shade200,                                              
-                        child: Center(child: FaIcon(FontAwesomeIcons.image, size: 30, color: Colors.grey)),                                   
-=======
                         color: Colors.grey.shade200, 
-                        // 🛠️ تم التعديل هنا لـ FaIcon وحذف const عن الـ Center لتجنب مشاكل التوافقية
                         child: Center(
                           child: FaIcon(FontAwesomeIcons.image, size: 30, color: Colors.grey),
                         ),                        
->>>>>>> local-fix-branch
                       ),
                     ),
                   ),
