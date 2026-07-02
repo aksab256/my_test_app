@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:my_test_app/services/store_data_service.dart'; // لاستدعاء البيانات والمنطق
 
 // ----------------------------------------------------
@@ -408,9 +409,9 @@ class SocialLinksWidget extends StatelessWidget {
         children: <Widget>[
           IconButton(
             icon: const FaIcon(FontAwesomeIcons.whatsapp),
-            onPressed: () {
+            onPressed: () async {
               // فتح رابط الواتساب
-              // await launchUrl(Uri.parse('https://wa.me/201021070462'));
+              await launchUrl(Uri.parse('https://wa.me/201021070462'));
             },
             color: Colors.green,
             iconSize: 30,
@@ -418,9 +419,9 @@ class SocialLinksWidget extends StatelessWidget {
           const SizedBox(width: 20),
           IconButton(
             icon: const FaIcon(FontAwesomeIcons.facebookF),
-            onPressed: () {
+            onPressed: () async {
               // فتح رابط الفيسبوك
-              // await launchUrl(Uri.parse('https://www.facebook.com/share/199za9SBSE/'));
+              await launchUrl(Uri.parse('https://www.facebook.com/share/199za9SBSE/'));
             },
             color: Colors.blue.shade800,
             iconSize: 30,

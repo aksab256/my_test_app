@@ -184,16 +184,50 @@ class MyApp extends StatelessWidget {
           supportedLocales: const [Locale('ar', 'EG')],
           themeMode: themeNotifier.themeMode,
           theme: ThemeData(
+            useMaterial3: true, // ✅ تفعيل معايير Material 3 للوضع الفاتح
             brightness: Brightness.light,
             primaryColor: AppTheme.primaryGreen,
-            colorScheme: ColorScheme.light(primary: AppTheme.primaryGreen),
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: AppTheme.primaryGreen,
+              brightness: Brightness.light,
+            ),
             textTheme: GoogleFonts.cairoTextTheme(ThemeData.light().textTheme),
+            // ✅ ضبط تباين ووضوح نصوص وحدود الحقول في الوضع الفاتح (خلفيات فاتحة/بيضاء)
+            inputDecorationTheme: const InputDecorationTheme(
+              labelStyle: TextStyle(color: Colors.black87, fontWeight: FontWeight.w500),
+              hintStyle: TextStyle(color: Colors.black45),
+              floatingLabelStyle: TextStyle(color: AppTheme.primaryGreen, fontWeight: FontWeight.bold),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: AppTheme.primaryGreen, width: 2),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.black38, width: 1),
+              ),
+              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
           ),
           darkTheme: ThemeData(
+            useMaterial3: true, // ✅ تفعيل معايير Material 3 للوضع الليلي
             brightness: Brightness.dark,
             primaryColor: AppTheme.primaryGreen,
-            colorScheme: ColorScheme.dark(primary: AppTheme.primaryGreen),
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: AppTheme.primaryGreen,
+              brightness: Brightness.dark,
+            ),
             textTheme: GoogleFonts.cairoTextTheme(ThemeData.dark().textTheme),
+            // ✅ ضبط تباين ووضوح نصوص وحدود الحقول في الوضع الليلي (خلفيات داكنة/سوداء)
+            inputDecorationTheme: InputDecorationTheme(
+              labelStyle: TextStyle(color: Colors.white70, fontWeight: FontWeight.w500),
+              hintStyle: TextStyle(color: Colors.white54),
+              floatingLabelStyle: TextStyle(color: AppTheme.primaryGreen, fontWeight: FontWeight.bold),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: AppTheme.primaryGreen, width: 2),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.white38, width: 1),
+              ),
+              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
           ),
           initialRoute: '/',
           routes: {
