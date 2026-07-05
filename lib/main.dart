@@ -31,7 +31,6 @@ import 'package:my_test_app/services/user_session.dart';
 import 'package:my_test_app/models/user_role.dart';
 
 // استيراد الشاشات
-//import 'package:my_test_app/screens/otp_verification_screen.dart';
 import 'package:my_test_app/screens/login_screen.dart';
 import 'package:my_test_app/screens/seller_screen.dart';
 import 'package:my_test_app/screens/buyer/buyer_home_screen.dart';
@@ -70,25 +69,74 @@ import 'package:my_test_app/screens/customer_tracking_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('ar', null);
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+// ✅ نسخة موحّدة من البلجن يقدر أي كود في الملف يوصلها (مش بس داخل main)
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
-  // ✅ تهيئة فيسبوك
-  final facebookAppEvents = FacebookAppEvents();
-  facebookAppEvents.setAutoLogAppEventsEnabled(true);
+/// ✅ معالج الإشعارات في الخلفية (لازم تكون top-level function ومعلمة بـ pragma عشان تعمل صح)
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // مفيش داعي لأي تنقل هنا - النظام بيتكفل بعرض الإشعار في الخلفية تلقائيًا
+  // التوجيه الفعلي بيحصل في onMessageOpenedApp أو getInitialMessage لما المستخدم يضغط عليه
+  debugPrint("📩 Background message received: ${message.messageId}");
+}
 
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+/// ✅ دالة موحّدة للتوجيه بناءً على بيانات الإشعار (data payload)
+/// بتستخدم navigatorKey فتقدر توجّه من غير ما تحتاج BuildContext
+void _handleNotificationNavigation(Map<String, dynamic> data) {
+  final route = data['route'] as String?;
+  final orderId = data['orderId'] as String?;
+
+  if (route == null) return;
+
+  // تأخير خفيف يضمن إن الـ Navigator اتبنى فعليًا قبل أي تنقل (مهم خصوصًا لحالة cold start)
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    switch (route) {
+      case '/customerTracking':
+        navigatorKey.currentState?.pushNamed('/customerTracking', arguments: orderId ?? '');
+        break;
+      case '/con-orders':
+        navigatorKey.currentState?.pushNamed('/con-orders');
+        break;
+      case '/deliveryMerchantDashboard':
+        navigatorKey.currentState?.pushNamed('/deliveryMerchantDashboard');
+        break;
+      default:
+        // أي route تاني معروف ومسجل في routes/onGenerateRoute
+        navigatorKey.currentState?.pushNamed(route);
+    }
+  });
+}
+
+/// ✅ تهيئة شاملة للإشعارات: صلاحيات + إشعارات محلية + كل حالات FCM (مفتوح/خلفية/مغلق)
+Future<void> _setupNotifications() async {
+  // 1) طلب صلاحية الإشعارات (مهم جدًا لـ iOS، ومطلوب في أندرويد 13+)
+  await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
+  // 2) تهيئة الإشعارات المحلية (اللي بتظهر فعليًا وقت التطبيق مفتوح)
   const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('notif_icon');
   const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
 
-  // ✅ النسخة الأصلية من الـ Commit المستقر تماماً كما ظهرت عندك (بدون أي تعديل أو اختصار)
   await flutterLocalNotificationsPlugin.initialize(
-    settings: initializationSettings,
+    settings: initializationSettings, // ✅ الاسم الصحيح حسب النسخة المثبتة فعليًا في المشروع
+    onDidReceiveNotificationResponse: (NotificationResponse response) {
+      // الضغط على إشعار محلي ظاهر - بنقرا الـ payload المحفوظ فيه ونوجه بناءً عليه
+      final payload = response.payload;
+      if (payload != null && payload.isNotEmpty) {
+        try {
+          final data = jsonDecode(payload) as Map<String, dynamic>;
+          _handleNotificationNavigation(data);
+        } catch (e) {
+          debugPrint("⚠️ Failed to parse notification payload: $e");
+        }
+      }
+    },
   );
 
-  const AndroidNotificationChannel channel = AndroidNotificationChannel(
+  final AndroidNotificationChannel channel = AndroidNotificationChannel(
     'high_importance_channel',
     'إشعارات هامة',
     description: 'هذه القناة مخصصة لإشعارات الطلبات الهامة.',
@@ -99,6 +147,55 @@ void main() async {
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(channel);
+
+  // 3) تسجيل معالج الخلفية (لازم يتسجل في main() قبل runApp، لكن الدالة نفسها top-level فوق)
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // 4) الحالة الأولى: التطبيق مفتوح فعليًا (foreground) - لازم نعرض إشعار محلي بنفسنا يدويًا
+  //    لأن FCM مبيعرضش إشعار تلقائي والتطبيق شغال في المقدمة
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    final notification = message.notification;
+    if (notification != null) {
+      flutterLocalNotificationsPlugin.show(
+        id: notification.hashCode,
+        title: notification.title,
+        body: notification.body,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'high_importance_channel',
+            'إشعارات هامة',
+            importance: Importance.max,
+            priority: Priority.high,
+          ),
+        ),
+        payload: jsonEncode(message.data), // بنحفظ بيانات التوجيه جوه الإشعار المحلي المعروض
+      );
+    }
+  });
+
+  // 5) الحالة الثانية: التطبيق كان في الخلفية والمستخدم ضغط على الإشعار ففتح التطبيق
+  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+    _handleNotificationNavigation(message.data);
+  });
+
+  // 6) الحالة الثالثة: التطبيق كان مقفول تمامًا (cold start) وفتح بالضغط على إشعار
+  final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+  if (initialMessage != null) {
+    _handleNotificationNavigation(initialMessage.data);
+  }
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('ar', null);
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // ✅ تهيئة فيسبوك
+  final facebookAppEvents = FacebookAppEvents();
+  facebookAppEvents.setAutoLogAppEventsEnabled(true);
+
+  // ✅ الإشعارات بكل حالاتها (صلاحيات + محلي + FCM في كل الحالات الثلاث)
+  await _setupNotifications();
 
   runApp(
     MultiProvider(
@@ -134,7 +231,7 @@ class MyApp extends StatelessWidget {
     try {
       DocumentSnapshot config = await FirebaseFirestore.instance.collection('app_config').doc('version_control').get();
       if (config.exists) {
-        int latestVersion = config['min_version']; 
+        int latestVersion = config['min_version'];
         int currentVersion = 19; // رقم الإصدار الحالي لتطبيقك
         if (currentVersion < latestVersion) {
           _showUpdateDialog(context, config['update_url']);
@@ -165,7 +262,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeNotifier = Provider.of<ThemeNotifier>(context);
-    
+
     // فحص التحديث عند بناء التطبيق
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkUpdate(context));
 
@@ -184,15 +281,17 @@ class MyApp extends StatelessWidget {
           supportedLocales: const [Locale('ar', 'EG')],
           themeMode: themeNotifier.themeMode,
           theme: ThemeData(
-            useMaterial3: true, // ✅ تفعيل معايير Material 3 للوضع الفاتح
+            useMaterial3: true,
             brightness: Brightness.light,
             primaryColor: AppTheme.primaryGreen,
             colorScheme: ColorScheme.fromSeed(
               seedColor: AppTheme.primaryGreen,
               brightness: Brightness.light,
             ),
-            textTheme: GoogleFonts.cairoTextTheme(ThemeData.light().textTheme),
-            // ✅ ضبط تباين ووضوح نصوص وحدود الحقول في الوضع الفاتح (خلفيات فاتحة/بيضاء)
+            textTheme: GoogleFonts.cairoTextTheme(ThemeData.light().textTheme).apply(
+              bodyColor: Colors.black87,
+              displayColor: Colors.black87,
+            ),
             inputDecorationTheme: const InputDecorationTheme(
               labelStyle: TextStyle(color: Colors.black87, fontWeight: FontWeight.w500),
               hintStyle: TextStyle(color: Colors.black45),
@@ -206,34 +305,44 @@ class MyApp extends StatelessWidget {
               contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
           ),
+          // ✅ الوضع الليلي بعد التصحيح: تباين قوي وصريح للنص بدل الاعتماد على ألوان الـ seed التلقائية
           darkTheme: ThemeData(
-            useMaterial3: true, // ✅ تفعيل معايير Material 3 للوضع الليلي
+            useMaterial3: true,
             brightness: Brightness.dark,
             primaryColor: AppTheme.primaryGreen,
+            scaffoldBackgroundColor: const Color(0xFF121212),
+            cardColor: const Color(0xFF1E1E1E),
             colorScheme: ColorScheme.fromSeed(
               seedColor: AppTheme.primaryGreen,
               brightness: Brightness.dark,
+            ).copyWith(
+              // تثبيت ألوان السطح والنص بدل ترك الخوارزمية تولّد تباين ضعيف
+              surface: const Color(0xFF1E1E1E),
+              onSurface: Colors.white.withOpacity(0.92),
+              onSurfaceVariant: Colors.white.withOpacity(0.75),
             ),
-            textTheme: GoogleFonts.cairoTextTheme(ThemeData.dark().textTheme),
-            // ✅ ضبط تباين ووضوح نصوص وحدود الحقول في الوضع الليلي (خلفيات داكنة/سوداء)
+            // ✅ التصحيح الأساسي: bodyColor/displayColor صريحين وواضحين بدل الشفافية الافتراضية الباهتة
+            textTheme: GoogleFonts.cairoTextTheme(ThemeData.dark().textTheme).apply(
+              bodyColor: Colors.white.withOpacity(0.92),
+              displayColor: Colors.white.withOpacity(0.95),
+            ),
             inputDecorationTheme: InputDecorationTheme(
-              labelStyle: TextStyle(color: Colors.white70, fontWeight: FontWeight.w500),
-              hintStyle: TextStyle(color: Colors.white54),
-              floatingLabelStyle: TextStyle(color: AppTheme.primaryGreen, fontWeight: FontWeight.bold),
-              focusedBorder: OutlineInputBorder(
+              labelStyle: TextStyle(color: Colors.white.withOpacity(0.85), fontWeight: FontWeight.w500),
+              hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+              floatingLabelStyle: const TextStyle(color: AppTheme.primaryGreen, fontWeight: FontWeight.bold),
+              focusedBorder: const OutlineInputBorder(
                 borderSide: BorderSide(color: AppTheme.primaryGreen, width: 2),
               ),
               enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.white38, width: 1),
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.4), width: 1),
               ),
-              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
           ),
           initialRoute: '/',
           routes: {
             '/': (context) => const AuthWrapper(),
             '/sellerhome': (context) => const SellerScreen(),
-          //  '/otp_verification': (context) => const OtpVerificationScreen(), // ✅ تم الإصلاح
             LoginScreen.routeName: (context) => const LoginScreen(),
             SellerScreen.routeName: (context) => const SellerScreen(),
             BuyerHomeScreen.routeName: (context) => const BuyerHomeScreen(),
@@ -306,8 +415,8 @@ class MyApp extends StatelessWidget {
             }
             if (settings.name == ConsumerProductListScreen.routeName) {
               return MaterialPageRoute(
-                settings: settings, 
-                builder: (context) => const ConsumerProductListScreen(), 
+                settings: settings,
+                builder: (context) => const ConsumerProductListScreen(),
               );
             }
             if (settings.name == '/productDetails') {
