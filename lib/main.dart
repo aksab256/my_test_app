@@ -261,7 +261,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeNotifier = Provider.of<ThemeNotifier>(context);
+    // ⚠️ ملاحظة: themeNotifier متسجل هنا فقط لأي كود تاني في الشجرة بيسمعه
+    // (زي زرار تبديل الوضع في شاشة الإعدادات لو موجود). قيمته بقت متجاهلة
+    // تمامًا في MaterialApp تحت (انظر themeMode) بناءً على طلبك بتعطيل
+    // الوضع الليلي بالكامل.
+    Provider.of<ThemeNotifier>(context);
 
     // فحص التحديث عند بناء التطبيق
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkUpdate(context));
@@ -279,7 +283,11 @@ class MyApp extends StatelessWidget {
             GlobalCupertinoLocalizations.delegate,
           ],
           supportedLocales: const [Locale('ar', 'EG')],
-          themeMode: themeNotifier.themeMode,
+          // ✅ إصلاح: تعطيل الوضع الليلي بالكامل بناءً على طلبك
+          // (النصوص كانت بتبقى باهتة وصعبة القراءة في وضع توفير الطاقة).
+          // themeMode بقى مثبّت على Light دايمًا - بيتجاهل قيمة themeNotifier
+          // تمامًا وكمان بيتجاهل إعدادات الوضع الليلي في نظام الجهاز نفسه.
+          themeMode: ThemeMode.light,
           theme: ThemeData(
             useMaterial3: true,
             brightness: Brightness.light,
@@ -305,7 +313,9 @@ class MyApp extends StatelessWidget {
               contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
           ),
-          // ✅ الوضع الليلي بعد التصحيح: تباين قوي وصريح للنص بدل الاعتماد على ألوان الـ seed التلقائية
+          // ⚠️ ملاحظة: سيبت darkTheme موجودة في الكود (مش محذوفة) لأنها غير
+          // مؤثرة أصلاً بعد تثبيت themeMode على Light فوق - مفيش خطر إنها
+          // تتفعل. لو عايز تشيلها فعليًا من الكود (مش ضروري)، قولّي.
           darkTheme: ThemeData(
             useMaterial3: true,
             brightness: Brightness.dark,
@@ -316,12 +326,10 @@ class MyApp extends StatelessWidget {
               seedColor: AppTheme.primaryGreen,
               brightness: Brightness.dark,
             ).copyWith(
-              // تثبيت ألوان السطح والنص بدل ترك الخوارزمية تولّد تباين ضعيف
               surface: const Color(0xFF1E1E1E),
               onSurface: Colors.white.withOpacity(0.92),
               onSurfaceVariant: Colors.white.withOpacity(0.75),
             ),
-            // ✅ التصحيح الأساسي: bodyColor/displayColor صريحين وواضحين بدل الشفافية الافتراضية الباهتة
             textTheme: GoogleFonts.cairoTextTheme(ThemeData.dark().textTheme).apply(
               bodyColor: Colors.white.withOpacity(0.92),
               displayColor: Colors.white.withOpacity(0.95),
