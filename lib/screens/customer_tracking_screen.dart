@@ -28,6 +28,20 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
   bool _isMapCreated = false;
   bool _hasInitialCenteringDone = false;
 
+  // ✅ إصلاح: حالات نهائية صريحة بدل الاعتماد على substring matching
+  // (كان status.contains('cancelled') يمسك 'driver_cancelled_reseeking' غلط،
+  // وكانت rejected_by_system مش متغطية خالص)
+  static const Set<String> _finalExitStatuses = {
+    'cancelled_by_user_before_accept',
+    'cancelled_by_user_after_accept',
+    'cancelled',
+    'no_drivers_available',
+    'rejected_by_system',
+  };
+
+  // الحالات اللي المندوب لسه رايح فيها لمكان الاستلام (قبل أخد الشحنة)
+  static const Set<String> _headingToPickupStatuses = {'accepted', 'at_pickup'};
+
   @override
   void initState() {
     super.initState();
@@ -68,8 +82,26 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
     }
   }
 
+  // ✅ سرعة متوسطة تقديرية لكل نوع مركبة (كم/س) - بديل عن الرقم الثابت 30
+  // اتحسبت بشكل واقعي: الموتوسيكل أسرع في الزحمة والشوارع الضيقة،
+  // الجامبو أبطأ بسبب الحجم والحمولة
+  static double _averageSpeedFor(String? vehicleType) {
+    switch (vehicleType) {
+      case 'motorcycle':
+        return 35.0;
+      case 'pickup':
+        return 28.0;
+      case 'jumbo':
+        return 22.0;
+      default:
+        return 30.0;
+    }
+  }
+
   // دالة حساب المسافة والوقت والتدوير (المنطق المحسن)
-  void _calculateMetrics(LatLng currentPos, LatLng destination) {
+  // ✅ إصلاح: بقت بتستقبل الوجهة الصحيحة من الخارج بدل ما تحددها بنفسها بـ substring
+  // ✅ إصلاح: السرعة بقت مرتبطة بنوع المركبة بدل رقم ثابت لكل الأنواع
+  void _calculateMetrics(LatLng currentPos, LatLng destination, String? vehicleType) {
     if (_lastDriverPosition != null && _lastDriverPosition != currentPos) {
       double latRes = currentPos.latitude - _lastDriverPosition!.latitude;
       double lngRes = currentPos.longitude - _lastDriverPosition!.longitude;
@@ -84,8 +116,10 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
             (1 - c((destination.longitude - currentPos.longitude) * p)) / 2;
     double dist = 12742 * asin(sqrt(a));
 
-    _distanceRemaining = dist < 1 ? "${(dist * 1000).toInt()} متر" : "${dist.toStringAsFixed(1)} كم";
-    _estimatedTime = "${((dist / 30) * 60).round() + 2} دقيقة";
+    double speed = _averageSpeedFor(vehicleType);
+
+    _distanceRemaining = dist < 1 ? "${(dist * 1000).toInt()} م" : "${dist.toStringAsFixed(1)} كم";
+    _estimatedTime = "${((dist / speed) * 60).round() + 2} د";
   }
 
   // نافذة التقييم (من الكود الأصلي 2048e61)
@@ -213,12 +247,21 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
         String status = orderData['status'] ?? "pending";
         bool isRated = orderData.containsKey('rating');
 
-        // التعامل مع الحالات النهائية (إلغاء أو تسليم)
-        if (status.contains('cancelled') || status == 'no_drivers_available' || (status == 'delivered' && isRated)) {
+        // ✅ إصلاح: التعامل مع الحالات النهائية بشكل صريح (بدل .contains('cancelled')
+        // اللي كان بيمسك 'driver_cancelled_reseeking' غلط ويخرج العميل من الشاشة
+        // رغم إن النظام لسه بيدور على مندوب تاني، وكان مش بيغطي rejected_by_system خالص)
+        bool isFinalExit = _finalExitStatuses.contains(status) || (status == 'delivered' && isRated);
+        if (isFinalExit) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (context.mounted) {
+              String? message;
               if (status == 'no_drivers_available') {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("عذراً، لم نجد مناديب متاحة حالياً لطلبك."), backgroundColor: Colors.redAccent));
+                message = "عذراً، لم نجد مناديب متاحة حالياً لطلبك.";
+              } else if (status == 'rejected_by_system') {
+                message = "تعذر تنفيذ الطلب، برجاء مراجعة تفاصيل الشحنة.";
+              }
+              if (message != null) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.redAccent));
               }
               Navigator.of(context).popUntil((route) => route.isFirst);
             }
@@ -237,6 +280,11 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
         GeoPoint dropoff = orderData['dropoffLocation'];
         LatLng pickupLatLng = LatLng(pickup.latitude, pickup.longitude);
         LatLng dropoffLatLng = LatLng(dropoff.latitude, dropoff.longitude);
+
+        // ✅ إصلاح: تحديد الوجهة بشكل صريح - المندوب رايح لمكان الاستلام لسه
+        // في accepted و at_pickup، وبعدها يبقى رايح للتسليم
+        bool headedToPickup = _headingToPickupStatuses.contains(status);
+        LatLng navigationTarget = headedToPickup ? pickupLatLng : dropoffLatLng;
 
         return StreamBuilder<DocumentSnapshot>(
           stream: (driverId != null && driverId.isNotEmpty)
@@ -257,7 +305,7 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                 }
 
                 if (driverLatLng != null) {
-                  _calculateMetrics(driverLatLng, status.contains('pickup') ? pickupLatLng : dropoffLatLng);
+                  _calculateMetrics(driverLatLng, navigationTarget, orderData['vehicleType'] as String?);
                   if (!_hasInitialCenteringDone) {
                     _googleMapController.future.then((c) => c.animateCamera(CameraUpdate.newLatLngZoom(driverLatLng!, 15)));
                     _hasInitialCenteringDone = true;
@@ -289,7 +337,7 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                         if (driverLatLng != null)
                           Polyline(
                             polylineId: const PolylineId("route"),
-                            points: [driverLatLng, status.contains('pickup') ? pickupLatLng : dropoffLatLng],
+                            points: [driverLatLng, navigationTarget],
                             color: const Color(0xFF2D9E68).withOpacity(0.6),
                             width: 5,
                           ),
@@ -330,9 +378,24 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
     String statusDesc = "بانتظار قبول مندوب...";
     Color mainColor = Colors.orange;
 
-    if (status == 'accepted') { progress = 0.4; statusDesc = "المندوب وافق وفي طريقه إليك"; mainColor = Colors.blue; }
-    else if (status == 'at_pickup') { progress = 0.6; statusDesc = "المندوب وصل لموقع الاستلام"; mainColor = Colors.indigo; }
-    else if (status == 'picked_up') { progress = 0.8; statusDesc = "جاري التوصيل الآن"; mainColor = Colors.green; }
+    if (status == 'accepted') {
+      progress = 0.4;
+      statusDesc = "المندوب وافق وفي طريقه إليك";
+      mainColor = Colors.blue;
+    } else if (status == 'at_pickup') {
+      progress = 0.6;
+      statusDesc = "المندوب وصل لموقع الاستلام";
+      mainColor = Colors.indigo;
+    } else if (status == 'picked_up') {
+      progress = 0.8;
+      statusDesc = "جاري التوصيل الآن";
+      mainColor = Colors.green;
+    } else if (status == 'driver_cancelled_reseeking') {
+      // ✅ حالة نشطة (مش نهائية) - النظام بيدور على مندوب تاني
+      progress = 0.2;
+      statusDesc = "المندوب السابق ألغى، جاري البحث عن مندوب آخر...";
+      mainColor = Colors.deepOrange;
+    }
 
     return Container(
       margin: const EdgeInsets.fromLTRB(10, 0, 10, 15),
@@ -354,7 +417,7 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
           ),
           const SizedBox(height: 12),
           Text(statusDesc, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.sp, color: mainColor, fontFamily: 'Cairo')),
-          
+
           if (status == 'accepted' || status == 'at_pickup' || status == 'picked_up') ...[
             const Divider(height: 25),
             Container(
@@ -373,28 +436,48 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
             ),
           ],
 
-          Row(
-            children: [
-              CircleAvatar(radius: 25, backgroundColor: Colors.blue[50], child: const Icon(Icons.person, color: Colors.blue)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(driver != null ? (driver['fullname'] ?? driver['driverName'] ?? "مندوب رابية") : "جاري البحث...", style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-                    Text("الوقت المقدر: $_estimatedTime", style: const TextStyle(fontSize: 10, color: Colors.grey, fontFamily: 'Cairo')),
-                  ],
+          // خلال إعادة البحث عن مندوب، لا يوجد مندوب حالي لعرضه
+          if (status != 'driver_cancelled_reseeking' && status != 'pending')
+            Row(
+              children: [
+                CircleAvatar(radius: 25, backgroundColor: Colors.blue[50], child: const Icon(Icons.person, color: Colors.blue)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(driver != null ? (driver['fullname'] ?? driver['driverName'] ?? "مندوب رابية") : "جاري البحث...", style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          _MetricPill(icon: Icons.access_time_filled, label: _estimatedTime, color: mainColor),
+                          const SizedBox(width: 6),
+                          _MetricPill(icon: Icons.route, label: _distanceRemaining, color: Colors.grey[600]!),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              if (driver != null && (driver['phone'] != null || order['driverPhone'] != null))
-                IconButton(
-                  onPressed: () async => await launchUrl(Uri.parse("tel:${driver['phone'] ?? order['driverPhone']}")),
-                  icon: const Icon(Icons.phone_in_talk, color: Colors.green, size: 30),
+                if (driver != null && (driver['phone'] != null || order['driverPhone'] != null))
+                  IconButton(
+                    onPressed: () async => await launchUrl(Uri.parse("tel:${driver['phone'] ?? order['driverPhone']}")),
+                    icon: const Icon(Icons.phone_in_talk, color: Colors.green, size: 30),
+                  ),
+              ],
+            )
+          else if (status == 'pending')
+            const Row(
+              children: [
+                CircleAvatar(radius: 25, backgroundColor: Color(0xFFE3F2FD), child: Icon(Icons.person_search, color: Colors.blue)),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text("جاري البحث عن مندوب متاح...", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
                 ),
-            ],
-          ),
+              ],
+            ),
 
-          if (status == 'pending' || status == 'accepted' || status == 'at_pickup')
+          // ✅ إصلاح: تفعيل زرار الإلغاء أثناء البحث عن مندوب تاني بعد إلغاء المندوب السابق
+          if (status == 'pending' || status == 'accepted' || status == 'at_pickup' || status == 'driver_cancelled_reseeking')
             Padding(
               padding: const EdgeInsets.only(top: 10),
               child: TextButton(
@@ -408,3 +491,31 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
   }
 }
 
+/// مؤشر صغير (Pill) لعرض قيمة مقاسة (وقت أو مسافة) مع أيقونة
+class _MetricPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  const _MetricPill({required this.icon, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    if (label.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color, fontFamily: 'Cairo')),
+        ],
+      ),
+    );
+  }
+}

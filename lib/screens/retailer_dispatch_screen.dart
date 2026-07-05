@@ -24,7 +24,7 @@ class RetailerDispatchScreen extends StatefulWidget {
 }
 
 class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
-  GoogleMapController? _mapController; 
+  GoogleMapController? _mapController;
   final DeliveryService _deliveryService = DeliveryService();
 
   String _pickupAddress = "جاري جلب العنوان...";
@@ -45,7 +45,7 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
 
   @override
   void dispose() {
-    _mapController?.dispose(); 
+    _mapController?.dispose();
     super.dispose();
   }
 
@@ -80,18 +80,18 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
   void _fitMapBounds() {
     if (_mapController == null) return;
 
-    LatLngBounds bounds;
-    if (widget.storeLocation.latitude > widget.order.customerLatLng.latitude) {
-      bounds = LatLngBounds(
-        southwest: widget.order.customerLatLng,
-        northeast: widget.storeLocation,
-      );
-    } else {
-      bounds = LatLngBounds(
-        southwest: widget.storeLocation,
-        northeast: widget.order.customerLatLng,
-      );
-    }
+    // ✅ إصلاح: حساب أصغر/أكبر قيمة لكل من خط العرض وخط الطول بشكل مستقل
+    // (الكود القديم كان يعتمد على latitude بس ويفترض غلط إن أكبر latitude
+    // معناها أكبر longitude كمان - ده بيكسر الحدود لو النقطتين على قطر عكسي)
+    final double south = min(widget.storeLocation.latitude, widget.order.customerLatLng.latitude);
+    final double north = max(widget.storeLocation.latitude, widget.order.customerLatLng.latitude);
+    final double west = min(widget.storeLocation.longitude, widget.order.customerLatLng.longitude);
+    final double east = max(widget.storeLocation.longitude, widget.order.customerLatLng.longitude);
+
+    final LatLngBounds bounds = LatLngBounds(
+      southwest: LatLng(south, west),
+      northeast: LatLng(north, east),
+    );
     _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 70));
   }
 
@@ -145,11 +145,11 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
         'userPhone': senderPhone,
         'customerPhone': widget.order.customerPhone,
         'customerName': widget.order.customerName,
-        
+
         // 🚀 الحل: إرسال كـ GeoPoint فقط كما يتوقع تطبيق المندوب في دالة _calculateDistance
         'pickupLocation': GeoPoint(widget.storeLocation.latitude, widget.storeLocation.longitude),
         'dropoffLocation': GeoPoint(widget.order.customerLatLng.latitude, widget.order.customerLatLng.longitude),
-        
+
         'pickupAddress': _pickupAddress,
         'dropoffAddress': _dropoffAddress,
         'totalPrice': _pricingDetails['totalPrice'],
@@ -157,6 +157,11 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
         'driverNet': _pricingDetails['driverNet'],
         'vehicleType': 'motorcycle',
         'status': 'pending',
+        // ✅ إصلاح اتساق: تصريح واضح بالحقول اللي الباك إند (financialSettlementEngine)
+        // بيتحقق منها بشرط `!afterData.moneyLocked` - كانت غائبة تمامًا من هنا
+        // (كانت شغالة صح لأن undefined falsy في JS، بس التصريح الصريح أوضح وأأمن للصيانة)
+        'insurance_points': 0,
+        'moneyLocked': false,
         'verificationCode': securityCode,
         'createdAt': FieldValue.serverTimestamp(),
         'requestSource': 'retailer',
@@ -301,4 +306,3 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
     );
   }
 }
-

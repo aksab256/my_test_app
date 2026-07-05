@@ -28,6 +28,22 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
   bool _isMapCreated = false;
   bool _hasInitialCenteringDone = false;
 
+  // ✅ إصلاح: حالات صريحة بدل substring matching
+  // (pickupLocation هنا = المتجر، dropoffLocation = العميل - عكس شاشة العميل)
+  static const String _returningToSeller = 'returning_to_seller';
+
+  static const Set<String> _terminalExitStatuses = {
+    'delivered',
+    'cancelled',
+    'cancelled_by_retailer_before_accept',
+    'cancelled_by_retailer_after_accept',
+    'cancelled_by_user_before_accept',
+    'cancelled_by_user_after_accept',
+    'no_drivers_available',
+    'rejected_by_system',
+    'returned_successfully',
+  };
+
   @override
   void initState() {
     super.initState();
@@ -62,6 +78,7 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
   }
 
   // دالة الحسابات الرياضية للمسافة والتدوير
+  // ✅ إصلاح: بقت بتستقبل الوجهة الجاهزة من الخارج بدل تحديدها بـ substring
   void _calculateMetrics(LatLng currentPos, LatLng destination) {
     if (_lastDriverPosition != null && _lastDriverPosition != currentPos) {
       double latRes = currentPos.latitude - _lastDriverPosition!.latitude;
@@ -138,11 +155,12 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
         var orderData = orderSnapshot.data!.data() as Map<String, dynamic>;
         String status = orderData['status'] ?? "pending";
         String? originalOrderId = orderData['originalOrderId'];
-        bool isReturning = status == 'returning_to_seller';
+        bool isReturning = status == _returningToSeller;
         String verificationCode = isReturning ? (orderData['returnVerificationCode'] ?? "----") : (orderData['verificationCode'] ?? "----");
 
-        // الخروج التلقائي عند التسليم أو الإلغاء
-        if (status.contains('cancelled_by') || status == 'delivered') {
+        // ✅ إصلاح: الخروج التلقائي بقى يغطي كل الحالات النهائية الحقيقية
+        // (كان ناقص: cancelled, no_drivers_available, rejected_by_system, returned_successfully)
+        if (_terminalExitStatuses.contains(status)) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (context.mounted) Navigator.of(context).pop();
           });
@@ -151,8 +169,21 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
         String? driverId = orderData['driverId'];
         GeoPoint pickup = orderData['pickupLocation'];
         GeoPoint dropoff = orderData['dropoffLocation'];
-        LatLng pickupLatLng = LatLng(pickup.latitude, pickup.longitude);
-        LatLng dropoffLatLng = LatLng(dropoff.latitude, dropoff.longitude);
+        LatLng pickupLatLng = LatLng(pickup.latitude, pickup.longitude); // المتجر
+        LatLng dropoffLatLng = LatLng(dropoff.latitude, dropoff.longitude); // العميل
+
+        // ✅ إصلاح: تحديد الوجهة بشكل صريح حسب الجغرافيا الفعلية للتاجر
+        // accepted/at_pickup: المندوب رايح للمتجر (pickup) يستلم العهدة
+        // picked_up: المندوب رايح للعميل (dropoff)
+        // returning_to_seller: المندوب راجع للمتجر (pickup) بالمرتجع
+        LatLng navigationTarget;
+        if (isReturning) {
+          navigationTarget = pickupLatLng;
+        } else if (status == 'picked_up') {
+          navigationTarget = dropoffLatLng;
+        } else {
+          navigationTarget = pickupLatLng;
+        }
 
         return StreamBuilder<DocumentSnapshot>(
           stream: (driverId != null && driverId.isNotEmpty)
@@ -165,11 +196,17 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
             if (driverSnapshot.hasData && driverSnapshot.data!.exists) {
               driverData = driverSnapshot.data!.data() as Map<String, dynamic>;
               if (driverData != null) {
+                // ✅ إصلاح اتساق: دعم fallback لـ lat/lng زي شاشة العميل
+                // (بعض السجلات ممكن تكون محفوظة بصيغة مختلفة)
                 GeoPoint? dLoc = driverData['location'];
                 if (dLoc != null) {
                   driverLatLng = LatLng(dLoc.latitude, dLoc.longitude);
-                  _calculateMetrics(driverLatLng, status.contains('pickup') ? pickupLatLng : dropoffLatLng);
-                  
+                } else if (driverData['lat'] != null && driverData['lng'] != null) {
+                  driverLatLng = LatLng(driverData['lat'], driverData['lng']);
+                }
+
+                if (driverLatLng != null) {
+                  _calculateMetrics(driverLatLng, navigationTarget);
                   if (!_hasInitialCenteringDone) {
                     _googleMapController.future.then((c) => c.animateCamera(CameraUpdate.newLatLngZoom(driverLatLng!, 15)));
                     _hasInitialCenteringDone = true;
@@ -202,7 +239,7 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
                         if (driverLatLng != null)
                           Polyline(
                             polylineId: const PolylineId("route"),
-                            points: [driverLatLng, status.contains('pickup') ? pickupLatLng : dropoffLatLng],
+                            points: [driverLatLng, navigationTarget],
                             color: isReturning ? Colors.red.withOpacity(0.5) : const Color(0xFF2D9E68).withOpacity(0.5),
                             width: 5,
                           ),
@@ -247,9 +284,24 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
       progress = 0.9;
       statusDesc = "المستهلك رفض الاستلام.. العهدة عائدة إليك";
       mainColor = Colors.red[900]!;
-    } else if (status == 'accepted') { progress = 0.4; statusDesc = "تم تخصيص مندوب.. في طريقه للاستلام"; mainColor = Colors.blue; }
-    else if (status == 'at_pickup') { progress = 0.6; statusDesc = "المندوب في نقطة الاستلام (توقيع العهدة)"; mainColor = Colors.indigo; }
-    else if (status == 'picked_up') { progress = 0.8; statusDesc = "العهدة في حوزة المندوب (قيد التوصيل)"; mainColor = Colors.green; }
+    } else if (status == 'accepted') {
+      progress = 0.4;
+      statusDesc = "تم تخصيص مندوب.. في طريقه للاستلام";
+      mainColor = Colors.blue;
+    } else if (status == 'at_pickup') {
+      progress = 0.6;
+      statusDesc = "المندوب في نقطة الاستلام (توقيع العهدة)";
+      mainColor = Colors.indigo;
+    } else if (status == 'picked_up') {
+      progress = 0.8;
+      statusDesc = "العهدة في حوزة المندوب (قيد التوصيل)";
+      mainColor = Colors.green;
+    } else if (status == 'driver_cancelled_reseeking') {
+      // ✅ إصلاح: حالة نشطة واضحة بدل الرسالة الافتراضية المضللة
+      progress = 0.2;
+      statusDesc = "المندوب السابق ألغى.. جاري البحث عن مندوب آخر";
+      mainColor = Colors.deepOrange;
+    }
 
     return Container(
       margin: const EdgeInsets.fromLTRB(10, 0, 10, 15),
@@ -296,7 +348,7 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
                   ),
                   const Padding(padding: EdgeInsets.symmetric(vertical: 8.0), child: Divider(thickness: 0.5)),
                   Text(
-                    isReturning 
+                    isReturning
                     ? "⚠️ لا تعطي هذا الكود للمندوب إلا بعد استلام البضاعة المرتجعة والتأكد من سلامتها تماماً."
                     : "⚠️ تنبيه: إدخال المندوب لهذا الكود بمثابة توقيع إلكتروني باستلام العهدة وتأمين قيمتها.",
                     textAlign: TextAlign.center,
@@ -319,15 +371,17 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
                   ],
                 ),
               ),
-              if (driver != null)
+              // ✅ إصلاح: فحص وجود رقم الهاتف فعليًا قبل عرض زرار الاتصال
+              if (driver != null && driver['phone'] != null && (driver['phone'] as String).isNotEmpty)
                 IconButton(
                   onPressed: () async => await launchUrl(Uri.parse("tel:${driver['phone']}")),
                   icon: Icon(Icons.phone_in_talk, color: mainColor, size: 30),
                 ),
             ],
           ),
-          
-          if (!isReturning && (status == 'pending' || status == 'accepted' || status == 'at_pickup'))
+
+          // ✅ إصلاح: تفعيل زرار الإلغاء أثناء إعادة البحث عن مندوب بديل
+          if (!isReturning && (status == 'pending' || status == 'accepted' || status == 'at_pickup' || status == 'driver_cancelled_reseeking'))
             Padding(
               padding: const EdgeInsets.only(top: 10),
               child: TextButton(
@@ -340,4 +394,3 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
     );
   }
 }
-

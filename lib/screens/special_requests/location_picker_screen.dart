@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -30,7 +31,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   final TextEditingController _detailsController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  // الإعدادات الخاصة بـ Google Maps API
+  // ⚠️ TODO أمني: نقل مفتاح Google Maps API بعيدًا عن الكود المصدري
+  // (متفق على تأجيله - backlog)
   final String _apiKey = "AIzaSyB4Nu0SHkkoSQi9gMjxNK5pfnqbKSrS5fg";
   List<dynamic> _searchResults = [];
 
@@ -229,54 +231,57 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   }
 
   Future<void> _finalizeAndUpload() async {
-  if (!_formKey.currentState!.validate()) return;
-  setState(() => _isLoading = true);
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
 
-  try {
-    final user = FirebaseAuth.instance.currentUser;
+    try {
+      final user = FirebaseAuth.instance.currentUser;
 
-    await FirebaseFirestore.instance.collection('specialRequests').add({
-      'userId': user?.uid ?? 'anonymous',
-      
-      // ✅ الربط الصحيح مع UserSession:
-      'userName': UserSession.merchantName ?? "مستخدم أكسب", 
-      'userPhone': UserSession.phoneNumber ?? "", // استخدمنا phoneNumber اللي في الملف عندك
-      
-      // كررناهم في حقول الكاش عشان المندوب يقرأ من مكان واحد
-      'customerName': UserSession.merchantName ?? "مستخدم أكسب", 
-      'customerPhone': UserSession.phoneNumber ?? "",
+      await FirebaseFirestore.instance.collection('specialRequests').add({
+        'userId': user?.uid ?? 'anonymous',
 
-      'pickupLocation': GeoPoint(_pickupLocation!.latitude, _pickupLocation!.longitude),
-      'pickupAddress': _pickupAddress,
-      'dropoffLocation': GeoPoint(_dropoffLocation!.latitude, _dropoffLocation!.longitude),
-      'dropoffAddress': _dropoffAddress,
-      'totalPrice': _pricingDetails['totalPrice'],
-      'driverNet': _pricingDetails['driverNet'],
-      'commissionAmount': _pricingDetails['commissionAmount'],
-      'vehicleType': _selectedVehicle,
-      'details': _detailsController.text,
-      'status': 'pending',
-      'requestSource': 'consumer', 
-      'createdAt': FieldValue.serverTimestamp(),
-      'verificationCode': (1000 + (DateTime.now().millisecond % 9000)).toString(),
-      'insurance_points': 0, 
-      'moneyLocked': true, // عشان يظهر للمندوب فوراً
-    });
+        // ✅ الربط الصحيح مع UserSession:
+        'userName': UserSession.merchantName ?? "مستخدم أكسب",
+        'userPhone': UserSession.phoneNumber ?? "", // استخدمنا phoneNumber اللي في الملف عندك
 
-    if (mounted) {
-      Navigator.pop(context); 
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          backgroundColor: Colors.green, 
-          content: Text("🚀 طلبك قيد التنفيذ", style: TextStyle(fontFamily: 'Cairo'))));
+        // كررناهم في حقول الكاش عشان المندوب يقرأ من مكان واحد
+        'customerName': UserSession.merchantName ?? "مستخدم أكسب",
+        'customerPhone': UserSession.phoneNumber ?? "",
+
+        'pickupLocation': GeoPoint(_pickupLocation!.latitude, _pickupLocation!.longitude),
+        'pickupAddress': _pickupAddress,
+        'dropoffLocation': GeoPoint(_dropoffLocation!.latitude, _dropoffLocation!.longitude),
+        'dropoffAddress': _dropoffAddress,
+        'totalPrice': _pricingDetails['totalPrice'],
+        'driverNet': _pricingDetails['driverNet'],
+        'commissionAmount': _pricingDetails['commissionAmount'],
+        'vehicleType': _selectedVehicle,
+        'details': _detailsController.text,
+        'status': 'pending',
+        'requestSource': 'consumer',
+        'createdAt': FieldValue.serverTimestamp(),
+        // ✅ إصلاح: توليد كود عشوائي حقيقي بمساحة أكبر (1000-9999) بدل الاعتماد على millisecond
+        'verificationCode': (1000 + Random().nextInt(9000)).toString(),
+        'insurance_points': 0,
+        // ✅ إصلاح الباج: moneyLocked يجب أن تبدأ false، والباك إند (financialSettlementEngine)
+        // هو المسؤول عن ضبطها true فعليًا عند حجز العهدة لحظة قبول المندوب للطلب.
+        // إبقاؤها true من الفرونت كانت تمنع تنفيذ handleInsuranceLocking بالكامل.
+        'moneyLocked': false,
+      });
+
+      if (mounted) {
+        Navigator.pop(context);
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            backgroundColor: Colors.green,
+            content: Text("🚀 طلبك قيد التنفيذ", style: TextStyle(fontFamily: 'Cairo'))));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
   }
-}
-
 
   @override
   Widget build(BuildContext context) {
@@ -319,35 +324,112 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     );
   }
 
+  // ---------------------------------------------------------------------
+  // 🎨 الكارت السفلي المحسّن: هيدر واضح + مؤشرات خطوة + تباين ألوان أقوى
+  // ---------------------------------------------------------------------
   Widget _buildActionCard() {
     double safeBottom = MediaQuery.of(context).padding.bottom;
+    final bool isPickup = _currentStep == PickerStep.pickup;
+    final Color stepColor = isPickup ? const Color(0xFF1E8E5A) : const Color(0xFFD32F2F);
+
     return Align(
       alignment: Alignment.bottomCenter,
       child: SafeArea(
+        top: false,
         child: Container(
           margin: EdgeInsets.fromLTRB(15, 0, 15, safeBottom > 0 ? 5 : 20),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(25), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)]),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 20, offset: const Offset(0, 8)),
+            ],
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  Icon(Icons.location_searching, color: _currentStep == PickerStep.pickup ? Colors.green : Colors.red),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text(_tempAddress, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Cairo'))),
-                ],
+              // مؤشر السحب البصري
+              Container(
+                margin: const EdgeInsets.only(top: 10),
+                height: 4,
+                width: 36,
+                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
               ),
-              const SizedBox(height: 15),
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton(
-                  onPressed: _handleNextStep,
-                  style: ElevatedButton.styleFrom(backgroundColor: _currentStep == PickerStep.pickup ? Colors.green[700] : Colors.red[700], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
-                  child: Text(_currentStep == PickerStep.pickup ? "تحديد مكان الاستلام" : "تحديد وجهة التوصيل", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15, fontFamily: 'Cairo')),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // مؤشر الخطوة (استلام / توصيل) مع ترقيم صغير
+                    Row(
+                      children: [
+                        _StepPill(label: "الاستلام", isActive: isPickup, activeColor: const Color(0xFF1E8E5A)),
+                        Container(
+                          width: 22,
+                          height: 1.5,
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          color: Colors.grey[300],
+                        ),
+                        _StepPill(label: "التوصيل", isActive: !isPickup, activeColor: const Color(0xFFD32F2F)),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(9),
+                          decoration: BoxDecoration(color: stepColor.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+                          child: Icon(Icons.location_searching, color: stepColor, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isPickup ? "نقطة الاستلام" : "نقطة التوصيل",
+                                style: TextStyle(fontSize: 11, color: Colors.grey[500], fontFamily: 'Cairo', fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _tempAddress,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, fontFamily: 'Cairo', height: 1.3),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 55,
+                      child: ElevatedButton(
+                        onPressed: _handleNextStep,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: stepColor,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              isPickup ? "تحديد مكان الاستلام" : "تحديد وجهة التوصيل",
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15, fontFamily: 'Cairo'),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.arrow_back, color: Colors.white, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              )
+              ),
             ],
           ),
         ),
@@ -369,6 +451,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                Container(margin: const EdgeInsets.only(bottom: 15), height: 4, width: 36, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
                 const Text("تفاصيل طلب التوصيل", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, fontFamily: 'Cairo')),
                 const Divider(height: 30),
                 Row(
@@ -420,3 +503,32 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   }
 }
 
+/// ويدجت صغيرة لعرض مؤشر الخطوة الحالية (استلام / توصيل) بشكل بصري واضح
+class _StepPill extends StatelessWidget {
+  final String label;
+  final bool isActive;
+  final Color activeColor;
+
+  const _StepPill({required this.label, required this.isActive, required this.activeColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: isActive ? activeColor.withOpacity(0.1) : Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontFamily: 'Cairo',
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: isActive ? activeColor : Colors.grey[400],
+        ),
+      ),
+    );
+  }
+}
