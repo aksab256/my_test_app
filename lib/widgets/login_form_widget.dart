@@ -82,7 +82,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
       if (!userExists) {
         setState(() => _isLoading = false);
-        _handleError("❌ خطأ: الرقم غير مسجل في رابية أحلى.");
+        _handleError("❌ خطأ: الرقم غير مسجل في اسواق.");
         return;
       }
 
@@ -175,7 +175,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
           await Provider.of<BuyerDataProvider>(context, listen: false).initializeData(
             FirebaseAuth.instance.currentUser?.uid,
             UserSession.ownerId,
-            UserSession.merchantName ?? "مستخدم رابية أحلى"
+            UserSession.merchantName ?? "مستخدم اسواق اكسب"
           );
 
           _navigateToHome(finalRole);
@@ -193,7 +193,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   void _navigateToHome(String role) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: const Text('✅ أهلاً بك في رابية أحلى'), backgroundColor: primaryGreen),
+      SnackBar(content: const Text('✅ أهلاً بك في اسواق اكسب'), backgroundColor: primaryGreen),
     );
     
     String route = SellerScreen.routeName;
