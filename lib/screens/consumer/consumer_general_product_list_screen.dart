@@ -20,7 +20,7 @@ class ConsumerGeneralProductListScreen extends StatefulWidget {
 
 class _ConsumerGeneralProductListScreenState extends State<ConsumerGeneralProductListScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  String _selectedCity = "الإسكندرية"; // القيمة الافتراضية المأخوذة من الكونسول بناءً على النطاق الجغرافي للمستخدم
+  String _selectedCity = "الإسكندرية"; // القيمة الافتراضية
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +30,6 @@ class _ConsumerGeneralProductListScreenState extends State<ConsumerGeneralProduc
     final String subId = args['subId'] ?? '';
     final String title = args['subCategoryName'] ?? 'المنتجات العامة';
     
-    // استقبال الإحداثيات إن وجدت لتحديد المحافظة أو المنطقة مستقبلاً بدقة
     final LatLng? userLocation = args['userLocation']; 
 
     return Directionality(
@@ -63,16 +62,34 @@ class _ConsumerGeneralProductListScreenState extends State<ConsumerGeneralProduc
           .where('status', isEqualTo: 'active')
           .snapshots(),
       builder: (context, snapshot) {
+        // 1. حالة حدوث خطأ في قاعدة البيانات (مثل نقص الفهرس المجمع)
+        if (snapshot.hasError) {
+          return _buildUIDebugger(
+            title: "🛑 خطأ في الفايربيز (احتمال كبير نقص فهرس مجمع)",
+            errorDetails: snapshot.error.toString(),
+            rawDocs: const [],
+            subId: subId,
+          );
+        }
+
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
+        // 2. حالة عدم وجود أي مستندات خام تطابق القسم والحالة
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return _buildEmptyState();
+          return _buildUIDebugger(
+            title: "⚠️ لا توجد منتجات خام في السيرفر لهذا القسم",
+            errorDetails: "تم البحث بـ subCategoryId: '$subId' و حالة active ولم نجد شيئاً في مجموعة productOffers.",
+            rawDocs: const [],
+            subId: subId,
+          );
         }
 
-        // 1. الفلترة الجغرافية المحلية بناءً على نطاق التوصيل المتاح في مصفوفة deliveryAreas بالوثيقة
-        final allOffers = snapshot.data!.docs.map((doc) {
+        final List<DocumentSnapshot> rawDocs = snapshot.data!.docs;
+
+        // 3. الفلترة الجغرافية المحلية بناءً على نطاق التوصيل
+        final allOffers = rawDocs.map((doc) {
           final data = doc.data() as Map<String, dynamic>;
           data['offerId'] = doc.id;
           return data;
@@ -81,11 +98,17 @@ class _ConsumerGeneralProductListScreenState extends State<ConsumerGeneralProduc
           return areas.contains(_selectedCity);
         }).toList();
 
+        // 4. إذا كانت المنتجات موجودة لكن اختفت بسبب تصفية المدن والنطاق الجغرافي
         if (allOffers.isEmpty) {
-          return _buildEmptyState();
+          return _buildUIDebugger(
+            title: "📍 المنتجات موجودة بالسيرفر لكن اختفت بسبب فلترة المدينة!",
+            errorDetails: "المدينة الحالية للتطبيق هي '$_selectedCity'. المنتجات المتاحة بالسيرفر مسجلة بمدن أخرى لا تطابق حروفها مدينتك الحالية.",
+            rawDocs: rawDocs,
+            subId: subId,
+          );
         }
 
-        // 2. تجميع العروض الذكي (Grouping) بناءً على الـ productId الفريد للمنتج لمنع التكرار
+        // 5. تجميع العروض الذكي لمنع التكرار
         final Map<String, List<Map<String, dynamic>>> groupedProducts = {};
         for (var offer in allOffers) {
           final String pId = offer['productId'] ?? '';
@@ -103,7 +126,7 @@ class _ConsumerGeneralProductListScreenState extends State<ConsumerGeneralProduc
           padding: EdgeInsets.fromLTRB(3.w, 2.h, 3.w, 15.h),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            childAspectRatio: 0.58, // زيادة الارتفاع قليلاً لاستيعاب قائمة المنسدلة للتجار بشكل مريح
+            childAspectRatio: 0.58,
             crossAxisSpacing: 3.w,
             mainAxisSpacing: 3.w,
           ),
@@ -112,7 +135,6 @@ class _ConsumerGeneralProductListScreenState extends State<ConsumerGeneralProduc
             final currentProductId = productIds[index];
             final List<Map<String, dynamic>> offersForThisProduct = groupedProducts[currentProductId]!;
             
-            // تمرير جميع عروض التجار المتنافسين على نفس المنتج لعمل المنسدلة
             return _GeneralProductGroupCard(
               productId: currentProductId,
               offers: offersForThisProduct,
@@ -123,16 +145,77 @@ class _ConsumerGeneralProductListScreenState extends State<ConsumerGeneralProduc
     );
   }
 
-  Widget _buildEmptyState() {
+  // لوحة تشخيص الأخطاء المباشرة في الواجهة
+  Widget _buildUIDebugger({
+    required String title,
+    required String errorDetails,
+    required List<DocumentSnapshot> rawDocs,
+    required String subId,
+  }) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.layers_clear_outlined, size: 70, color: Colors.grey[300]),
-          const SizedBox(height: 15),
-          const Text("لا توجد عروض متاحة في منطقتك حالياً لـ هذا القسم",
-              style: TextStyle(color: Colors.grey, fontSize: 14, fontFamily: 'Tajawal')),
-        ],
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.bug_report, size: 60, color: Colors.orange[700]),
+            const SizedBox(height: 10),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)),
+            const SizedBox(height: 20),
+            
+            // زرار يعرض تفاصيل الخطأ أو الفهرس الناقص فوراً في دايالوج
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[700], foregroundColor: Colors.white),
+              icon: const Icon(Icons.error_outline),
+              label: const Text("اضغط لعرض الخطأ الفعلي ورابط الفهرس مجمع"),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text("تفاصيل فحص السيرفر والخطأ"),
+                    content: SingleChildScrollView(
+                      child: SelectableText("رقم القسم المرسل (subId): $subId\n\nنص الخطأ والروابط:\n$errorDetails"),
+                    ),
+                    actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("إغلاق"))],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 10),
+
+            // زرار يعرض المدن المسجلة في السيرفر مقارنة بمدينة المستخدم لتحديد مشكلة الهمزات والحروف
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[700], foregroundColor: Colors.white),
+              icon: const Icon(Icons.location_city),
+              label: const Text("اضغط لفحص ومقارنة مناطق التوصيل المتاحة"),
+              onPressed: () {
+                String areaReport = "المدينة الحالية في التطبيق: '$_selectedCity'\n\n";
+                if (rawDocs.isEmpty) {
+                  areaReport += "لا توجد مستندات خام بالسيرفر لمقارنتها.";
+                } else {
+                  areaReport += "المدن المسجلة بالمنتجات المتاحة في السيرفر حالياً:\n";
+                  for (var i = 0; i < rawDocs.length; i++) {
+                    final d = rawDocs[i].data() as Map<String, dynamic>? ?? {};
+                    final name = d['productName'] ?? 'بدون اسم';
+                    final areas = d['deliveryAreas'] as List? ?? [];
+                    areaReport += "${i + 1}. المنتج: ($name) -> مدن التوصيل: $areas\n";
+                  }
+                }
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text("فحص ومقارنة النطاق الجغرافي"),
+                    content: SingleChildScrollView(child: SelectableText(areaReport)),
+                    actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("إغلاق"))],
+                  ),
+                );
+              },
+            ),
+            
+            const SizedBox(height: 30),
+            Text("إجمالي المنتجات الخام المستلمة: ${rawDocs.length}", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+          ],
+        ),
       ),
     );
   }
@@ -170,13 +253,12 @@ class _GeneralProductGroupCardState extends State<_GeneralProductGroupCard> {
   @override
   void initState() {
     super.initState();
-    // افتراضياً نختار أول عرض متاح (أو يمكن ترتيبهم برمجياً لعرض السعر الأقل أولاً)
     widget.offers.sort((a, b) {
       final List unitsA = a['units'] as List? ?? [];
       final List unitsB = b['units'] as List? ?? [];
       final double priceA = unitsA.isNotEmpty ? (unitsA[0]['price'] as num).toDouble() : 0.0;
       final double priceB = unitsB.isNotEmpty ? (unitsB[0]['price'] as num).toDouble() : 0.0;
-      return priceA.compareTo(priceB); // ترتيب تصاعدي من الأرخص للأغلى لخدمة العميل
+      return priceA.compareTo(priceB);
     });
     _selectedOffer = widget.offers.first;
   }
@@ -185,9 +267,8 @@ class _GeneralProductGroupCardState extends State<_GeneralProductGroupCard> {
   Widget build(BuildContext context) {
     final cart = Provider.of<CartProvider>(context);
     
-    // استخراج بيانات المنتج الأساسية من العرض المختار
     final String pName = _selectedOffer['productName'] ?? 'منتج';
-    final String? imgUrl = _selectedOffer['imageUrl']; // بناءً على البنية المرفقة بالصورة
+    final String? imgUrl = _selectedOffer['imageUrl'];
 
     final List units = _selectedOffer['units'] as List? ?? [];
     final firstUnit = units.isNotEmpty ? units[0] : {'unitName': 'وحدة', 'price': 0.0, 'availableStock': 0};
@@ -211,7 +292,6 @@ class _GeneralProductGroupCardState extends State<_GeneralProductGroupCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // صور المنتج الموحد
           Expanded(
             flex: 4,
             child: Container(
@@ -230,7 +310,6 @@ class _GeneralProductGroupCardState extends State<_GeneralProductGroupCard> {
             ),
           ),
           
-          // اسم المنتج
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             child: Text(
@@ -242,7 +321,6 @@ class _GeneralProductGroupCardState extends State<_GeneralProductGroupCard> {
             ),
           ),
 
-          // 🎯 المنسدلة السحرية لاختيار التاجر / المورد المتنافس
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
             child: Container(
@@ -288,7 +366,6 @@ class _GeneralProductGroupCardState extends State<_GeneralProductGroupCard> {
 
           const Spacer(),
           
-          // السعر والوحدة للتاجر المحدد حالياً من المنسدلة
           Center(
             child: Text(
               "$price ج.م",
@@ -304,7 +381,6 @@ class _GeneralProductGroupCardState extends State<_GeneralProductGroupCard> {
           
           const SizedBox(height: 6),
           
-          // إدارة كمية السلة للتاجر المختار
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: quantity == 0
@@ -347,7 +423,7 @@ class _GeneralProductGroupCardState extends State<_GeneralProductGroupCard> {
     cart.addItemToCart(
       offerId: _selectedOffer['offerId'],
       productId: _selectedOffer['productId'],
-      sellerId: _selectedOffer['sellerId'], // الـ sellerId الخاص بالمورد المختار من المنسدلة بالصورة
+      sellerId: _selectedOffer['sellerId'],
       sellerName: _selectedOffer['sellerName'] ?? 'التاجر',
       name: name,
       price: (unit['price'] as num).toDouble(),
