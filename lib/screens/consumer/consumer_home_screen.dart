@@ -38,13 +38,11 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
     super.initState();
     _checkInitialPoints();
     _checkForPendingRating();
-
     // إعداد أنميشن النبض (نفس إعدادات ويدجت الشات للاتساق)
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
-
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
@@ -59,7 +57,6 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
   void _checkForPendingRating() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-
     final query = await FirebaseFirestore.instance
         .collection('specialRequests')
         .where('userId', isEqualTo: user.uid)
@@ -67,7 +64,6 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
         .where('isRated', isEqualTo: false)
         .limit(1)
         .get();
-
     if (query.docs.isNotEmpty) {
       final orderId = query.docs.first.id;
       if (mounted) {
@@ -95,7 +91,6 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
     bool alreadyAsked = prefs.getBool('notifications_asked') ?? false;
 
     if (alreadyAsked || !mounted) return;
-
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -114,9 +109,19 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
                 await messaging.requestPermission(alert: true, badge: true, sound: true);
                 String? token = await messaging.getToken();
                 if (token != null && FirebaseAuth.instance.currentUser != null) {
-                  await FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid).set({
+                  String uid = FirebaseAuth.instance.currentUser!.uid;
+                  
+                  // 1. التحديث المعتاد في كولكشن users للحفاظ على تماسك البيانات الحالية
+                  await FirebaseFirestore.instance.collection('users').doc(uid).set({
                     'fcmToken': token,
                     'lastTokenUpdate': FieldValue.serverTimestamp(),
+                  }, SetOptions(merge: true));
+
+                  // 2. تحديث الكولكشن الموحد المخصص لقراءة الـ Cloud Functions لإنهاء مشكلة التضارب
+                  await FirebaseFirestore.instance.collection('UserEndpoints').doc(uid).set({
+                    'fcmToken': token,
+                    'role': 'consumer',
+                    'updatedAt': FieldValue.serverTimestamp(),
                   }, SetOptions(merge: true));
                 }
               },
@@ -446,6 +451,7 @@ class _CelebrationWidget extends StatefulWidget {
 class _CelebrationWidgetState extends State<_CelebrationWidget> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scale;
+
   @override
   void initState() {
     super.initState();
@@ -483,4 +489,3 @@ class _CelebrationWidgetState extends State<_CelebrationWidget> with SingleTicke
                     ])))));
   }
 }
-

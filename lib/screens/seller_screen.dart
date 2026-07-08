@@ -1,4 +1,4 @@
-// lib/screens/seller_screen.dart
+// المسار: lib/screens/seller_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -49,7 +49,6 @@ class _SellerScreenState extends State<SellerScreen> {
 
       if (!hasShownDisclosure && currentSettings.authorizationStatus != AuthorizationStatus.authorized) {
         if (!mounted) return;
-        
         bool proceed = await _showNotificationDisclosure();
         
         if (proceed) {
@@ -111,11 +110,18 @@ class _SellerScreenState extends State<SellerScreen> {
       String? uid = UserSession.userId;
 
       if (token != null && uid != null) {
+        // 1. تحديث الكولكشن الخاص بالتاجر الحالي لضمان عمل الـ Queries المرتبطة به
         String collection = (UserSession.isSubUser) ? 'subUsers' : 'sellers';
         await FirebaseFirestore.instance.collection(collection).doc(uid).set({
           'notificationToken': token,
           'fcmToken': token,
           'lastUpdate': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        // 2. تحديث الكولكشن الموحد المخصص لقراءة الـ Cloud Functions لإنهاء مشكلة الفشل
+        await FirebaseFirestore.instance.collection('UserEndpoints').doc(uid).set({
+          'fcmToken': token,
+          'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       }
     }
@@ -140,7 +146,6 @@ class _SellerScreenState extends State<SellerScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = Provider.of<SellerDashboardController>(context);
-
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
@@ -178,7 +183,7 @@ class _SellerScreenState extends State<SellerScreen> {
         }
 
         if (context.mounted) {
-          SystemNavigator.pop(); 
+          SystemNavigator.pop();
         }
       },
       child: Scaffold(
@@ -212,7 +217,6 @@ class _SellerScreenState extends State<SellerScreen> {
         
         body: Column(
           children: [
-            // ✅ تم تعديل الشرط ليفحص الحقل "status" كما في قاعدة البيانات
             if (controller.data.status != 'active')
               Container(
                 width: double.infinity,
@@ -244,7 +248,6 @@ class _SellerScreenState extends State<SellerScreen> {
                   ],
                 ),
               ),
-            // الشاشة النشطة تملأ بقية المساحة
             Expanded(child: _activeScreen),
           ],
         ),
@@ -274,6 +277,7 @@ class _SellerScreenState extends State<SellerScreen> {
           .snapshots(),
       builder: (context, snapshot) {
         bool hasNotifications = snapshot.hasData && snapshot.data!.docs.isNotEmpty;
+        
         return PopupMenuButton<int>(
           offset: const Offset(0, 50),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),

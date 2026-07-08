@@ -115,6 +115,12 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with SingleTickerProv
           'fcmToken': token,
           'notificationsEnabled': true,
         });
+
+        // مزامنة التوكن مع الكولكشن الموحد لضمان عمل الـ Cloud Functions
+        await _db.collection('UserEndpoints').doc(_currentUserId).set({
+          'fcmToken': token,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
       return;
     }
@@ -158,6 +164,13 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with SingleTickerProv
             'lastTokenUpdate': FieldValue.serverTimestamp(),
             'notificationsEnabled': true,
           });
+
+          // مزامنة التوكن مع الكولكشن الموحد لضمان عمل الـ Cloud Functions
+          await _db.collection('UserEndpoints').doc(_currentUserId).set({
+            'fcmToken': token,
+            'role': 'buyer',
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
         }
       }
     }
@@ -349,4 +362,3 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with SingleTickerProv
     );
   }
 }
-
