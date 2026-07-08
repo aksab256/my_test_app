@@ -8,7 +8,7 @@ import '../../models/category_model.dart';
 import '../../services/marketplace_data_service.dart';
 import '../../theme/app_theme.dart';
 import '../../providers/cart_provider.dart';
-import 'package:my_test_app/screens/consumer/ConsumerProductListScreen.dart';
+import 'package:my_test_app/screens/consumer/consumer_general_product_list_screen.dart';
 
 class ConsumerGeneralSubCategoryScreen extends StatefulWidget {
   final String mainCategoryId;
@@ -272,7 +272,7 @@ class _GeneralSubCategoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () => Navigator.of(context).pushNamed(
-        ConsumerProductListScreen.routeName,
+        ConsumerGeneralProductListScreen.routeName,
         arguments: {
           'mainId': mainCategoryId,
           'subId': category.id,
