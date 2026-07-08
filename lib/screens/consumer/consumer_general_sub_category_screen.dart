@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'dart:async';
 import '../../models/category_model.dart';
 import '../../services/marketplace_data_service.dart';
@@ -14,15 +13,12 @@ import 'package:my_test_app/screens/consumer/consumer_general_product_list_scree
 class ConsumerGeneralSubCategoryScreen extends StatefulWidget {
   final String mainCategoryId;
   final String mainCategoryName;
-  final LatLng? userLocation; 
-
   static const routeName = '/general-subcategories'; 
 
   const ConsumerGeneralSubCategoryScreen({
     super.key,
     required this.mainCategoryId,
     required this.mainCategoryName,
-    this.userLocation,
   });
 
   @override
@@ -220,7 +216,6 @@ class _ConsumerGeneralSubCategoryScreenState extends State<ConsumerGeneralSubCat
               (context, index) => _GeneralSubCategoryCard(
                 category: subCategories[index],
                 mainCategoryId: widget.mainCategoryId,
-                userLocation: widget.userLocation, 
               ),
               childCount: subCategories.length,
             ),
@@ -265,19 +260,17 @@ class _ConsumerGeneralSubCategoryScreenState extends State<ConsumerGeneralSubCat
 class _GeneralSubCategoryCard extends StatelessWidget {
   final CategoryModel category;
   final String mainCategoryId;
-  final LatLng? userLocation; 
 
   const _GeneralSubCategoryCard({
     required this.category,
     required this.mainCategoryId,
-    this.userLocation,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        // الاعتماد على التوجيه المباشر بالكامل لأن الشاشة غير مضافة في مسارات الـ main
+        // توجيه مباشر صافي ومستقل، وصفحة المنتجات هي التي ستجلب موقعها من الـ SharedPreferences
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => const ConsumerGeneralProductListScreen(),
@@ -286,7 +279,6 @@ class _GeneralSubCategoryCard extends StatelessWidget {
                 'mainId': mainCategoryId,
                 'subId': category.id,
                 'subCategoryName': category.name,
-                'userLocation': userLocation,
               },
             ),
           ),
