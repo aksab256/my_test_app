@@ -14,7 +14,8 @@ import 'package:my_test_app/screens/consumer/consumer_general_product_list_scree
 class ConsumerGeneralSubCategoryScreen extends StatefulWidget {
   final String mainCategoryId;
   final String mainCategoryName;
-  final LatLng? userLocation; // إضافة استقبال موقع المستهلك لتمريره لصفحة المنتجات العامة الجديدة
+  final LatLng? userLocation; 
+
   static const routeName = '/general-subcategories'; 
 
   const ConsumerGeneralSubCategoryScreen({
@@ -40,7 +41,6 @@ class _ConsumerGeneralSubCategoryScreenState extends State<ConsumerGeneralSubCat
   @override
   void initState() {
     super.initState();
-    // جلب كل الأقسام الفرعية التابعة للقسم الرئيسي بناءً على التعديل الجديد للـ mainId
     _subCategoriesFuture = _fetchGeneralSubCategories(widget.mainCategoryId);
     
     _bannersFuture = FirebaseFirestore.instance
@@ -61,11 +61,10 @@ class _ConsumerGeneralSubCategoryScreenState extends State<ConsumerGeneralSubCat
     });
   }
 
-  // الدالة بعد تعديل اسم الحقل ليتطابق مع الفايربيز الفعلي (mainId)
   Future<List<CategoryModel>> _fetchGeneralSubCategories(String mainCategoryId) async {
     final querySnapshot = await FirebaseFirestore.instance
         .collection('subCategory')
-        .where('mainId', isEqualTo: mainCategoryId) // التعديل هنا: mainId بدلاً من mainCategoryId
+        .where('mainId', isEqualTo: mainCategoryId) 
         .where('status', isEqualTo: 'active')
         .orderBy('order', descending: false)
         .get();
@@ -221,7 +220,7 @@ class _ConsumerGeneralSubCategoryScreenState extends State<ConsumerGeneralSubCat
               (context, index) => _GeneralSubCategoryCard(
                 category: subCategories[index],
                 mainCategoryId: widget.mainCategoryId,
-                userLocation: widget.userLocation, // تمرير الموقع للكارد
+                userLocation: widget.userLocation, 
               ),
               childCount: subCategories.length,
             ),
@@ -266,7 +265,7 @@ class _ConsumerGeneralSubCategoryScreenState extends State<ConsumerGeneralSubCat
 class _GeneralSubCategoryCard extends StatelessWidget {
   final CategoryModel category;
   final String mainCategoryId;
-  final LatLng? userLocation; // استقبال الموقع هنا
+  final LatLng? userLocation; 
 
   const _GeneralSubCategoryCard({
     required this.category,
@@ -277,15 +276,22 @@ class _GeneralSubCategoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => Navigator.of(context).pushNamed(
-        ConsumerGeneralProductListScreen.routeName,
-        arguments: {
-          'mainId': mainCategoryId,
-          'subId': category.id,
-          'subCategoryName': category.name,
-          'userLocation': userLocation, // تمرير الموقع بنجاح للتصفية الجغرافية المتناسقة
-        },
-      ),
+      onTap: () {
+        // الاعتماد على التوجيه المباشر بالكامل لأن الشاشة غير مضافة في مسارات الـ main
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => const ConsumerGeneralProductListScreen(),
+            settings: RouteSettings(
+              arguments: {
+                'mainId': mainCategoryId,
+                'subId': category.id,
+                'subCategoryName': category.name,
+                'userLocation': userLocation,
+              },
+            ),
+          ),
+        );
+      },
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -302,6 +308,7 @@ class _GeneralSubCategoryCard extends StatelessWidget {
                   width: double.infinity,
                   fit: BoxFit.cover,
                   cacheWidth: 400,
+                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.image, size: 40, color: Colors.grey),
                 ),
               ),
             ),
