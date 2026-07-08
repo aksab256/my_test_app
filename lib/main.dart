@@ -48,6 +48,8 @@ import 'package:my_test_app/screens/my_details_screen.dart';
 import 'package:my_test_app/screens/about_screen.dart';
 import 'package:my_test_app/screens/product_details_screen.dart';
 import 'package:my_test_app/screens/consumer/consumer_sub_category_screen.dart';
+import 'package:my_test_app/screens/consumer/consumer_general_sub_category_screen.dart';
+
 import 'package:my_test_app/screens/consumer/ConsumerProductListScreen.dart';
 import 'package:my_test_app/screens/consumer/consumer_store_search_screen.dart';
 import 'package:my_test_app/screens/consumer/MarketplaceHomeScreen.dart';
@@ -417,6 +419,16 @@ class MyApp extends StatelessWidget {
                 builder: (context) => ConsumerSubCategoryScreen(
                   mainCategoryId: args?['mainId'] ?? '',
                   ownerId: args?['ownerId'] ?? '',
+                  mainCategoryName: args?['mainCategoryName'] ?? '',
+                ),
+              );
+            }
+             if (settings.name == '/genralsubcategories') {
+              final args = settings.arguments as Map<String, dynamic>?;
+              return MaterialPageRoute(
+                builder: (context) => ConsumerGeneralSubCategoryScreen(
+                  mainCategoryId: args?['mainId'] ?? '',
+                  
                   mainCategoryName: args?['mainCategoryName'] ?? '',
                 ),
               );

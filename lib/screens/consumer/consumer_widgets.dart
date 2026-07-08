@@ -274,10 +274,10 @@ class ConsumerCategoriesBanner extends StatelessWidget {
               // 🎯 تم التعديل لاستخدام pushNamed المتوافق مع ConsumerSubCategoryScreen
               Navigator.pushNamed(
                 context,
-                '/subcategories',
+                '/genralsubcategories',
                 arguments: {
                   'mainId': category.id,
-                  'ownerId': '', // سيتم تعبئته في الصفحة التالية أو يترك فارغاً حسب الحاجة
+                  // سيتم تعبئته في الصفحة التالية أو يترك فارغاً حسب الحاجة
                   'mainCategoryName': category.name,
                 },
               );
