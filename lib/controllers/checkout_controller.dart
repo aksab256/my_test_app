@@ -190,7 +190,8 @@ class CheckoutController {
                         'status': 'new-order',
                         'orderDate': DateTime.now().toUtc().toIso8601String(),
                         'commissionRateSnapshot': commissionRatesCache[sellerId] ?? 0.0,
-                        'insurance_points': discountPortion, // تخصيص نقاط أمان للعهدة بشكل لوجستي معتمد
+                        'insurance_points': discountPortion,
+                        'cashbackApplied': discountPortion, // تخصيص نقاط أمان للعهدة بشكل لوجستي معتمد
                         'isCashbackUsed': discountUsed > 0,
                         'isFinancialSettled': false,
                         'isCommissionProcessed': false,
