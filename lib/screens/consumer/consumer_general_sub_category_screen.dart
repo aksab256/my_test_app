@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'dart:async';
 import '../../models/category_model.dart';
 import '../../services/marketplace_data_service.dart';
@@ -13,12 +14,14 @@ import 'package:my_test_app/screens/consumer/consumer_general_product_list_scree
 class ConsumerGeneralSubCategoryScreen extends StatefulWidget {
   final String mainCategoryId;
   final String mainCategoryName;
+  final LatLng? userLocation; // إضافة استقبال موقع المستهلك لتمريره لصفحة المنتجات العامة الجديدة
   static const routeName = '/general-subcategories'; 
 
   const ConsumerGeneralSubCategoryScreen({
     super.key,
     required this.mainCategoryId,
     required this.mainCategoryName,
+    this.userLocation,
   });
 
   @override
@@ -218,6 +221,7 @@ class _ConsumerGeneralSubCategoryScreenState extends State<ConsumerGeneralSubCat
               (context, index) => _GeneralSubCategoryCard(
                 category: subCategories[index],
                 mainCategoryId: widget.mainCategoryId,
+                userLocation: widget.userLocation, // تمرير الموقع للكارد
               ),
               childCount: subCategories.length,
             ),
@@ -262,10 +266,12 @@ class _ConsumerGeneralSubCategoryScreenState extends State<ConsumerGeneralSubCat
 class _GeneralSubCategoryCard extends StatelessWidget {
   final CategoryModel category;
   final String mainCategoryId;
+  final LatLng? userLocation; // استقبال الموقع هنا
 
   const _GeneralSubCategoryCard({
     required this.category,
     required this.mainCategoryId,
+    this.userLocation,
   });
 
   @override
@@ -276,8 +282,8 @@ class _GeneralSubCategoryCard extends StatelessWidget {
         arguments: {
           'mainId': mainCategoryId,
           'subId': category.id,
-          'ownerId': null, 
           'subCategoryName': category.name,
+          'userLocation': userLocation, // تمرير الموقع بنجاح للتصفية الجغرافية المتناسقة
         },
       ),
       child: Container(
