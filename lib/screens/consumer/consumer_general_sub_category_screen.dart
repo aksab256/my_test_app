@@ -1,4 +1,4 @@
-// المسار المقترح: lib/screens/consumer/consumer_general_sub_category_screen.dart
+// المسار: lib/screens/consumer/consumer_general_sub_category_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
@@ -13,7 +13,7 @@ import 'package:my_test_app/screens/consumer/ConsumerProductListScreen.dart';
 class ConsumerGeneralSubCategoryScreen extends StatefulWidget {
   final String mainCategoryId;
   final String mainCategoryName;
-  static const routeName = '/general-subcategories'; // مسار جديد مخصص للنسخة العامة
+  static const routeName = '/general-subcategories'; 
 
   const ConsumerGeneralSubCategoryScreen({
     super.key,
@@ -37,10 +37,9 @@ class _ConsumerGeneralSubCategoryScreenState extends State<ConsumerGeneralSubCat
   @override
   void initState() {
     super.initState();
-    // 1. جلب كل الأقسام الفرعية التابعة للقسم الرئيسي بدون التقييد بـ ownerId
+    // جلب كل الأقسام الفرعية التابعة للقسم الرئيسي بناءً على التعديل الجديد للـ mainId
     _subCategoriesFuture = _fetchGeneralSubCategories(widget.mainCategoryId);
     
-    // 2. جلب البانرات العامة فقط التي تخص كل المستخدمين
     _bannersFuture = FirebaseFirestore.instance
         .collection('consumerBanners')
         .where('status', isEqualTo: 'active')
@@ -59,16 +58,17 @@ class _ConsumerGeneralSubCategoryScreenState extends State<ConsumerGeneralSubCat
     });
   }
 
+  // الدالة بعد تعديل اسم الحقل ليتطابق مع الفايربيز الفعلي (mainId)
   Future<List<CategoryModel>> _fetchGeneralSubCategories(String mainCategoryId) async {
     final querySnapshot = await FirebaseFirestore.instance
         .collection('subCategory')
-        .where('mainCategoryId', isEqualTo: mainCategoryId)
+        .where('mainId', isEqualTo: mainCategoryId) // التعديل هنا: mainId بدلاً من mainCategoryId
         .where('status', isEqualTo: 'active')
         .orderBy('order', descending: false)
         .get();
 
     return querySnapshot.docs.map((doc) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data();
       return CategoryModel(
         id: doc.id,
         name: data['name'] ?? 'قسم فرعي غير مسمى',
@@ -98,7 +98,6 @@ class _ConsumerGeneralSubCategoryScreenState extends State<ConsumerGeneralSubCat
         body: CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
-            // 1. شريط الترحيب
             SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(4.w, 4.w, 4.w, 0),
@@ -112,11 +111,7 @@ class _ConsumerGeneralSubCategoryScreenState extends State<ConsumerGeneralSubCat
                 ),
               ),
             ),
-
-            // 2. البانر المتحرك العام
             SliverToBoxAdapter(child: _buildBannerSlider()),
-
-            // 3. شبكة الأقسام الفرعية العامة
             _buildSubCategoriesGrid(),
           ],
         ),
@@ -281,7 +276,7 @@ class _GeneralSubCategoryCard extends StatelessWidget {
         arguments: {
           'mainId': mainCategoryId,
           'subId': category.id,
-          'ownerId': null, // نمرر null هنا لأن العرض عام وليس لتاجر مخصص
+          'ownerId': null, 
           'subCategoryName': category.name,
         },
       ),
