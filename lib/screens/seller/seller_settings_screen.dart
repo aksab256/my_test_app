@@ -1,10 +1,12 @@
 // lib/screens/seller/seller_settings_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:math';
 import 'package:sizer/sizer.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -28,6 +30,7 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
   final _auth = FirebaseAuth.instance;
   bool _isLoading = true;
   bool _isUploading = false;
+  bool _isGeneratingCode = false;
 
   Map<String, dynamic> sellerDataCache = {};
   List<Map<String, dynamic>> subUsersList = [];
@@ -61,6 +64,32 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
     setState(() => _isLoading = false);
   }
 
+  String _generateRandomCode() {
+    final random = Random();
+    return (100000 + random.nextInt(900000)).toString();
+  }
+
+  Future<void> _generateNewIntegrationCode() async {
+    setState(() => _isGeneratingCode = true);
+    try {
+      String newCode = _generateRandomCode();
+      await _firestore.collection("sellers").doc(widget.currentSellerId).set({
+        'integrationCode': newCode,
+        'integrationCodeCreatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      setState(() {
+        sellerDataCache['integrationCode'] = newCode;
+      });
+
+      _showFloatingAlert("✅ تم توليد كود ربط جديد بنجاح");
+    } catch (e) {
+      _showFloatingAlert("❌ فشل توليد كود الربط", isError: true);
+    } finally {
+      setState(() => _isGeneratingCode = false);
+    }
+  }
+
   Future<void> _loadSellerData() async {
     try {
       final doc = await _firestore.collection("sellers").doc(widget.currentSellerId).get();
@@ -76,6 +105,16 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
           if (_deliveryOptions.contains(val)) {
             _selectedDeliveryDuration = val;
           }
+        }
+
+        // إنشاء كود ربط تلقائي إذا لم يكن موجوداً
+        if (sellerDataCache['integrationCode'] == null || sellerDataCache['integrationCode'].toString().isEmpty) {
+          String generatedCode = _generateRandomCode();
+          await _firestore.collection("sellers").doc(widget.currentSellerId).set({
+            'integrationCode': generatedCode,
+            'integrationCodeCreatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+          sellerDataCache['integrationCode'] = generatedCode;
         }
       }
     } catch (e) {
@@ -293,6 +332,11 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
                   children: [
                     _buildLogoHeader(logoUrl),
                     SizedBox(height: 4.h),
+                    
+                    // 🔗 كارت كود الربط مع الأنظمة الخارجية / ERP
+                    _buildIntegrationCodeCard(),
+                    SizedBox(height: 3.h),
+
                     _buildSectionTitle("بيانات العمل"),
                     _buildModernField("اسم النشاط", _merchantNameController, Icons.storefront),
                     _buildReadOnlyField("نوع النشاط", sellerDataCache['businessType'] ?? 'غير محدد', Icons.category),
@@ -339,6 +383,76 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
   }
 
   // --- المكونات المساعدة (UI Helpers) ---
+
+  Widget _buildIntegrationCodeCard() {
+    String currentCode = sellerDataCache['integrationCode'] ?? 'غير متوفر';
+
+    return Container(
+      padding: EdgeInsets.all(4.w),
+      decoration: BoxDecoration(
+        color: const Color(0xfff8f9fa),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: primaryColor.withOpacity(0.3), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.qr_code_scanner, color: primaryColor, size: 20.sp),
+              SizedBox(width: 2.w),
+              Text(
+                "كود الربط مع نظام ERP",
+                style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo', color: Colors.black87),
+              ),
+            ],
+          ),
+          SizedBox(height: 1.h),
+          Text(
+            "استخدم هذا الكود المكون من 6 أرقام لتوصيل حساب متجرك بنظام إدارة موارد المؤسسة (ERP) لإدارة العهدة والطلبات اللوجستية.",
+            style: TextStyle(fontSize: 10.sp, color: Colors.grey[600], fontFamily: 'Cairo', height: 1.4),
+          ),
+          SizedBox(height: 2.h),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.5.h),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xffe9ecef)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                SelectableText(
+                  currentCode,
+                  style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold, letterSpacing: 4, color: primaryColor, fontFamily: 'Cairo'),
+                ),
+                Row(
+                  children: [
+                    IconButton(
+                      tooltip: "نسخ الكود",
+                      icon: const Icon(Icons.copy_rounded, color: primaryColor),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: currentCode));
+                        _showFloatingAlert("📋 تم نسخ كود الربط إلى الحافظة");
+                      },
+                    ),
+                    IconButton(
+                      tooltip: "إعادة توليد كود جديد",
+                      icon: _isGeneratingCode
+                          ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: primaryColor, strokeWidth: 2))
+                          : const Icon(Icons.refresh_rounded, color: Colors.blueGrey),
+                      onPressed: _isGeneratingCode ? null : _generateNewIntegrationCode,
+                    ),
+                  ],
+                )
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildDeliveryDurationDropdown() {
     return Padding(
