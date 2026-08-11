@@ -1,432 +1,191 @@
-// lib/screens/seller/seller_settings_screen.dart
+// lib/screens/my_details_screen.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:sizer/sizer.dart';
-import 'package:permission_handler/permission_handler.dart';
 
-// 🎯 الألوان والثوابت المعتمدة
-const Color primaryColor = Color(0xff28a745);
+// 🟢 الألوان المعتمدة للهوية البصرية
+const Color _primaryColor = Color(0xFF2c3e50);
+const Color _accentColor = Color(0xFF4CAF50);
+const Color _deleteColor = Color(0xFFE74C3C);
 
-// 🎯 معرفات كلوديناري النهائية
-const String CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dgmmx6jbu/image/upload";
-const String UPLOAD_PRESET = "commerce"; 
-
-class SellerSettingsScreen extends StatefulWidget {
-  final String currentSellerId;
-  const SellerSettingsScreen({super.key, required this.currentSellerId});
+class MyDetailsScreen extends StatefulWidget {
+  const MyDetailsScreen({super.key});
+  static const routeName = '/myDetails';
 
   @override
-  State<SellerSettingsScreen> createState() => _SellerSettingsScreenState();
+  State<MyDetailsScreen> createState() => _MyDetailsScreenState();
 }
 
-class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
-  final _firestore = FirebaseFirestore.instance;
-  final _auth = FirebaseAuth.instance;
+class _MyDetailsScreenState extends State<MyDetailsScreen> {
+  Map<String, dynamic>? _userData;
   bool _isLoading = true;
-  bool _isUploading = false;
-  bool _isCodeObscured = true; // التحكم في إخفاء/إظهار الكود بالنجوم
+  bool _isUpdating = false;
 
-  Map<String, dynamic> sellerDataCache = {};
-  List<Map<String, dynamic>> subUsersList = [];
-
-  final _merchantNameController = TextEditingController();
-  final _minOrderTotalController = TextEditingController();
-  final _deliveryFeeController = TextEditingController();
-  final _subUserPhoneController = TextEditingController();
-
-  String _selectedSubUserRole = 'read_only';
-  
-  // الحقل الجديد لـ "مدة التوصيل"
-  String? _selectedDeliveryDuration; 
-  final List<String> _deliveryOptions = [
-    '24 ساعة',
-    '48 ساعة',
-    '72 ساعة',
-    'أسبوع',
-  ];
+  late TextEditingController _nameController;
+  late TextEditingController _addressController;
 
   @override
   void initState() {
     super.initState();
-    _refreshData();
+    _nameController = TextEditingController();
+    _addressController = TextEditingController();
+    _fetchProfile();
   }
 
-  Future<void> _refreshData() async {
-    setState(() => _isLoading = true);
-    await _loadSellerData();
-    await _loadSubUsersFromCollection();
-    setState(() => _isLoading = false);
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _addressController.dispose();
+    super.dispose();
   }
 
-  Future<void> _loadSellerData() async {
+  Future<void> _fetchProfile() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
     try {
-      final doc = await _firestore.collection("sellers").doc(widget.currentSellerId).get();
-      if (doc.exists) {
-        sellerDataCache = doc.data()!;
-        _merchantNameController.text = sellerDataCache['merchantName'] ?? '';
-        _minOrderTotalController.text = (sellerDataCache['minOrderTotal'] ?? 0.0).toString();
-        _deliveryFeeController.text = (sellerDataCache['deliveryFee'] ?? 0.0).toString();
-        
-        // جلب قيمة مدة التوصيل بأمان
-        if (sellerDataCache.containsKey('deliveryDuration')) {
-          String? val = sellerDataCache['deliveryDuration'];
-          if (_deliveryOptions.contains(val)) {
-            _selectedDeliveryDuration = val;
-          }
-        }
+      DocumentSnapshot docSnap =
+          await FirebaseFirestore.instance.collection('consumers').doc(user.uid).get();
+      String col = 'consumers';
+
+      if (!docSnap.exists) {
+        col = 'users';
+        docSnap = await FirebaseFirestore.instance.collection(col).doc(user.uid).get();
       }
-    } catch (e) {
-      debugPrint("Error loading seller data: $e");
-    }
-  }
 
-  Future<void> _loadSubUsersFromCollection() async {
-    try {
-      final snapshot = await _firestore
-          .collection("subUsers")
-          .where("parentSellerId", isEqualTo: widget.currentSellerId)
-          .get();
-      setState(() {
-        subUsersList = snapshot.docs.map((doc) => doc.data()).toList();
-      });
-    } catch (e) {
-      debugPrint("Error loading sub-users: $e");
-    }
-  }
-
-  Future<void> _updateSettings() async {
-    setState(() => _isLoading = true);
-    try {
-      await _firestore.collection("sellers").doc(widget.currentSellerId).update({
-        'merchantName': _merchantNameController.text.trim(),
-        'minOrderTotal': double.tryParse(_minOrderTotalController.text) ?? 0.0,
-        'deliveryFee': double.tryParse(_deliveryFeeController.text) ?? 0.0,
-        'deliveryDuration': _selectedDeliveryDuration, // تحديث الحقل الجديد
-      });
-      _showFloatingAlert("✅ تم تحديث بيانات العمل بنجاح");
-    } catch (e) {
-      _showFloatingAlert("❌ فشل التحديث: تأكد من الاتصال بالإنترنت", isError: true);
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _uploadLogo() async {
-    PermissionStatus status = await Permission.photos.status;
-    
-    if (status.isDenied || status.isPermanentlyDenied || status.isRestricted) {
-      final bool? proceed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Row(
-            children: [
-              Icon(Icons.photo_library, color: primaryColor, size: 22.sp),
-              SizedBox(width: 8.sp),
-              Text("تحديث شعار المتجر", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14.sp)),
-            ],
-          ),
-          content: Text(
-            "نحتاج للوصول إلى معرض الصور لاختيار شعار متجرك. سيتم عرض الشعار للمستهلكين لتمييز علامتك التجارية وضمان هوية النشاط.",
-            style: TextStyle(fontFamily: 'Cairo', fontSize: 12.sp, height: 1.5),
-            textAlign: TextAlign.right,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text("إلغاء", style: TextStyle(fontFamily: 'Cairo', fontSize: 12.sp, color: Colors.grey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-              onPressed: () => Navigator.pop(context, true),
-              child: Text("موافق", style: TextStyle(fontFamily: 'Cairo', fontSize: 12.sp, color: Colors.white)),
-            ),
-          ],
-        ),
-      );
-
-      if (proceed != true) return;
-    }
-
-    final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
-
-    if (image == null) return;
-    setState(() => _isUploading = true);
-    try {
-      var request = http.MultipartRequest('POST', Uri.parse(CLOUDINARY_URL));
-      request.fields['upload_preset'] = UPLOAD_PRESET;
-      request.fields['folder'] = 'merchant_logos'; 
-      request.files.add(await http.MultipartFile.fromPath('file', image.path));
-
-      var res = await request.send();
-      if (res.statusCode == 200) {
-        var responseData = await res.stream.bytesToString();
-        var jsonRes = json.decode(responseData);
-        String newUrl = jsonRes['secure_url'];
-
-        await _firestore.collection("sellers").doc(widget.currentSellerId).update({
-          'logoUrl': newUrl
+      if (docSnap.exists) {
+        final data = docSnap.data() as Map<String, dynamic>;
+        setState(() {
+          _userData = data;
+          _userData?['activeCollection'] = col;
+          _nameController.text = data['fullname'] ?? data['name'] ?? '';
+          _addressController.text = data['address'] ?? '';
+          _isLoading = false;
         });
-
-        await _refreshData();
-        _showFloatingAlert("✅ تم تحديث الشعار بنجاح");
-      } else {
-        _showFloatingAlert("❌ فشل رفع الصورة (كود الخطأ: ${res.statusCode})", isError: true);
       }
     } catch (e) {
-      _showFloatingAlert("❌ حدث خطأ أثناء الرفع: $e", isError: true);
-    } finally {
-      setState(() => _isUploading = false);
-    }
-  }
-
-  Future<void> _deleteAccount() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('⚠️ حذف الحساب', textAlign: TextAlign.right, style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-        content: const Text(
-          'هل أنت متأكد من رغبتك في حذف حسابك؟ سيتم إخفاء نشاطك التجاري وستفقد الوصول للتطبيق خلال 14 يوماً.',
-          textAlign: TextAlign.right,
-          style: TextStyle(fontFamily: 'Cairo'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('تأكيد الحذف', style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() => _isLoading = true);
-    try {
-      await _firestore.collection("sellers").doc(widget.currentSellerId).update({
-        'isDeleted': true,
-        'deletedAt': FieldValue.serverTimestamp(),
-        'status': 'delete_requested',
-      });
-
-      await _auth.signOut();
-      if (mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-      }
-    } catch (e) {
-      _showFloatingAlert("❌ حدث خطأ أثناء معالجة الطلب", isError: true);
-    } finally {
       setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _addSubUser() async {
-    final phone = _subUserPhoneController.text.trim();
-    if (phone.isEmpty) {
-      _showFloatingAlert("⚠️ يرجى إدخال رقم هاتف الموظف", isError: true);
-      return;
-    }
+  Future<void> _updateProfile() async {
+    if (_nameController.text.isEmpty) return;
 
-    setState(() => _isLoading = true);
+    setState(() => _isUpdating = true);
+    final user = FirebaseAuth.instance.currentUser;
+    final col = _userData?['activeCollection'];
+
     try {
-      String fakeEmail = "$phone@aksab.com";
-      try {
-        await _auth.createUserWithEmailAndPassword(email: fakeEmail, password: "123456");
-      } catch (_) {}
-
-      final subData = {
-        'phone': phone,
-        'email': fakeEmail,
-        'role': _selectedSubUserRole,
-        'parentSellerId': widget.currentSellerId,
-        'mustChangePassword': true,
-        'addedAt': FieldValue.serverTimestamp(),
-        'merchantName': sellerDataCache['merchantName'] ?? 'متجر',
+      Map<String, dynamic> updates = {
+        'address': _addressController.text.trim(),
       };
 
-      await _firestore.collection("subUsers").doc(phone).set(subData, SetOptions(merge: true));
-      _subUserPhoneController.clear();
-      await _refreshData();
-      _showFloatingAlert("✅ تمت إضافة الموظف بنجاح.\nكلمة المرور: 123456");
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
+      if (col == 'consumers') {
+        updates['fullname'] = _nameController.text.trim();
+      } else {
+        updates['name'] = _nameController.text.trim();
+      }
 
-  Future<void> _removeSubUser(String phone) async {
-    try {
-      await _firestore.collection("subUsers").doc(phone).delete();
-      await _refreshData();
-      _showFloatingAlert("🗑️ تم حذف الموظف بنجاح");
+      await FirebaseFirestore.instance.collection(col!).doc(user!.uid).update(updates);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم تحديث البيانات بنجاح'), backgroundColor: _accentColor),
+      );
+      _fetchProfile();
     } catch (e) {
-      _showFloatingAlert("❌ خطأ أثناء الحذف", isError: true);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('فشل التحديث')));
+    } finally {
+      setState(() => _isUpdating = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final String? logoUrl = sellerDataCache['logoUrl'];
-
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.grey[50],
         appBar: AppBar(
-          elevation: 0,
-          title: Text('إعدادات الحساب', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16.sp)),
-          backgroundColor: primaryColor,
+          title: const Text('الملف الشخصي',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          backgroundColor: _primaryColor,
           foregroundColor: Colors.white,
           centerTitle: true,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
         ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: primaryColor))
-            : SingleChildScrollView(
-                padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 2.h),
-                child: Column(
-                  children: [
-                    _buildLogoHeader(logoUrl),
-                    SizedBox(height: 4.h),
-                    
-                    // 🔗 كارت عرض كود ربط النظام الخارجي / ERP
-                    _buildIntegrationCodeCard(),
-                    SizedBox(height: 3.h),
-
-                    _buildSectionTitle("بيانات العمل"),
-                    _buildModernField("اسم النشاط", _merchantNameController, Icons.storefront),
-                    _buildReadOnlyField("نوع النشاط", sellerDataCache['businessType'] ?? 'غير محدد', Icons.category),
-                    
-                    // حقل مدة التوصيل الجديد
-                    _buildDeliveryDurationDropdown(),
-
-                    Row(
-                      children: [
-                        Expanded(child: _buildModernField("الحد الأدنى", _minOrderTotalController, Icons.shopping_basket, isNum: true)),
-                        SizedBox(width: 3.w),
-                        Expanded(child: _buildModernField("التوصيل", _deliveryFeeController, Icons.local_shipping, isNum: true)),
-                      ],
-                    ),
-                    _buildMainButton("حفظ الإعدادات", Icons.check_circle, _updateSettings),
-                    Padding(
-                      padding: EdgeInsets.symmetric(vertical: 3.h),
-                      child: const Divider(color: Color(0xfff1f1f1), thickness: 2),
-                    ),
-                    _buildSectionTitle("الموظفين والصلاحيات"),
-                    _buildModernField("رقم هاتف الموظف", _subUserPhoneController, Icons.phone_android, isNum: true),
-                    _buildRoleDropdown(),
-                    SizedBox(height: 1.h),
-                    _buildMainButton("إضافة موظف جديد", Icons.person_add, _addSubUser, color: Colors.blueGrey[800]!),
-                    SizedBox(height: 3.h),
-                    _buildSubUsersList(),
-                    
-                    SizedBox(height: 4.h),
-                    const Divider(color: Colors.redAccent, thickness: 0.5),
-                    TextButton.icon(
-                      onPressed: _deleteAccount,
-                      icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
-                      label: const Text(
-                        "حذف حساب التاجر نهائياً",
-                        style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
-                      ),
-                    ),
-                    SizedBox(height: 5.h),
-                  ],
+        body: SafeArea(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator(color: _accentColor))
+              : SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      _buildHeaderCard(),
+                      const SizedBox(height: 25),
+                      _buildEditableSection(),
+                      const SizedBox(height: 25),
+                      _buildReadOnlySection(),
+                      const SizedBox(height: 30),
+                      _buildActionButtons(),
+                      const SizedBox(height: 10),
+                    ],
+                  ),
                 ),
-              ),
+        ),
       ),
     );
   }
 
-  // --- المكونات المساعدة (UI Helpers) ---
-
-  Widget _buildIntegrationCodeCard() {
-    String rawCode = sellerDataCache['temp_link_code'] ?? sellerDataCache['integrationCode'] ?? '';
-    bool hasCode = rawCode.isNotEmpty;
-    String displayCode = hasCode 
-        ? (_isCodeObscured ? '*' * rawCode.length : rawCode)
-        : 'غير متوفر';
-
+  Widget _buildHeaderCard() {
+    bool isConsumer = _userData?['activeCollection'] == 'consumers';
     return Container(
-      padding: EdgeInsets.all(4.w),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xfff8f9fa),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: primaryColor.withOpacity(0.3), width: 1.5),
+        gradient: LinearGradient(colors: [_primaryColor, _primaryColor.withOpacity(0.8)]),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+              color: _primaryColor.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Icon(Icons.qr_code_scanner, color: primaryColor, size: 20.sp),
-              SizedBox(width: 2.w),
-              Text(
-                "كود الربط مع نظام ERP",
-                style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo', color: Colors.black87),
-              ),
-            ],
-          ),
-          SizedBox(height: 1.h),
-          Text(
-            "استخدم هذا الكود المرسل لإقران حسابك بنظام ERP الخارجي لمزامنة البيانات والطلبات.",
-            style: TextStyle(fontSize: 10.sp, color: Colors.grey[600], fontFamily: 'Cairo', height: 1.4),
-          ),
-          SizedBox(height: 2.h),
           Container(
-            padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.5.h),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xffe9ecef)),
+            padding: const EdgeInsets.all(4),
+            decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
+            child: const CircleAvatar(
+              radius: 30,
+              backgroundColor: Colors.white,
+              child: Icon(Icons.person, size: 35, color: _primaryColor),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          ),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: SelectableText(
-                    displayCode,
-                    style: TextStyle(
-                      fontSize: 16.sp, 
-                      fontWeight: FontWeight.bold, 
-                      letterSpacing: _isCodeObscured && hasCode ? 3 : 1.5, 
-                      color: primaryColor, 
-                      fontFamily: 'Cairo'
+                Text(_nameController.text,
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                if (isConsumer)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 5),
+                    child: Row(
+                      children: [
+                        // 💡 [التصحيح التقني]: استخدام FaIcon بدلاً من Icon لتوافق FontAwesome 11
+                        const FaIcon(FontAwesomeIcons.coins, color: Colors.amber, size: 14),
+                        const SizedBox(width: 6),
+                        Text('رصيد النقاط: ${_userData?['loyaltyPoints'] ?? 0}',
+                            style: const TextStyle(color: Colors.white, fontSize: 13)),
+                      ],
                     ),
                   ),
-                ),
-                if (hasCode)
-                  Row(
-                    children: [
-                      IconButton(
-                        tooltip: _isCodeObscured ? "إظهار الكود" : "إخفاء الكود",
-                        icon: Icon(
-                          _isCodeObscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                          color: Colors.blueGrey,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _isCodeObscured = !_isCodeObscured;
-                          });
-                        },
-                      ),
-                      IconButton(
-                        tooltip: "نسخ الكود",
-                        icon: const Icon(Icons.copy_rounded, color: primaryColor),
-                        onPressed: () {
-                          Clipboard.setData(ClipboardData(text: rawCode));
-                          _showFloatingAlert("📋 تم نسخ كود الربط إلى الحافظة");
-                        },
-                      ),
-                    ],
-                  )
               ],
             ),
           ),
@@ -435,137 +194,117 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
     );
   }
 
-  Widget _buildDeliveryDurationDropdown() {
-    return Padding(
-      padding: EdgeInsets.only(bottom: 2.h),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: EdgeInsets.only(right: 2.w, bottom: 0.5.h),
-            child: Text("مدة التوصيل المتوقعة", style: TextStyle(fontSize: 11.sp, color: Colors.grey[600], fontFamily: 'Cairo')),
-          ),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 0.5.h),
-            decoration: BoxDecoration(
-              color: const Color(0xfff8f9fa),
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: const Color(0xffe9ecef)),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _selectedDeliveryDuration,
-                hint: const Text("اختر مدة التوصيل", style: TextStyle(fontFamily: 'Cairo')),
-                isExpanded: true,
-                icon: const Icon(Icons.timer_outlined, color: primaryColor),
-                items: _deliveryOptions.map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-                  );
-                }).toList(),
-                onChanged: (newValue) {
-                  setState(() => _selectedDeliveryDuration = newValue);
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLogoHeader(String? logoUrl) {
-    return Stack(
-      alignment: Alignment.bottomRight,
+  Widget _buildEditableSection() {
+    return _buildSectionContainer(
+      title: 'تعديل البيانات',
+      icon: Icons.edit_note,
       children: [
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: primaryColor.withOpacity(0.2), width: 4),
-          ),
-          child: CircleAvatar(
-            radius: 65,
-            backgroundColor: const Color(0xfff8f9fa),
-            backgroundImage: (logoUrl != null && logoUrl.isNotEmpty) ? NetworkImage(logoUrl) : null,
-            child: (logoUrl == null || logoUrl.isEmpty) ? Icon(Icons.store, size: 50, color: Colors.grey[400]) : null,
+        _buildTextField('الاسم الكامل', _nameController, Icons.person_outline),
+        _buildTextField('عنوان التوصيل', _addressController, Icons.location_on_outlined),
+        const SizedBox(height: 5),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isUpdating ? null : _updateProfile,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _accentColor,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
+            ),
+            child: _isUpdating
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Text('حفظ التعديلات',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ),
-        CircleAvatar(
-          backgroundColor: primaryColor,
-          radius: 20,
-          child: _isUploading
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : IconButton(
-                  icon: const Icon(Icons.camera_alt, size: 20, color: Colors.white),
-                  onPressed: _uploadLogo,
-                ),
-        )
       ],
     );
   }
 
-  Widget _buildRoleDropdown() {
-    return Container(
-      margin: EdgeInsets.only(bottom: 2.h),
-      padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 0.5.h),
-      decoration: BoxDecoration(
-        color: const Color(0xfff8f9fa),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: const Color(0xffe9ecef)),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _selectedSubUserRole,
-          isExpanded: true,
-          icon: const Icon(Icons.arrow_drop_down, color: primaryColor),
-          items: const [
-            DropdownMenuItem(value: 'full', child: Text('صلاحية كاملة (مدير)')),
-            DropdownMenuItem(value: 'read_only', child: Text('عرض فقط (موظف)')),
-          ],
-          onChanged: (v) => setState(() => _selectedSubUserRole = v!),
-        ),
-      ),
+  Widget _buildReadOnlySection() {
+    return _buildSectionContainer(
+      title: 'بيانات الحساب الأساسية',
+      icon: Icons.security,
+      children: [
+        _buildReadOnlyField('رقم الهاتف', _userData?['phone'] ?? 'غير متوفر', Icons.phone_android),
+        _buildReadOnlyField(
+            'البريد الإلكتروني', _userData?['email'] ?? 'غير متوفر', Icons.alternate_email),
+        _buildReadOnlyField(
+            'عضو منذ',
+            _userData?['createdAt'] != null
+                ? (_userData!['createdAt'] as Timestamp).toDate().toString().split(' ')[0]
+                : 'غير متوفر',
+            Icons.event_available),
+      ],
     );
   }
 
-  Widget _buildSubUsersList() {
-    if (subUsersList.isEmpty) return const SizedBox();
+  Widget _buildActionButtons() {
     return Column(
-      children: subUsersList.map((u) => Container(
-            margin: EdgeInsets.only(bottom: 1.5.h),
-            decoration: BoxDecoration(
-                color: const Color(0xfff8f9fa),
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: const Color(0xffe9ecef))),
-            child: ListTile(
-              leading: const CircleAvatar(backgroundColor: Colors.blueGrey, child: Icon(Icons.person, color: Colors.white)),
-              title: Text(u['phone'] ?? '', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.sp)),
-              subtitle: Text(u['role'] == 'full' ? 'صلاحية كاملة' : 'عرض فقط', style: TextStyle(fontSize: 11.sp)),
-              trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                  onPressed: () => _removeSubUser(u['phone'])),
-            ),
-          )).toList(),
+      children: [
+        OutlinedButton.icon(
+          onPressed: () => _showDeleteDialog(),
+          icon: const Icon(Icons.no_accounts, color: _deleteColor, size: 18),
+          label: const Text('طلب إغلاق الحساب نهائياً', style: TextStyle(color: _deleteColor)),
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: _deleteColor),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        const SizedBox(height: 15),
+        const Text('منصة أسواق أكسب - v2.0.2',
+            style: TextStyle(color: Colors.grey, fontSize: 11)),
+      ],
     );
   }
 
-  Widget _buildModernField(String label, TextEditingController ctrl, IconData icon, {bool isNum = false}) {
+  Widget _buildSectionContainer(
+      {required String title, required IconData icon, required List<Widget> children}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 18, color: _accentColor),
+            const SizedBox(width: 8),
+            Text(title,
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, color: _primaryColor, fontSize: 15)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Column(children: children),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTextField(String label, TextEditingController controller, IconData icon) {
     return Padding(
-      padding: EdgeInsets.only(bottom: 2.h),
+      padding: const EdgeInsets.only(bottom: 12),
       child: TextField(
-        controller: ctrl,
-        keyboardType: isNum ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
-        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.sp),
+        controller: controller,
+        style: const TextStyle(fontSize: 14),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(color: Colors.grey, fontWeight: FontWeight.normal),
-          prefixIcon: Icon(icon, color: primaryColor, size: 20),
+          labelStyle: const TextStyle(color: Colors.grey, fontSize: 13),
+          prefixIcon: Icon(icon, color: _accentColor, size: 20),
           filled: true,
-          fillColor: const Color(0xfff8f9fa),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: const BorderSide(color: Color(0xffe9ecef))),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: const BorderSide(color: primaryColor, width: 1.5)),
+          fillColor: Colors.grey[50],
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
         ),
       ),
     );
@@ -573,74 +312,87 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
 
   Widget _buildReadOnlyField(String label, String value, IconData icon) {
     return Padding(
-      padding: EdgeInsets.only(bottom: 2.h),
-      child: TextField(
-        controller: TextEditingController(text: value),
-        enabled: false,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon, color: Colors.grey, size: 20),
-          filled: true,
-          fillColor: const Color(0xfff1f3f5),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMainButton(String label, IconData icon, VoidCallback onPressed, {Color color = primaryColor}) {
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, color: Colors.white, size: 20),
-      label: Text(label, style: TextStyle(color: Colors.white, fontSize: 14.sp, fontWeight: FontWeight.bold)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        minimumSize: Size(double.infinity, 7.h),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        elevation: 0,
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Padding(
-        padding: EdgeInsets.only(bottom: 2.h),
-        child: Text(title, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w900, color: Colors.black87)),
-      ),
-    );
-  }
-
-  void _showFloatingAlert(String message, {bool isError = false}) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: EdgeInsets.all(6.w),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration:
+                BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
+            child: Icon(icon, size: 18, color: _primaryColor),
+          ),
+          const SizedBox(width: 15),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(isError ? Icons.error_outline : Icons.check_circle_outline, color: isError ? Colors.red : primaryColor, size: 50.sp),
-              SizedBox(height: 2.h),
-              Text(message, textAlign: TextAlign.center, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.bold, height: 1.5)),
-              SizedBox(height: 3.h),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: isError ? Colors.red : primaryColor,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: EdgeInsets.symmetric(vertical: 1.5.h)),
-                  child: const Text("استمرار", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
-              )
+              Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+              Text(value,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.bold, color: _primaryColor)),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
+
+  void _showDeleteDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Text('طلب حذف الحساب',
+            style: TextStyle(fontWeight: FontWeight.bold, color: _deleteColor)),
+        content: const Text(
+          'سيتم البدء في إجراءات حذف حسابك وكافة بياناتك نهائياً. سيتم تسجيل خروجك الآن ومعالجة الطلب خلال 48 ساعة. هل أنت متأكد؟',
+          style: TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('تراجع', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context); // إغلاق الديالوج
+              await _handleDeleteAccount(); // تنفيذ الحذف الفعلي
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: _deleteColor, elevation: 0),
+            child: const Text('تأكيد الحذف', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleDeleteAccount() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final col = _userData?['activeCollection'];
+
+    if (user == null || col == null) return;
+    try {
+      // 1. تحديث حالة الحساب في Firestore ليعرف النظام أنه "قيد الحذف"
+      await FirebaseFirestore.instance.collection(col).doc(user.uid).update({
+        'status': 'delete_requested',
+        'deletionDate': FieldValue.serverTimestamp(),
+      });
+
+      // 2. تسجيل الخروج فوراً (شرط أساسي لجوجل ليشعر المستخدم ببدء الإجراء)
+      await FirebaseAuth.instance.signOut();
+
+      // 3. التوجيه لشاشة تسجيل الدخول
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم استلام طلبك وسيتم حذف البيانات نهائياً')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('حدث خطأ، حاول مرة أخرى')));
+      }
+    }
+  }
 }
+
