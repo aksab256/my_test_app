@@ -18,7 +18,7 @@ class InvoiceScreen extends StatefulWidget {
 
 class _InvoiceScreenState extends State<InvoiceScreen> {
   final SellerDataSource _sellerDataSource = SellerDataSource();
-  SellerModel? _sellerDetails; // تغييرها لتقبل null للتأكد من حالة التحميل
+  SellerModel? _sellerDetails;
   bool _isLoadingSeller = true;
   String _errorMessage = '';
 
@@ -30,7 +30,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
   Future<void> _fetchSellerDetails() async {
     try {
-      // 🎯 التأكد من إرسال الـ sellerId الموجود داخل موديل الطلب
       final details = await _sellerDataSource.getSellerDetails(widget.order.sellerId);
       
       if (mounted) {
@@ -58,7 +57,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     final font = await PdfGoogleFonts.cairoRegular();
     final boldFont = await PdfGoogleFonts.cairoBold();
     
-    // استخدام البيانات المجلوبة أو اسم افتراضي في حالة الطوارئ
     final String storeName = _sellerDetails?.name ?? "متجر موثق";
     final String storePhone = _sellerDetails?.phone ?? "غير مسجل";
     final String storeAddress = _sellerDetails?.address ?? "غير محدد";
@@ -70,7 +68,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         theme: pw.ThemeData.withFont(base: font, bold: boldFont),
         margin: const pw.EdgeInsets.all(25),
 
-        // رأس الصفحات (تكراري في أعلى كل صفحة)
         header: (pw.Context context) {
           return pw.Container(
             margin: const pw.EdgeInsets.only(bottom: 10),
@@ -94,7 +91,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
           );
         },
 
-        // ذيل الصفحات (تكراري في أسفل كل صفحة)
         footer: (pw.Context context) {
           return pw.Column(
             mainAxisSize: pw.MainAxisSize.min,
@@ -111,10 +107,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
           );
         },
 
-        // محتوى الفاتورة الذي يتمدد تلقائياً عبر صفحات متعددة
         build: (pw.Context context) {
           return [
-            // ترويسة الفاتورة ومعلومات المتجر
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
@@ -150,7 +144,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             pw.Divider(thickness: 2, color: PdfColors.green800),
             pw.SizedBox(height: 20),
 
-            // بيانات العميل
             pw.Text('فاتورة إلى:', style: pw.TextStyle(font: boldFont, fontSize: 12, color: PdfColors.grey700)),
             pw.SizedBox(height: 5),
             pw.Container(
@@ -172,7 +165,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             ),
             pw.SizedBox(height: 25),
 
-            // جدول الأصناف الممتد والآمن للصفحات المتعددة
             pw.TableHelper.fromTextArray(
               headers: ['اسم الصنف', 'الكمية', 'سعر الوحدة', 'الإجمالي'],
               data: widget.order.items.map((item) => [
@@ -194,7 +186,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             ),
             pw.SizedBox(height: 25),
 
-            // الرمز الملخص وخانة المجاميع
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -245,6 +236,15 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     );
   }
 
+  // دالة المشاركة المباشرة لكل الصفحات
+  Future<void> _shareFullPdf() async {
+    final pdfBytes = await _buildA4Invoice(PdfPageFormat.a4);
+    await Printing.sharePdf(
+      bytes: pdfBytes,
+      filename: "Aksab_Invoice_${widget.order.id.substring(0, 8)}.pdf",
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -252,6 +252,14 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         title: const Text('معاينة الفاتورة للطباعة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF28A745),
         centerTitle: true,
+        actions: [
+          if (!_isLoadingSeller && _errorMessage.isEmpty)
+            IconButton(
+              icon: const Icon(Icons.share),
+              tooltip: 'مشاركة الفاتورة كاملة',
+              onPressed: _shareFullPdf,
+            ),
+        ],
       ),
       body: SafeArea(
         child: _isLoadingSeller
