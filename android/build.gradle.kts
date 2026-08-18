@@ -5,7 +5,7 @@ buildscript {
     }
     dependencies {
         // ✅ لازم يكون 8.9.1 عشان يتوافق مع المكتبات الجديدة
-        classpath("com.android.tools.build:gradle:8.9.1") 
+        classpath("com.android.tools.build:gradle:8.11.1") 
         classpath("com.google.gms:google-services:4.4.1")
         classpath("com.google.firebase:firebase-crashlytics-gradle:3.0.2")
     }
