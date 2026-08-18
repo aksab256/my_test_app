@@ -44,6 +44,7 @@ class ProductOfferModel {
   final int? minOrder;
   final int? maxOrder;
   final int? lowStockThreshold;
+  final double? offerPrice; // 🎯 الحقل الجديد لسعر الخصم/العرض
   final String status;
   final Timestamp? createdAt;
 
@@ -59,6 +60,7 @@ class ProductOfferModel {
     this.minOrder,
     this.maxOrder,
     this.lowStockThreshold,
+    this.offerPrice, // 🎯 الممر المباشر في الـ Constructor
     this.status = "active",
     this.createdAt,
   });
@@ -79,6 +81,7 @@ class ProductOfferModel {
       minOrder: data['minOrder'] as int?,
       maxOrder: data['maxOrder'] as int?,
       lowStockThreshold: data['lowStockThreshold'] as int?,
+      offerPrice: (data['offerPrice'] as num?)?.toDouble(), // 🎯 قراءة سعر العرض
       status: data['status'] ?? 'active',
       createdAt: data['createdAt'] as Timestamp?,
     );
@@ -100,6 +103,7 @@ class ProductOfferModel {
     if (minOrder != null) data['minOrder'] = minOrder;
     if (maxOrder != null) data['maxOrder'] = maxOrder;
     if (lowStockThreshold != null) data['lowStockThreshold'] = lowStockThreshold;
+    if (offerPrice != null) data['offerPrice'] = offerPrice; // 🎯 حفظ سعر العرض إن وجد (ولن يحفظ إذا كان null)
 
     return data;
   }
@@ -108,4 +112,3 @@ class ProductOfferModel {
     imageUrl = url;
   }
 }
-

@@ -24,7 +24,10 @@ class _AddOfferScreenState extends State<AddOfferScreen> {
   final _quantityController = TextEditingController();
   final _minOrderController = TextEditingController(); 
   final _maxOrderController = TextEditingController();
-  final _lowStockController = TextEditingController(); // 🎯 الحقل الجديد المضاف
+  final _lowStockController = TextEditingController();
+
+  // 🎯 الحقل الاختياري الجديد لسعر العرض التخفيضي فقط
+  final _offerPriceController = TextEditingController();
 
   // متغيرات البيانات
   List<SelectItemModel> _mainCategories = [];
@@ -58,7 +61,8 @@ class _AddOfferScreenState extends State<AddOfferScreen> {
     _quantityController.dispose();
     _minOrderController.dispose();
     _maxOrderController.dispose();
-    _lowStockController.dispose(); // 🎯 إغلاق الـ Controller الجديد
+    _lowStockController.dispose();
+    _offerPriceController.dispose(); // 🎯 إغلاق الـ Controller الجديد
     super.dispose();
   }
 
@@ -146,6 +150,14 @@ class _AddOfferScreenState extends State<AddOfferScreen> {
 
     if (selectedProduct == null) return;
 
+    final double mainPrice = double.parse(_priceController.text);
+    final double? offerPrice = double.tryParse(_offerPriceController.text);
+    
+    if (offerPrice != null && offerPrice >= mainPrice) {
+      _showMessage('سعر العرض الخاص يجب أن يكون أقل من السعر الأصلي للوحدة.', false);
+      return;
+    }
+
     try {
       setState(() => _isLoading = true);
 
@@ -159,14 +171,16 @@ class _AddOfferScreenState extends State<AddOfferScreen> {
         units: [
           OfferUnitModel(
             unitName: _selectedUnitName!,
-            price: double.parse(_priceController.text),
+            price: mainPrice,
             availableStock: int.parse(_quantityController.text),
           ),
         ],
         minOrder: int.tryParse(_minOrderController.text),
         maxOrder: int.tryParse(_maxOrderController.text),
-        // 🎯 الحقل الجديد يُرسل هنا للقاعدة
-        lowStockThreshold: int.tryParse(_lowStockController.text) ?? 5, 
+        lowStockThreshold: int.tryParse(_lowStockController.text) ?? 5,
+        
+        // 🎯 يتم إرسال سعر العرض كـ null إن لم يُدخل التاجر قيمة (لضمان عدم التخزين بقيمة 0)
+        offerPrice: offerPrice,
       );
 
       await _dataSource.addOffer(offerModel);
@@ -178,7 +192,8 @@ class _AddOfferScreenState extends State<AddOfferScreen> {
       _quantityController.clear();
       _minOrderController.clear();
       _maxOrderController.clear();
-      _lowStockController.clear(); // تنظيف الحقل الجديد
+      _lowStockController.clear();
+      _offerPriceController.clear();
 
       setState(() {
         _selectedProductId = null;
@@ -317,10 +332,18 @@ class _AddOfferScreenState extends State<AddOfferScreen> {
                 icon: Icons.monetization_on_rounded,
                 children: [
                   CustomInputField(
-                    label: 'السعر للوحدة (ج.م)',
+                    label: 'السعر الأصلي للوحدة (ج.م)',
                     controller: _priceController,
                     keyboardType: TextInputType.number,
-                    hintText: 'مثال: 15.5',
+                    hintText: 'مثال: 300',
+                  ),
+                  SizedBox(height: 2.h),
+                  // 🎯 حقل سعر العرض الخصم المضاف حديثاً
+                  CustomInputField(
+                    label: 'سعر العرض/الخصم (اختياري)',
+                    controller: _offerPriceController,
+                    keyboardType: TextInputType.number,
+                    hintText: 'مثال: 270 (اتركه فارغاً إذا لم يوجد خصم)',
                   ),
                   SizedBox(height: 2.h),
                   CustomInputField(
@@ -330,7 +353,6 @@ class _AddOfferScreenState extends State<AddOfferScreen> {
                     hintText: 'مثال: 100',
                   ),
                   SizedBox(height: 2.h),
-                  // 🎯 حقل تحذير المخزون الجديد
                   CustomInputField(
                     label: 'حد التحذير لنقص المخزون',
                     controller: _lowStockController,
@@ -342,7 +364,7 @@ class _AddOfferScreenState extends State<AddOfferScreen> {
 
               _buildStepCard(
                 step: "4",
-                title: "سياسة الطلب (اختياري)",
+                title: "سياسة حدود الطلب (اختياري)",
                 icon: Icons.shopping_bag_rounded,
                 children: [
                   CustomInputField(
@@ -356,7 +378,7 @@ class _AddOfferScreenState extends State<AddOfferScreen> {
                     label: 'الحد الأقصى للطلب (كمية)',
                     controller: _maxOrderController,
                     keyboardType: TextInputType.number,
-                    hintText: 'مثال: 50',
+                    hintText: 'مثال: 50 (أو 1 لو عايز تخليه قطعة واحدة كعرض خاص)',
                   ),
                 ],
               ),
