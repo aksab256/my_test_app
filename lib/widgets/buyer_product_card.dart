@@ -52,6 +52,14 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
     final String imageUrl = widget.productData['imageUrls']?.isNotEmpty == true
         ? widget.productData['imageUrls'][0]
         : '';
+
+    // 🎯 تحديد السعر النهائي: اعتماد offerPrice إذا كان موجوداً وأكبر من 0، وإلا السعر الأصلي
+    final double finalPrice = (offer.offerPrice != null &&
+            (offer.offerPrice is num) &&
+            (offer.offerPrice as num) > 0)
+        ? (offer.offerPrice as num).toDouble()
+        : ((offer.price is num) ? (offer.price as num).toDouble() : 0.0);
+
     try {
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
       await cartProvider.addItemToCart(
@@ -60,7 +68,7 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
         offerId: offer.offerId,
         sellerId: offer.sellerId,
         sellerName: offer.sellerName,
-        price: (offer.price is num) ? offer.price.toDouble() : 0.0, 
+        price: finalPrice, // 🎯 تمرير السعر الخاص المعتمَد للسلة
         unit: offer.unitName,
         unitIndex: offer.unitIndex ?? 0,
         quantityToAdd: qty,
@@ -91,6 +99,12 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
     final availableOffers = offersProvider.availableOffers;
     final hasOffers = availableOffers.isNotEmpty;
 
+    // 🎯 التحقق مما إذا كان هناك أي عرض يحتوي على سعر خاص offerPrice
+    final bool hasSpecialPrice = availableOffers.any((offer) =>
+        offer.offerPrice != null &&
+        (offer.offerPrice is num) &&
+        (offer.offerPrice as num) > 0);
+
     final displayImageUrl = widget.productData['imageUrls']?.isNotEmpty == true
         ? widget.productData['imageUrls'][0]
         : 'https://via.placeholder.com/300';
@@ -99,60 +113,85 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       margin: EdgeInsets.all(4.sp),
-      child: Padding(
-        padding: const EdgeInsets.all(10.0),
-        child: Column(
-          children: [
-            Expanded(
-              child: InkWell(
-                onTap: hasOffers 
-                    ? () => widget.onTap?.call(widget.productId, offersProvider.selectedOffer?.offerId)
-                    : null,
-                child: Image.network(displayImageUrl, fit: BoxFit.contain, width: double.infinity),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              widget.productData['name'] ?? 'منتج غير معروف',
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 13.sp),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: (isLoadingOffers || !hasOffers) 
-                    ? null 
-                    : () => _showOfferSelectionModal(context, availableOffers, offersProvider),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: !hasOffers ? Colors.grey : const Color(0xFFFF7000),
-                  padding: EdgeInsets.symmetric(vertical: 10.sp),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                child: isLoadingOffers
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(hasOffers ? Icons.shopping_cart_outlined : Icons.block, color: Colors.white, size: 14.sp),
-                          const SizedBox(width: 8),
-                          Text(
-                            hasOffers ? 'عرض الأسعار' : 'غير متوفر بمدينتك',
-                            style: GoogleFonts.cairo(fontSize: 11.sp, fontWeight: FontWeight.bold, color: Colors.white),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(15),
+        child: Padding(
+          padding: const EdgeInsets.all(10.0),
+          child: Column(
+            children: [
+              Expanded(
+                child: Stack(
+                  children: [
+                    InkWell(
+                      onTap: hasOffers 
+                          ? () => widget.onTap?.call(widget.productId, offersProvider.selectedOffer?.offerId)
+                          : null,
+                      child: Image.network(displayImageUrl, fit: BoxFit.contain, width: double.infinity),
+                    ),
+                    // 🎯 شريط بالعرض يكتب "سعر خاص" فوق المنتج
+                    if (hasSpecialPrice)
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          color: Colors.red.shade700,
+                          child: Text(
+                            '🔥 سعر خاص',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.cairo(
+                              color: Colors.white,
+                              fontSize: 9.sp,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ],
+                        ),
                       ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                widget.productData['name'] ?? 'منتج غير معروف',
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 13.sp),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: (isLoadingOffers || !hasOffers) 
+                      ? null 
+                      : () => _showOfferSelectionModal(context, availableOffers, offersProvider),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: !hasOffers ? Colors.grey : const Color(0xFFFF7000),
+                    padding: EdgeInsets.symmetric(vertical: 10.sp),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: isLoadingOffers
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(hasOffers ? Icons.shopping_cart_outlined : Icons.block, color: Colors.white, size: 14.sp),
+                            const SizedBox(width: 8),
+                            Text(
+                              hasOffers ? 'عرض الأسعار' : 'غير متوفر بمدينتك',
+                              style: GoogleFonts.cairo(fontSize: 11.sp, fontWeight: FontWeight.bold, color: Colors.white),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // دالة _showOfferSelectionModal وباقي الدوال تظل كما هي في كودك الأصلي
-  // ... (نفس الكود الذي أرسلته أنت للمودال والتاج)
   void _showOfferSelectionModal(BuildContext context, List<OfferModel> availableOffers, ProductOffersProvider provider) {
     showModalBottomSheet(
       context: context,
@@ -171,6 +210,10 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                   child: Column(
                     children: availableOffers.map((offer) {
                       final bool isOutOfStock = (offer.stock) <= 0;
+                      final bool hasOfferPrice = offer.offerPrice != null &&
+                          (offer.offerPrice is num) &&
+                          (offer.offerPrice as num) > 0;
+
                       return Card(
                         margin: const EdgeInsets.symmetric(vertical: 8),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
@@ -182,7 +225,33 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Expanded(child: Text('${offer.sellerName} (${offer.unitName})', style: GoogleFonts.cairo(fontSize: 14.sp, fontWeight: FontWeight.bold))),
-                                  Text('${offer.price} ج', style: GoogleFonts.cairo(fontSize: 16.sp, fontWeight: FontWeight.w900, color: Colors.red.shade700)),
+                                  
+                                  // 🎯 عند وجود سعر خاص: عرض السعر الأصلي مشطوباً وبجانبه السعر الجديد
+                                  if (hasOfferPrice) ...[
+                                    Row(
+                                      children: [
+                                        Text(
+                                          '${offer.price} ج',
+                                          style: GoogleFonts.cairo(
+                                            fontSize: 12.sp,
+                                            color: Colors.grey,
+                                            decoration: TextDecoration.lineThrough,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          '${offer.offerPrice} ج',
+                                          style: GoogleFonts.cairo(
+                                            fontSize: 16.sp,
+                                            fontWeight: FontWeight.w900,
+                                            color: Colors.red.shade700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ] else ...[
+                                    Text('${offer.price} ج', style: GoogleFonts.cairo(fontSize: 16.sp, fontWeight: FontWeight.w900, color: Colors.red.shade700)),
+                                  ],
                                 ],
                               ),
                               const SizedBox(height: 10),

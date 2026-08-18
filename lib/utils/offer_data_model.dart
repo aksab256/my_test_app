@@ -7,6 +7,7 @@ class OfferModel {
   final String sellerName;
   final List<String>? deliveryAreas; // 👈 تم الإضافة (مهمة جداً للفلترة الجغرافية)
   final dynamic price; 
+  final dynamic offerPrice; // 🎯 تم الإضافة: حقل السعر الخاص
   final String unitName;
   final int stock;
   final int? minQty;
@@ -21,6 +22,7 @@ class OfferModel {
     required this.sellerName,
     this.deliveryAreas, // 👈 أضفناه هنا
     required this.price,
+    this.offerPrice, // 🎯 تم الإضافة
     required this.unitName,
     required this.stock,
     this.minQty = 1,
@@ -54,6 +56,7 @@ class OfferModel {
         if (unitData is Map<String, dynamic>) {
           final String unitName = unitData['unitName'] ?? 'وحدة غير محددة';
           final dynamic price = unitData['price'] ?? '?';
+          final dynamic offerPrice = unitData['offerPrice']; // 🎯 قراءة السعر الخاص من الوحدة
           final int stock = unitData['availableStock'] ?? 0;
           
           final bool isDisabled = stock < productMinQty;
@@ -65,6 +68,7 @@ class OfferModel {
             sellerName: sellerName,
             deliveryAreas: areas, // تمرير المناطق
             price: price,
+            offerPrice: offerPrice, // 🎯 تمرير السعر الخاص
             unitName: unitName,
             stock: stock,
             minQty: productMinQty,
@@ -77,6 +81,7 @@ class OfferModel {
     } 
     else {
       final dynamic price = data['price'] ?? '?';
+      final dynamic offerPrice = data['offerPrice']; // 🎯 قراءة السعر الخاص من مستند العرض المباشر
       final int stock = data['availableQuantity'] ?? 0;
       final String unitName = data['unitName'] ?? 'وحدة افتراضية';
       
@@ -89,6 +94,7 @@ class OfferModel {
         sellerName: sellerName,
         deliveryAreas: areas, // تمرير المناطق
         price: price,
+        offerPrice: offerPrice, // 🎯 تمرير السعر الخاص
         unitName: unitName,
         stock: stock,
         minQty: productMinQty,
