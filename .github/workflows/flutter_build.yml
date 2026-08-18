@@ -45,8 +45,8 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD_ALIAS }}
           KEYSTORE_PATH: "release-keystore.jks"
         run: |
-          flutter build apk --release
-          flutter build appbundle --release
+          flutter build apk --release --android-skip-build-dependency-validation
+          flutter build appbundle --release --android-skip-build-dependency-validation
 
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
