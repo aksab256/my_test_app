@@ -7,6 +7,7 @@ import 'package:my_test_app/utils/offer_data_model.dart';
 import 'package:my_test_app/providers/product_offers_provider.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
+import 'package:my_test_app/services/analytics_service.dart';
 import 'package:sizer/sizer.dart';
 
 class BuyerProductCard extends StatefulWidget {
@@ -32,7 +33,6 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // 🎯 جلب مناطق المشتري وتمريرها تحديثياً للبروفايدر إذا لزم الأمر
       final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
       
       List<String> userAreas = [];
@@ -40,7 +40,6 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
         userAreas.add(buyerProvider.userAddress!);
       }
 
-      // استدعاء جلب العروض وتحديثها بالمناطق الحالية
       Provider.of<ProductOffersProvider>(context, listen: false)
           .fetchOffers(widget.productId, userAreas);
     });
@@ -52,7 +51,6 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
         ? widget.productData['imageUrls'][0]
         : '';
 
-    // 🎯 تحديد السعر النهائي: اعتماد offerPrice إذا كان موجوداً وأكبر من 0، وإلا السعر الأصلي
     final double finalPrice = (offer.offerPrice != null &&
             (offer.offerPrice is num) &&
             (offer.offerPrice as num) > 0)
@@ -67,7 +65,7 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
         offerId: offer.offerId,
         sellerId: offer.sellerId,
         sellerName: offer.sellerName,
-        price: finalPrice, // 🎯 تمرير السعر الخاص المعتمَد للسلة
+        price: finalPrice,
         unit: offer.unitName,
         unitIndex: offer.unitIndex ?? 0,
         quantityToAdd: qty,
@@ -99,10 +97,20 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
   Widget build(BuildContext context) {
     final offersProvider = context.watch<ProductOffersProvider>();
     final isLoadingOffers = offersProvider.isLoading;
-    final availableOffers = offersProvider.availableOffers;
+    final rawOffers = offersProvider.availableOffers;
+    
+    // 🎯 ترتيب العروض: العروض التي تحتوي على خصم وسعر خاص تصعد للمقدمة
+    final List<OfferModel> availableOffers = List.from(rawOffers)
+      ..sort((a, b) {
+        final bool aHasDiscount = a.offerPrice != null && (a.offerPrice is num) && (a.offerPrice as num) > 0;
+        final bool bHasDiscount = b.offerPrice != null && (b.offerPrice is num) && (b.offerPrice as num) > 0;
+        if (aHasDiscount && !bHasDiscount) return -1;
+        if (!aHasDiscount && bHasDiscount) return 1;
+        return 0;
+      });
+
     final hasOffers = availableOffers.isNotEmpty;
 
-    // 🎯 التحقق مما إذا كان هناك أي عرض يحتوي على سعر خاص offerPrice
     final bool hasSpecialPrice = availableOffers.any((offer) =>
         offer.offerPrice != null &&
         (offer.offerPrice is num) &&
@@ -131,23 +139,44 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                           : null,
                       child: Image.network(displayImageUrl, fit: BoxFit.contain, width: double.infinity),
                     ),
-                    // 🎯 شريط بالعرض يكتب "سعر خاص" فوق المنتج
+                    
+                    // 🎯 شريط خصم بروفيشنال جانبي مميز أعلى الكارت
                     if (hasSpecialPrice)
                       Positioned(
                         top: 0,
-                        left: 0,
                         right: 0,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          color: Colors.red.shade700,
-                          child: Text(
-                            '🔥 سعر خاص',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.cairo(
-                              color: Colors.white,
-                              fontSize: 9.sp,
-                              fontWeight: FontWeight.bold,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Color(0xFFD32F2F), Color(0xFFFF5252)],
                             ),
+                            borderRadius: BorderRadius.only(
+                              topRight: Radius.circular(12),
+                              bottomLeft: Radius.circular(12),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 4,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.local_fire_department, color: Colors.amber, size: 12),
+                              const SizedBox(width: 3),
+                              Text(
+                                'خصم خاص',
+                                style: GoogleFonts.cairo(
+                                  color: Colors.white,
+                                  fontSize: 8.5.sp,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -159,7 +188,8 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                 widget.productData['name'] ?? 'منتج غير معروف',
                 textAlign: TextAlign.center,
                 maxLines: 2,
-                style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 13.sp),
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 12.5.sp),
               ),
               const SizedBox(height: 12),
               SizedBox(
@@ -167,7 +197,22 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                 child: ElevatedButton(
                   onPressed: (isLoadingOffers || !hasOffers) 
                       ? null 
-                      : () => _showOfferSelectionModal(context, availableOffers, offersProvider),
+                      : () {
+                          // 📊 تسجيل الحدث في الخلفية فوراً بدون أية انتظار لسرعة الفرونت إند
+                          AnalyticsService.logEvent(
+                            eventName: 'click_view_offers',
+                            eventData: {
+                              'productId': widget.productId,
+                              'productName': widget.productData['name'] ?? '',
+                              'mainId': widget.productData['mainId'] ?? '',
+                              'subId': widget.productData['subId'] ?? '',
+                              'offersCount': availableOffers.length,
+                            },
+                          );
+
+                          // فتح المنسدلة مباشرة دون تأخير
+                          _showOfferSelectionModal(context, availableOffers, offersProvider);
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: !hasOffers ? Colors.grey : const Color(0xFFFF7000),
                     padding: EdgeInsets.symmetric(vertical: 10.sp),
@@ -206,7 +251,7 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('اختيار العرض والطلب', style: GoogleFonts.cairo(fontSize: 18.sp, fontWeight: FontWeight.bold)),
+              Text('اختيار العرض والطلب', style: GoogleFonts.cairo(fontSize: 16.sp, fontWeight: FontWeight.bold)),
               const Divider(),
               Flexible(
                 child: SingleChildScrollView(
@@ -219,7 +264,14 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
 
                       return Card(
                         margin: const EdgeInsets.symmetric(vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: hasOfferPrice ? Colors.orange.shade300 : Colors.grey.shade200,
+                            width: hasOfferPrice ? 1.5 : 1.0,
+                          ),
+                        ),
                         child: Padding(
                           padding: const EdgeInsets.all(12),
                           child: Column(
@@ -227,17 +279,40 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Expanded(child: Text('${offer.sellerName} (${offer.unitName})', style: GoogleFonts.cairo(fontSize: 14.sp, fontWeight: FontWeight.bold))),
+                                  Expanded(
+                                    child: RichText(
+                                      text: TextSpan(
+                                        children: [
+                                          // 🎯 تمييز لون واسم التاجر داخل المنسدلة
+                                          TextSpan(
+                                            text: '${offer.sellerName} ',
+                                            style: GoogleFonts.cairo(
+                                              fontSize: 12.5.sp,
+                                              fontWeight: FontWeight.w900,
+                                              color: const Color(0xFF1E3A8A), // لون أزرق داكن مميز للتاجر
+                                            ),
+                                          ),
+                                          TextSpan(
+                                            text: '(${offer.unitName})',
+                                            style: GoogleFonts.cairo(
+                                              fontSize: 11.sp,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.grey.shade700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                   
-                                  // 🎯 عند وجود سعر خاص: عرض السعر الأصلي مشطوباً وبجانبه السعر الجديد
                                   if (hasOfferPrice) ...[
                                     Row(
                                       children: [
                                         Text(
                                           '${offer.price} ج',
                                           style: GoogleFonts.cairo(
-                                            fontSize: 12.sp,
-                                            color: Colors.grey,
+                                            fontSize: 10.5.sp,
+                                            color: Colors.grey.shade600,
                                             decoration: TextDecoration.lineThrough,
                                           ),
                                         ),
@@ -245,7 +320,7 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                                         Text(
                                           '${offer.offerPrice} ج',
                                           style: GoogleFonts.cairo(
-                                            fontSize: 16.sp,
+                                            fontSize: 14.sp,
                                             fontWeight: FontWeight.w900,
                                             color: Colors.red.shade700,
                                           ),
@@ -253,7 +328,14 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                                       ],
                                     ),
                                   ] else ...[
-                                    Text('${offer.price} ج', style: GoogleFonts.cairo(fontSize: 16.sp, fontWeight: FontWeight.w900, color: Colors.red.shade700)),
+                                    Text(
+                                      '${offer.price} ج',
+                                      style: GoogleFonts.cairo(
+                                        fontSize: 14.sp,
+                                        fontWeight: FontWeight.w900,
+                                        color: Colors.red.shade700,
+                                      ),
+                                    ),
                                   ],
                                 ],
                               ),
@@ -284,8 +366,18 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                                         _addToCart(offer, provider.currentQuantity);
                                         Navigator.pop(modalContext);
                                       },
-                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade800),
-                                      child: Text('أضف', style: GoogleFonts.cairo(color: Colors.white, fontWeight: FontWeight.bold)),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.green.shade800,
+                                        padding: const EdgeInsets.symmetric(vertical: 8),
+                                      ),
+                                      child: Text(
+                                        'أضف',
+                                        style: GoogleFonts.cairo(
+                                          color: Colors.white,
+                                          fontSize: 11.sp,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -309,7 +401,7 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-      child: Text(text, style: GoogleFonts.cairo(fontSize: 12.sp, color: color, fontWeight: FontWeight.bold)),
+      child: Text(text, style: GoogleFonts.cairo(fontSize: 10.sp, color: color, fontWeight: FontWeight.bold)),
     );
   }
 }
