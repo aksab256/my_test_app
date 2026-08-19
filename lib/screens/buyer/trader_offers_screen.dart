@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // 🎯 تم الإضافة
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_test_app/theme/app_theme.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
 import 'package:my_test_app/widgets/trader_offer_card.dart';
@@ -20,15 +20,14 @@ class TraderOffersScreen extends StatefulWidget {
 
 class _TraderOffersScreenState extends State<TraderOffersScreen> {
   final int _selectedIndex = 0; 
-  String _userRole = 'consumer'; // 🎯 الرتبة الافتراضية للأمان
+  String _userRole = 'consumer';
 
   @override
   void initState() {
     super.initState();
-    _getUserRole(); // 🎯 جلب الرتبة عند التشغيل
+    _getUserRole();
   }
 
-  // 🎯 دالة جلب الرتبة من التخزين المحلي
   Future<void> _getUserRole() async {
     final prefs = await SharedPreferences.getInstance();
     final userJson = prefs.getString('loggedUser');
@@ -89,7 +88,7 @@ class _TraderOffersScreenState extends State<TraderOffersScreen> {
           children: [
             IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 22),
-              onPressed: () => Navigator.of(context).pop(), // 🎯 يرجع للصحفة السابقة (التجار)
+              onPressed: () => Navigator.of(context).pop(),
             ),
             const Text(
               'عروض التاجر',
@@ -136,10 +135,8 @@ class _TraderOffersScreenState extends State<TraderOffersScreen> {
         },
       ),
 
-      // 🎯 إضافة SafeArea لضمان بقاء المحتوى بعيداً عن حواف الشاشة بعد إخفاء الشريط
       body: SafeArea(child: OffersDataFetcher(sellerId: widget.sellerId)), 
       
-      // 🎯 الشرط الذكي: بناء الشريط فقط للـ buyer
       bottomNavigationBar: _userRole == 'buyer' 
         ? Consumer<CartProvider>(
             builder: (context, cart, child) => BuyerMobileNavWidget(
@@ -149,7 +146,7 @@ class _TraderOffersScreenState extends State<TraderOffersScreen> {
               ordersChanged: false,
             ),
           )
-        : null, // يختفي تماماً للـ consumer
+        : null,
     );
   }
 }
@@ -172,43 +169,57 @@ class _OffersDataFetcherState extends State<OffersDataFetcher> {
     _offersFuture = _loadOffersWithProductData();
   }
 
+  // 🚀 دالة جلب البيانات السريعة بالتوازي بدون N+1 Queries
   Future<List<Map<String, dynamic>>> _loadOffersWithProductData() async {
     final db = FirebaseFirestore.instance;
-    try {
-      final sellerDoc = await db.collection("sellers").doc(widget.sellerId).get();
-      if (sellerDoc.exists && mounted) {
-        setState(() => _sellerName = sellerDoc.data()?['fullname'] ?? "التاجر");
-      }
-    } catch (e) {
-      debugPrint("Error: $e");
-    }
 
+    // 1. جلب كولكشن العروض الخاصة بالتاجر دفعة واحدة
     final offersSnapshot = await db.collection("productOffers")
               .where("sellerId", isEqualTo: widget.sellerId)
               .get();
     
     if (offersSnapshot.docs.isEmpty) return [];
 
-    final List<Map<String, dynamic>> results = [];
-    for (var doc in offersSnapshot.docs) {
+    // استخراج اسم التاجر فوراً من أول مستند متوفر دون طلب شبكة إضافي
+    final firstDocData = offersSnapshot.docs.first.data();
+    if (firstDocData['sellerName'] != null && mounted) {
+      setState(() => _sellerName = firstDocData['sellerName']);
+    }
+
+    // 2. إطلاق جميع طلبات تفاصيل المنتجات في نفس الوقت بالتوازي (Parallel Requests)
+    final futures = offersSnapshot.docs.map((doc) async {
       final data = doc.data();
       final pId = data['productId']?.toString();
+      
+      Map<String, dynamic> productData = {};
       if (pId != null) {
         final pSnap = await db.collection("products").doc(pId).get();
         if (pSnap.exists) {
-          final productData = pSnap.data() ?? {};
-          results.add({
-            ...data,
-            'offerDocId': doc.id,
-            'productName': productData['name'] ?? 'منتج غير معروف',
-            'imageUrls': productData['imageUrls'],
-            // 🎯 جلب السعر الأصلي من كولكشن المنتجات لتمكين الشطب عند وجود عرض
-            'originalPrice': productData['price'] ?? data['originalPrice'] ?? data['oldPrice'] ?? 0.0,
-          });
+          productData = pSnap.data() ?? {};
         }
       }
-    }
-    return results;
+
+      // 🎯 استخراج السعر الأصلي من مصفوفة units المسجلة بالداتا[cite: 3]
+      double extractedOriginalPrice = 0.0;
+      if (data['units'] != null && (data['units'] as List).isNotEmpty) {
+        extractedOriginalPrice = (data['units'][0]['price'] ?? 0.0).toDouble();
+      } else if (productData['units'] != null && (productData['units'] as List).isNotEmpty) {
+        extractedOriginalPrice = (productData['units'][0]['price'] ?? 0.0).toDouble();
+      } else {
+        extractedOriginalPrice = (productData['price'] ?? 0.0).toDouble();
+      }
+
+      return {
+        ...data,
+        'offerDocId': doc.id,
+        'productName': productData['name'] ?? data['productName'] ?? 'منتج غير معروف',
+        'imageUrls': productData['imageUrls'] ?? data['imageUrls'],
+        'originalPrice': extractedOriginalPrice, // السعر الأصلي المشطوب (245)[cite: 3]
+      };
+    }).toList();
+
+    // انتظار جميع الطلبات معاً لتقليل زمن الاستجابة لأقل حد ممكن
+    return await Future.wait(futures);
   }
 
   @override
@@ -247,7 +258,7 @@ class _OffersDataFetcherState extends State<OffersDataFetcher> {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2, 
-                  childAspectRatio: 0.51, // 🎯 تم تعديل النسبة لتكبير الكارت عمودياً لضمان ظهور الصورة والسعرين المشطوب والجديد بدون قص
+                  childAspectRatio: 0.51, 
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
                 ),
