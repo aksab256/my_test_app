@@ -6,29 +6,29 @@ class ProductOffersProvider with ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   final String productId; 
-  // 🎯 إضافة قائمة المناطق المكتشفة للمشتري بناءً على الـ GPS والـ GeoJSON
+  // 🎯 قائمة المناطق المكتشفة للمشتري بناءً على الـ GPS والـ GeoJSON
   final List<String> userDetectedAreas;
 
-  // 💡 تحديث المُنشئ لاستقبال المنتج والمناطق المكتشفة
+  // 💡 المُنشئ لاستقبال المنتج والمناطق المكتشفة
   ProductOffersProvider({
     required this.productId, 
     required this.userDetectedAreas,
   }) {
-    // جلب العروض مع تمرير المناطق لفلترتها
+    // جلب العروض فور إنشاء البروفايدر
     fetchOffers(productId, userDetectedAreas);
   }
 
   List<OfferModel> _availableOffers = [];
-  OfferModel? _selectedOffer;                     
-  bool _isLoading = true;                         
+  OfferModel? _selectedOffer;                      
+  bool _isLoading = true;                          
   int _currentQuantity = 0;
-                                                  
+                                                   
   List<OfferModel> get availableOffers => _availableOffers;                                       
   OfferModel? get selectedOffer => _selectedOffer;                                                
-  bool get isLoading => _isLoading;               
-  int get currentQuantity => _currentQuantity;                                                                                                    
+  bool get isLoading => _isLoading;                
+  int get currentQuantity => _currentQuantity;                                                                                                                                   
   
-  // 💥 دالة جلب العروض مع منطق الفلترة الجغرافية
+  // 💥 دالة جلب العروض والفلترة الجغرافية المطابقة لبيانات Firestore
   Future<void> fetchOffers(String productId, List<String> detectedAreas) async {
     _isLoading = true;                              
     _availableOffers = [];                          
@@ -36,27 +36,26 @@ class ProductOffersProvider with ChangeNotifier {
     notifyListeners(); 
 
     try {                                             
-      // 1. جلب كل العروض النشطة للمنتج من Firestore
+      // 1. جلب العروض النشطة الخاصة بالمنتج من مجموعة productOffers
       final offersQuery = _db.collection('productOffers')
-        .where('productId', isEqualTo: productId)                                                       
+        .where('productId', isEqualTo: productId)                                                                
         .where('status', isEqualTo: 'active');
                                                       
-      final offersSnap = await offersQuery.get();                                                     
+      final offersSnap = await offersQuery.get();                                                              
       List<OfferModel> filteredOffers = [];
                                                       
       for (var doc in offersSnap.docs) {
-        // نستخدم الوظيفة الحالية لتحويل البيانات لنموذج OfferModel
+        // تحويل المستند لنموذج OfferModel
         List<OfferModel> offersFromDoc = OfferModel.fromFirestore(doc);
 
         for (var offer in offersFromDoc) {
-          // 🎯 منطق الفلترة الجغرافي (مطابق لكود الـ HTML الخاص بك):
-          // الحالة أ: التاجر لم يحدد مناطق (العرض متاح للجميع)
-          // الحالة ب: إحداثيات المشتري تقع ضمن إحدى المناطق التي يغطيها التاجر
+          // 🎯 منطق الفلترة الجغرافي بناءً على حقل deliveryZones المطابق لـ Firestore:
+          // 1. حالة الـ Global: إذا كانت مناطق التوصيل فارغة أو غير محددة (العرض متاح للجميع)
+          bool isGlobal = offer.deliveryZones == null || offer.deliveryZones!.isEmpty;
           
-          bool isGlobal = offer.deliveryAreas == null || offer.deliveryAreas!.isEmpty;
-          
-          bool isAreaMatch = offer.deliveryAreas?.any((area) => 
-            detectedAreas.contains(area)) ?? false;
+          // 2. حالة المطابقة: إذا كانت إحداثيات المشتري تقع ضمن مناطق التوصيل
+          bool isAreaMatch = offer.deliveryZones?.any((zone) => 
+            detectedAreas.contains(zone)) ?? false;
 
           if (isGlobal || isAreaMatch) {
             filteredOffers.add(offer);
@@ -64,11 +63,11 @@ class ProductOffersProvider with ChangeNotifier {
         }
       }                                         
 
-      // 2. تحديث الحالة بالعروض المفلترة فقط
+      // 2. تحديث قائمة العروض المتاحة
       _availableOffers = filteredOffers;             
       
       if (_availableOffers.isNotEmpty) {
-        _selectedOffer = _availableOffers.first;               
+        _selectedOffer = _availableOffers.first;                
         _currentQuantity = _selectedOffer!.stock >= (_selectedOffer!.minQty ?? 1)                             
           ? (_selectedOffer!.minQty ?? 1)
           : 0;
@@ -76,7 +75,7 @@ class ProductOffersProvider with ChangeNotifier {
         _currentQuantity = 0;
       }
                                                       
-      _isLoading = false;                             
+      _isLoading = false;                              
       notifyListeners(); 
     } catch (e) {
       _isLoading = false;
@@ -92,7 +91,7 @@ class ProductOffersProvider with ChangeNotifier {
                                                 
   void selectOffer(OfferModel offer) {
     _selectedOffer = offer;                         
-    _currentQuantity = offer.stock >= (offer.minQty ?? 1)                                               
+    _currentQuantity = offer.stock >= (offer.minQty ?? 1)                                                 
       ? (offer.minQty ?? 1)
       : 0;
     notifyListeners();

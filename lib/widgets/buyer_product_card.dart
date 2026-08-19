@@ -6,7 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:my_test_app/utils/offer_data_model.dart';
 import 'package:my_test_app/providers/product_offers_provider.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
-import 'package:my_test_app/providers/buyer_data_provider.dart'; // ✅ أضفنا هذا
+import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:sizer/sizer.dart';
 
 class BuyerProductCard extends StatefulWidget {
@@ -32,23 +32,22 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // 🎯 [التصحيح الجوهري]: جلب مناطق المشتري وتمريرها للدالة
+      // 🎯 جلب مناطق المشتري وتمريرها تحديثياً للبروفايدر إذا لزم الأمر
       final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
       
-      // تجهيز قائمة المناطق (إذا كان العنوان موجوداً)
       List<String> userAreas = [];
-      if (buyerProvider.userAddress != null) {
+      if (buyerProvider.userAddress != null && buyerProvider.userAddress!.isNotEmpty) {
         userAreas.add(buyerProvider.userAddress!);
       }
 
-      // تمرير المعاملين كما هو محدد في الـ Provider الجديد
+      // استدعاء جلب العروض وتحديثها بالمناطق الحالية
       Provider.of<ProductOffersProvider>(context, listen: false)
-          .fetchOffers(widget.productId, userAreas); // ✅ تم الإصلاح (2 arguments)
+          .fetchOffers(widget.productId, userAreas);
     });
   }
 
   void _addToCart(OfferModel offer, int qty) async {
-    if (offer == null || qty == 0) return;
+    if (qty == 0) return;
     final String imageUrl = widget.productData['imageUrls']?.isNotEmpty == true
         ? widget.productData['imageUrls'][0]
         : '';
@@ -80,15 +79,19 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
         mainId: widget.productData['mainId'],
         subId: widget.productData['subId'],
       );
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✅ تم الإضافة للسلة', style: GoogleFonts.cairo(fontSize: 14.sp)),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 1),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ تم الإضافة للسلة', style: GoogleFonts.cairo(fontSize: 14.sp)),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
   }
 

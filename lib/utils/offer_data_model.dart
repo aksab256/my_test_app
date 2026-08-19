@@ -2,12 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class OfferModel {
   final String offerId;
-  final String productId; // 👈 تم الإضافة (مهمة للفلترة)
+  final String productId;
   final String sellerId;
   final String sellerName;
-  final List<String>? deliveryAreas; // 👈 تم الإضافة (مهمة جداً للفلترة الجغرافية)
+  final List<String>? deliveryAreas; // للتوافق
+  final List<String>? deliveryZones; // المطابق لحقل Firestore
   final dynamic price; 
-  final dynamic offerPrice; // 🎯 تم الإضافة: حقل السعر الخاص
+  final dynamic offerPrice; // حقل السعر الخاص
   final String unitName;
   final int stock;
   final int? minQty;
@@ -17,12 +18,13 @@ class OfferModel {
 
   OfferModel({
     required this.offerId,
-    required this.productId, // 👈 أضفناه هنا
+    required this.productId,
     required this.sellerId,
     required this.sellerName,
-    this.deliveryAreas, // 👈 أضفناه هنا
+    this.deliveryAreas,
+    this.deliveryZones,
     required this.price,
-    this.offerPrice, // 🎯 تم الإضافة
+    this.offerPrice,
     required this.unitName,
     required this.stock,
     this.minQty = 1,
@@ -36,16 +38,19 @@ class OfferModel {
     if (data == null) return [];
 
     final String offerId = doc.id;
-    final String productId = data['productId'] ?? ''; // جلب معرف المنتج
+    final String productId = data['productId'] ?? '';
     final String sellerId = data['sellerId'] ?? '';
     final String sellerName = data['sellerName'] ?? 'بائع غير معروف';
     final int productMinQty = data['minOrder'] ?? 1;
     final int? productMaxQty = data['maxOrder'];
     
-    // 🎯 جلب قائمة المناطق الجغرافية من الـ Document
-    final List<String>? areas = data['deliveryAreas'] != null 
-        ? List<String>.from(data['deliveryAreas']) 
-        : null;
+    // 🎯 قراءة السعر الخاص الرئيسي الموجود على مستوى المستند
+    final dynamic rootOfferPrice = data['offerPrice'];
+    
+    // 🎯 جلب قائمة المناطق الجغرافية المطابقة لـ Firestore (deliveryZones)
+    final List<String>? zones = data['deliveryZones'] != null 
+        ? List<String>.from(data['deliveryZones']) 
+        : (data['deliveryAreas'] != null ? List<String>.from(data['deliveryAreas']) : null);
     
     List<OfferModel> unitsList = [];
     
@@ -56,19 +61,22 @@ class OfferModel {
         if (unitData is Map<String, dynamic>) {
           final String unitName = unitData['unitName'] ?? 'وحدة غير محددة';
           final dynamic price = unitData['price'] ?? '?';
-          final dynamic offerPrice = unitData['offerPrice']; // 🎯 قراءة السعر الخاص من الوحدة
+          
+          // إذا كان للوحدة سعر خاص مستقل نأخذه، وإلا نعتمد السعر الخاص للمستند الرئيسية
+          final dynamic unitOfferPrice = unitData['offerPrice'] ?? rootOfferPrice;
           final int stock = unitData['availableStock'] ?? 0;
           
           final bool isDisabled = stock < productMinQty;
 
           unitsList.add(OfferModel(
             offerId: offerId,
-            productId: productId, // تمرير المنتج
+            productId: productId,
             sellerId: sellerId,
             sellerName: sellerName,
-            deliveryAreas: areas, // تمرير المناطق
+            deliveryAreas: zones,
+            deliveryZones: zones,
             price: price,
-            offerPrice: offerPrice, // 🎯 تمرير السعر الخاص
+            offerPrice: unitOfferPrice,
             unitName: unitName,
             stock: stock,
             minQty: productMinQty,
@@ -81,7 +89,6 @@ class OfferModel {
     } 
     else {
       final dynamic price = data['price'] ?? '?';
-      final dynamic offerPrice = data['offerPrice']; // 🎯 قراءة السعر الخاص من مستند العرض المباشر
       final int stock = data['availableQuantity'] ?? 0;
       final String unitName = data['unitName'] ?? 'وحدة افتراضية';
       
@@ -89,12 +96,13 @@ class OfferModel {
 
       unitsList.add(OfferModel(
         offerId: offerId,
-        productId: productId, // تمرير المنتج
+        productId: productId,
         sellerId: sellerId,
         sellerName: sellerName,
-        deliveryAreas: areas, // تمرير المناطق
+        deliveryAreas: zones,
+        deliveryZones: zones,
         price: price,
-        offerPrice: offerPrice, // 🎯 تمرير السعر الخاص
+        offerPrice: rootOfferPrice,
         unitName: unitName,
         stock: stock,
         minQty: productMinQty,
