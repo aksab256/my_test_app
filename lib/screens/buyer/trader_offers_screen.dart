@@ -196,11 +196,14 @@ class _OffersDataFetcherState extends State<OffersDataFetcher> {
       if (pId != null) {
         final pSnap = await db.collection("products").doc(pId).get();
         if (pSnap.exists) {
+          final productData = pSnap.data() ?? {};
           results.add({
             ...data,
             'offerDocId': doc.id,
-            'productName': pSnap.data()?['name'] ?? 'منتج غير معروف',
-            'imageUrls': pSnap.data()?['imageUrls'],
+            'productName': productData['name'] ?? 'منتج غير معروف',
+            'imageUrls': productData['imageUrls'],
+            // 🎯 جلب السعر الأصلي من كولكشن المنتجات لتمكين الشطب عند وجود عرض
+            'originalPrice': productData['price'] ?? data['originalPrice'] ?? data['oldPrice'] ?? 0.0,
           });
         }
       }
@@ -244,7 +247,7 @@ class _OffersDataFetcherState extends State<OffersDataFetcher> {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2, 
-                  childAspectRatio: 0.58, // 🎯 تم تعديل النسبة وتكبير الكارت عمودياً لضمان عدم قص الصورة وظهورها كاملة
+                  childAspectRatio: 0.51, // 🎯 تم تعديل النسبة لتكبير الكارت عمودياً لضمان ظهور الصورة والسعرين المشطوب والجديد بدون قص
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
                 ),
