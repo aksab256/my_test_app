@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:math';
 import 'package:sizer/sizer.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -29,7 +30,8 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
   final _auth = FirebaseAuth.instance;
   bool _isLoading = true;
   bool _isUploading = false;
-  bool _isCodeObscured = true; // التحكم في إخفاء/إظهار الكود بالنجوم
+  bool _isCodeObscured = true; // التحكم في إخفاء/إظهار كود Rabia ERP
+  bool _isDashboardCodeObscured = true; // التحكم في إخفاء/إظهار كود اللوحة
 
   Map<String, dynamic> sellerDataCache = {};
   List<Map<String, dynamic>> subUsersList = [];
@@ -96,6 +98,38 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
       });
     } catch (e) {
       debugPrint("Error loading sub-users: $e");
+    }
+  }
+
+  // 🔑 دالة توليد أو إعادة عرض كود لوحة التحكم الخاص بالدخول
+  Future<void> _generateDashboardOtp() async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final int? expiresAt = sellerDataCache['dashboard_otp_expires'];
+    final String? currentOtp = sellerDataCache['dashboard_otp'];
+
+    // إذا كان الكود الحالي ما زال فعالاً ولم ينتهِ، يعرض نفس الكود ويمنع التكرار العشوائي
+    if (currentOtp != null && currentOtp.isNotEmpty && expiresAt != null && now < expiresAt) {
+      _showFloatingAlert("🔑 رمز الدخول النشط حالياً:\n$currentOtp\nما زال صالحاً للاستخدام.");
+      return;
+    }
+
+    // توليد كود جديد من 6 أرقام وصالح لمدة 10 دقائق
+    String newOtp = (100000 + Random().nextInt(900000)).toString();
+    int newExpiresAt = DateTime.now().add(const Duration(minutes: 10)).millisecondsSinceEpoch;
+
+    setState(() => _isLoading = true);
+    try {
+      await _firestore.collection("sellers").doc(widget.currentSellerId).update({
+        'dashboard_otp': newOtp,
+        'dashboard_otp_expires': newExpiresAt,
+      });
+
+      await _refreshData();
+      _showFloatingAlert("✅ تم إنتاج رمز دخول اللوحة بنجاح:\n$newOtp\nالرمز صالح لمدة 10 دقائق.");
+    } catch (e) {
+      _showFloatingAlert("❌ فشل إنشاء رمز اللوحة: تأكد من الاتصال بالإنترنت", isError: true);
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -296,7 +330,11 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
                     _buildLogoHeader(logoUrl),
                     SizedBox(height: 4.h),
                     
-                    // 🔗 كارت عرض كود ربط النظام الخارجي / ERP
+                    // 🖥️ كارت طلب كود لوحة التحكم (مستقل)
+                    _buildDashboardOtpCard(),
+                    SizedBox(height: 2.5.h),
+
+                    // 🔗 كارت عرض كود ربط النظام الخارجي / Rabia ERP (مستقل)
                     _buildIntegrationCodeCard(),
                     SizedBox(height: 3.h),
 
@@ -347,6 +385,115 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
 
   // --- المكونات المساعدة (UI Helpers) ---
 
+  // 💻 كارت كود لوحة التحكم الخاص بتسجيل الدخول
+  Widget _buildDashboardOtpCard() {
+    String rawOtp = sellerDataCache['dashboard_otp'] ?? '';
+    int? expiresAt = sellerDataCache['dashboard_otp_expires'];
+    bool isExpired = expiresAt == null || DateTime.now().millisecondsSinceEpoch > expiresAt;
+    
+    bool hasOtp = rawOtp.isNotEmpty && !isExpired;
+    String displayOtp = hasOtp 
+        ? (_isDashboardCodeObscured ? '*' * rawOtp.length : rawOtp)
+        : 'لا يوجد كود نشط';
+
+    return Container(
+      padding: EdgeInsets.all(4.w),
+      decoration: BoxDecoration(
+        color: const Color(0xfff0fdf4),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: primaryColor, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.dashboard_customize_outlined, color: primaryColor, size: 20.sp),
+              SizedBox(width: 2.w),
+              Text(
+                "طلب كود لوحة التحكم",
+                style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo', color: Colors.black87),
+              ),
+            ],
+          ),
+          SizedBox(height: 1.h),
+          Text(
+            "اضغط للحصول على رمز مؤقت لاستخدامه عند تسجيل الدخول إلى لوحة تحكم المتجر الإلكترونية.",
+            style: TextStyle(fontSize: 10.sp, color: Colors.grey[700], fontFamily: 'Cairo', height: 1.4),
+          ),
+          SizedBox(height: 2.h),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.2.h),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: primaryColor.withOpacity(0.3)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    displayOtp,
+                    style: TextStyle(
+                      fontSize: 16.sp, 
+                      fontWeight: FontWeight.bold, 
+                      letterSpacing: _isDashboardCodeObscured && hasOtp ? 3 : 1.5, 
+                      color: hasOtp ? primaryColor : Colors.grey, 
+                      fontFamily: 'Cairo'
+                    ),
+                  ),
+                ),
+                if (hasOtp)
+                  Row(
+                    children: [
+                      IconButton(
+                        tooltip: _isDashboardCodeObscured ? "إظهار الكود" : "إخفاء الكود",
+                        icon: Icon(
+                          _isDashboardCodeObscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          color: Colors.blueGrey,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _isDashboardCodeObscured = !_isDashboardCodeObscured;
+                          });
+                        },
+                      ),
+                      IconButton(
+                        tooltip: "نسخ الكود",
+                        icon: const Icon(Icons.copy_rounded, color: primaryColor),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: rawOtp));
+                          _showFloatingAlert("📋 تم نسخ رمز لوحة التحكم إلى الحافظة");
+                        },
+                      ),
+                    ],
+                  )
+              ],
+            ),
+          ),
+          SizedBox(height: 1.5.h),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _generateDashboardOtp,
+              icon: const Icon(Icons.key, color: primaryColor),
+              label: Text(
+                hasOtp ? "عرض/تجديد كود اللوحة" : "إنشاء كود لوحة التحكم",
+                style: const TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: primaryColor, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: EdgeInsets.symmetric(vertical: 1.2.h),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildIntegrationCodeCard() {
     String rawCode = sellerDataCache['temp_link_code'] ?? sellerDataCache['integrationCode'] ?? '';
     bool hasCode = rawCode.isNotEmpty;
@@ -359,17 +506,17 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
       decoration: BoxDecoration(
         color: const Color(0xfff8f9fa),
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: primaryColor.withOpacity(0.3), width: 1.5),
+        border: Border.all(color: Colors.grey.withOpacity(0.3), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.qr_code_scanner, color: primaryColor, size: 20.sp),
+              Icon(Icons.qr_code_scanner, color: Colors.blueGrey, size: 20.sp),
               SizedBox(width: 2.w),
               Text(
-                "كود الربط مع نظام ERP",
+                "كود الربط مع نظام Rabia ERP",
                 style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo', color: Colors.black87),
               ),
             ],
@@ -397,7 +544,7 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
                       fontSize: 16.sp, 
                       fontWeight: FontWeight.bold, 
                       letterSpacing: _isCodeObscured && hasCode ? 3 : 1.5, 
-                      color: primaryColor, 
+                      color: Colors.blueGrey[800], 
                       fontFamily: 'Cairo'
                     ),
                   ),
@@ -419,7 +566,7 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
                       ),
                       IconButton(
                         tooltip: "نسخ الكود",
-                        icon: const Icon(Icons.copy_rounded, color: primaryColor),
+                        icon: const Icon(Icons.copy_rounded, color: Colors.blueGrey),
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: rawCode));
                           _showFloatingAlert("📋 تم نسخ كود الربط إلى الحافظة");
