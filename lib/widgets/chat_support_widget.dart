@@ -1,502 +1,461 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'dart:ui';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:sizer/sizer.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:url_launcher/url_launcher.dart'; // مكتبة فتح رابط الملف (فتح/تحميل التقرير)
+import 'package:permission_handler/permission_handler.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
 
 class ChatSupportWidget extends StatefulWidget {
-  const ChatSupportWidget({super.key});
+  const ChatSupportWidget({Key? key}) : super(key: key);
 
   @override
   State<ChatSupportWidget> createState() => _ChatSupportWidgetState();
 }
 
-class _ChatSupportWidgetState extends State<ChatSupportWidget> with TickerProviderStateMixin {
-  final TextEditingController _controller = TextEditingController();
+class _ChatSupportWidgetState extends State<ChatSupportWidget> {
+  final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-
-  // ✅ Map<String, dynamic> بدل String عشان تقدر تحمل بيانات ملف (fileUrl/fileName) لرسائل شيرا
-  List<Map<String, dynamic>> _messages = [];
-  bool _isTyping = false;
-
-  final String apiGatewayUrl = "https://shirachat-tmfag3rhdq-uc.a.run.app";
-
-  late AnimationController _pulseController;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadChatHistory();
-
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.06).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-  }
+  final List<Map<String, dynamic>> _messages = [];
+  
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  
+  bool _isLoading = false;
+  bool _isRecording = false;
+  String? _recordedAudioPath;
 
   @override
   void dispose() {
-    _pulseController.dispose();
-    _controller.dispose();
+    _messageController.dispose();
     _scrollController.dispose();
+    _audioRecorder.dispose();
     super.dispose();
   }
 
-  Future<void> _saveChatHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    prefs.setString('chat_cache', json.encode(_messages));
-  }
-
-  Future<void> _loadChatHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    final cachedData = prefs.getString('chat_cache');
-    if (cachedData != null) {
-      setState(() {
-        _messages = List<Map<String, dynamic>>.from(
-          json.decode(cachedData).map((item) => Map<String, dynamic>.from(item)),
-        );
-      });
-      _scrollToBottom();
-    }
-  }
-
+  // التمرير لأسفل القائمة تلقائياً
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.easeOutQuart,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
         );
       }
     });
   }
 
-  Future<Map<String, dynamic>> _getUserDetails(String uid) async {
-    Map<String, dynamic> results = {"userName": "عميل شـيرا", "role": "guest", "userPhone": "N/A", "location": null};
-    try {
-      var supermarketDoc = await FirebaseFirestore.instance.collection('deliverySupermarkets').where('ownerId', isEqualTo: uid).limit(1).get();
-      if (supermarketDoc.docs.isNotEmpty) {
-        var data = supermarketDoc.docs.first.data();
-        results["location"] = data['location'];
-        results["address"] = data['address'];
+  // --- إدارة الأذونات والتسجيل الصوتي وفق اشتراطات جوجل ---
+  Future<void> _handleMicrophonePermissionAndRecord() async {
+    if (_isRecording) {
+      // إيقاف التسجيل
+      final path = await _audioRecorder.stop();
+      setState(() {
+        _isRecording = false;
+        _recordedAudioPath = path;
+      });
+      return;
+    }
+
+    // فحص إذن الميكروفون
+    var status = await Permission.microphone.status;
+    
+    if (status.isDenied) {
+      // إظهار رسالة توضيحية للمستخدم أولاً
+      bool proceed = await _showPermissionDialog();
+      if (!proceed) return;
+      status = await Permission.microphone.request();
+    }
+
+    if (status.isPermanentlyDenied) {
+      _showSettingsDialog();
+      return;
+    }
+
+    if (status.isGranted) {
+      if (await _audioRecorder.hasPermission()) {
+        final Directory tempDir = await getTemporaryDirectory();
+        final String filePath = '${tempDir.path}/shira_audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+        await _audioRecorder.start(
+          const RecordConfig(encoder: AudioEncoder.aacLc),
+          path: filePath,
+        );
+
+        setState(() {
+          _isRecording = true;
+          _recordedAudioPath = null;
+        });
       }
-      List<String> collections = ['consumers', 'sellers', 'users'];
-      for (var col in collections) {
-        var doc = await FirebaseFirestore.instance.collection(col).doc(uid).get();
-        if (doc.exists) {
-          var data = doc.data()!;
-          results["userName"] = data['fullname'] ?? data['merchantName'] ?? results["userName"];
-          results["role"] = data['role'] ?? col;
-          results["userPhone"] = data['phone'] ?? "N/A";
-          break;
-        }
-      }
-    } catch (e) { debugPrint("Error: $e"); }
-    return results;
-  }
-
-  Future<void> _sendMessage() async {
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    setState(() {
-      _messages.add({"role": "user", "text": text});
-      _isTyping = true;
-    });
-    _controller.clear();
-    _scrollToBottom();
-    await _saveChatHistory();
-
-    try {
-      final userDetails = await _getUserDetails(user.uid);
-      final idToken = await user.getIdToken();
-
-      final response = await http.post(
-        Uri.parse(apiGatewayUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $idToken',
-          'X-User-UID': user.uid
-        },
-        body: json.encode({
-          "message": text,
-          "uid": user.uid,
-          "userName": userDetails['userName'],
-          "role": userDetails['role'],
-          "userPhone": userDetails['userPhone'],
-          "location": userDetails['location'],
-          "address": userDetails['address'],
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final String botReply = data['message'] ?? "أنا هنا لمساعدتك، عمليات العهدة جاهزة.";
-
-        // ✅ لو الباك إند رجع بيانات ملف (تقرير Excel/CSV)، نضيفها لنفس الرسالة
-        final Map<String, dynamic>? fileData = data['file'];
-
-        setState(() => _messages.add({
-              "role": "bot",
-              "text": botReply,
-              if (fileData != null) "fileUrl": fileData['url'],
-              if (fileData != null) "fileName": fileData['name'],
-              if (fileData != null) "fileType": fileData['type'],
-            }));
-        _scrollToBottom();
-        await _saveChatHistory();
-      } else {
-        setState(() => _messages.add({"role": "bot", "text": "شـيرا تواجه صعوبة في تحليل البيانات حالياً."}));
-      }
-    } catch (e) {
-      setState(() => _messages.add({"role": "bot", "text": "عذراً يا غالي، واجهت مشكلة في الاتصال بالسيرفر."}));
-    } finally {
-      setState(() => _isTyping = false);
-      _scrollToBottom();
     }
   }
 
-  Future<void> _openFile(String url) async {
-    final uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      debugPrint("تعذر فتح رابط الملف: $url");
+  Future<bool> _showPermissionDialog() async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text("إذن تسجيل الصوت", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            content: const Text(
+              "نحتاج الوصول للميكروفون لتتمكن من إرسال الاستفسارات والرسائل الصوتية المباشرة لشيرا.",
+              style: TextStyle(fontSize: 15),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text("إلغاء", style: TextStyle(color: Colors.grey, fontSize: 15)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E88E5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text("سماح", style: TextStyle(color: Colors.white, fontSize: 15)),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  void _showSettingsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text("الميكروفون محظور", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        content: const Text(
+          "يبدو أنك رفضت الإذن بشكل دائم. يمكنك تفعيله يدويًا من إعدادات التطبيق للاستفادة من الميزة الصوتية.",
+          style: TextStyle(fontSize: 15),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("إلغاء", style: TextStyle(color: Colors.grey, fontSize: 15)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E88E5)),
+            onPressed: () {
+              Navigator.pop(context);
+              openAppSettings();
+            },
+            child: const Text("الإعدادات", style: TextStyle(color: Colors.white, fontSize: 15)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- إرسال الرسائل (نص أو صوت) ---
+  Future<void> _sendMessage() async {
+    final textMessage = _messageController.text.trim();
+    final hasAudio = _recordedAudioPath != null;
+
+    if (textMessage.isEmpty && !hasAudio) return;
+
+    // إضافة الرسالة في الواجهة (سواء نصية أو مؤشر صوت)
+    setState(() {
+      _messages.add({
+        "sender": "user",
+        "text": hasAudio ? "🎤 [رسالة صوتية]" : textMessage,
+        "isAudio": hasAudio,
+        "audioPath": _recordedAudioPath,
+      });
+      _isLoading = true;
+    });
+
+    _messageController.clear();
+    final audioToSend = _recordedAudioPath;
+    setState(() {
+      _recordedAudioPath = null;
+    });
+
+    _scrollToBottom();
+
+    try {
+      final url = Uri.parse("https://shirachat-tmfag3rhdq-uc.a.run.app");
+      http.Response response;
+
+      if (hasAudio) {
+        // تجهيز Multipart Request لإرسال الملف الصوتي للباك إند مباشرة
+        var request = http.MultipartRequest("POST", url);
+        request.files.add(await http.MultipartFile.fromPath('file', audioToSend!));
+        var streamedResponse = await request.send();
+        response = await http.Response.fromStream(streamedResponse);
+      } else {
+        // إرسال النص العادي كما هو سابقاً
+        response = await http.post(
+          url,
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({"message": textMessage}),
+        );
+      }
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final reply = data["reply"] ?? "لم يتم استلام رد من النظام.";
+
+        setState(() {
+          _messages.add({"sender": "bot", "text": reply});
+        });
+      } else {
+        setState(() {
+          _messages.add({
+            "sender": "bot",
+            "text": "حدث خطأ في الاتصال بالخادم (${response.statusCode})."
+          });
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _messages.add({
+          "sender": "bot",
+          "text": "عذراً، حدث خطأ أثناء إرسال البيانات: $e"
+        });
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+      _scrollToBottom();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-      child: Container(
-        height: 88.h,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.72),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(35)),
-          border: Border.all(color: Colors.white.withOpacity(0.45), width: 1.5),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 35, spreadRadius: 5)
-          ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.only(bottom: bottomInset),
-            child: Column(
-              children: [
-                _buildHeader(),
-                Expanded(
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, i) {
-                      final msg = _messages[i];
-                      return TweenAnimationBuilder<double>(
-                        tween: Tween<double>(begin: 0.0, end: 1.0),
-                        duration: const Duration(milliseconds: 400),
-                        curve: Curves.easeOutBack,
-                        builder: (context, value, child) {
-                          return Opacity(
-                            opacity: value,
-                            child: Transform.translate(
-                              offset: Offset(0, (1 - value) * 15),
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: _buildMessageBubble(msg),
-                      );
-                    },
-                  ),
-                ),
-                if (_isTyping) _buildCustomTypingIndicator(),
-                _buildInputSection(),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Container(
-      padding: EdgeInsets.symmetric(vertical: 1.8.h),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.35),
-        border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.4), width: 1.2)),
-      ),
-      child: Column(
-        children: [
-          Container(width: 45, height: 5, decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10))),
-          SizedBox(height: 1.5.h),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF4F6F9),
+        appBar: AppBar(
+          elevation: 1,
+          backgroundColor: Colors.white,
+          title: Row(
             children: [
-              ScaleTransition(
-                scale: _scaleAnimation,
-                child: Container(
-                  width: 58, height: 58,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: [BoxShadow(color: const Color(0xff1a237e).withOpacity(0.12), blurRadius: 12)],
-                  ),
-                  child: ClipOval(
-                    child: Image.asset('assets/images/shira_logo.png', fit: BoxFit.contain),
-                  ),
-                ),
+              CircleAvatar(
+                backgroundColor: const Color(0xFF1E88E5).withOpacity(0.1),
+                child: const Icon(Icons.smart_toy_outlined, color: Color(0xFF1E88E5)),
               ),
-              const SizedBox(width: 15),
+              const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("شـيرا | Shira AI", style: TextStyle(fontSize: 16.0.sp, fontWeight: FontWeight.w900, color: const Color(0xff1a237e), fontFamily: 'Cairo')),
-                  Text("إدارة العهدة والخدمات اللوجستية الذكية", style: TextStyle(fontSize: 9.5.sp, fontWeight: FontWeight.w700, color: Colors.black54, fontFamily: 'Cairo')),
+                children: const [
+                  Text(
+                    "المساعد الذكي (شيرا)",
+                    style: TextStyle(
+                      color: Colors.black87,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    "إدارة العهدة والاستفسارات",
+                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
                 ],
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMessageBubble(Map<String, dynamic> msg) {
-    final bool isUser = msg['role'] == 'user';
-    final String text = msg['text'] ?? '';
-    final String? fileUrl = msg['fileUrl'];
-    final String? fileName = msg['fileName'];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (!isUser) _buildBotAvatar(),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-                  decoration: BoxDecoration(
-                    color: isUser ? const Color(0xff1a237e).withOpacity(0.88) : Colors.white.withOpacity(0.95),
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(22),
-                      topRight: const Radius.circular(22),
-                      bottomLeft: Radius.circular(isUser ? 22 : 4),
-                      bottomRight: Radius.circular(isUser ? 4 : 22),
-                    ),
-                    border: Border.all(
-                      color: isUser ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.7),
-                      width: 1.2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 3))
-                    ],
-                  ),
-                  child: isUser
-                      ? Text(
-                          text,
-                          style: TextStyle(
-                            fontSize: 14.5.sp,
-                            fontWeight: FontWeight.w600,
-                            fontFamily: 'Cairo',
-                            color: Colors.white,
-                            height: 1.45,
-                          ),
-                        )
-                      : MarkdownBody(
-                          data: text,
-                          styleSheet: MarkdownStyleSheet(
-                            p: TextStyle(
-                              fontSize: 15.0.sp,
-                              fontWeight: FontWeight.w500,
-                              fontFamily: 'Cairo',
-                              color: Colors.black87,
-                              height: 1.55,
-                            ),
-                            strong: TextStyle(
-                              fontSize: 15.5.sp,
-                              fontWeight: FontWeight.w800,
-                              fontFamily: 'Cairo',
-                              color: const Color(0xff1a237e),
-                            ),
-                          ),
-                        ),
-                ),
-                // ✅ بطاقة الملف (File Chip) - بتظهر بس لو الرسالة معاها تقرير جاهز
-                if (fileUrl != null) ...[
-                  const SizedBox(height: 6),
-                  _buildFileChip(fileUrl, fileName ?? 'التقرير'),
-                ],
-              ],
-            ),
-          ),
-          if (isUser) const SizedBox(width: 5),
-        ],
-      ),
-    );
-  }
-
-  // بطاقة ملف تفاعلية لعرض التقرير القابل للتحميل/الفتح
-  Widget _buildFileChip(String url, String fileName) {
-    return GestureDetector(
-      onTap: () => _openFile(url),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.green.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.green.withOpacity(0.3)),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        body: Column(
           children: [
-            const Icon(Icons.table_view_rounded, color: Colors.green, size: 22),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                fileName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87),
+            // قائمة المحادثات
+            Expanded(
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                itemCount: _messages.length,
+                itemBuilder: (context, index) {
+                  final msg = _messages[index];
+                  final isUser = msg["sender"] == "user";
+                  return _buildMessageBubble(
+                    text: msg["text"],
+                    isUser: isUser,
+                    isAudio: msg["isAudio"] ?? false,
+                  );
+                },
               ),
             ),
-            const SizedBox(width: 8),
-            const Icon(Icons.download_rounded, color: Colors.green, size: 20),
+
+            // مؤشر التحميل
+            if (_isLoading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8.0),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                ),
+              ),
+
+            // شريط إدخال الرسائل والتسجيل
+            _buildInputArea(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBotAvatar() {
-    return Padding(
-      padding: const EdgeInsets.only(left: 0, right: 10, bottom: 2),
+  // تصميم فقاعة المحادثة
+  Widget _buildMessageBubble({required String text, required bool isUser, bool isAudio = false}) {
+    return Align(
+      alignment: isUser ? Alignment.centerLeft : Alignment.centerRight,
       child: Container(
-        width: 32, height: 32,
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.78,
+        ),
         decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: const Color(0xff1a237e).withOpacity(0.18)),
-        ),
-        child: ClipOval(
-          child: Image.asset('assets/images/shira_logo.png', fit: BoxFit.contain),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCustomTypingIndicator() {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 1.5.h),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          _buildBotAvatar(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.9),
-              borderRadius: const BorderRadius.all(Radius.circular(20)),
-              border: Border.all(color: Colors.white.withOpacity(0.6)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2.0, color: Color(0xff1a237e)),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  "شـيرا تحلل وتحدث بيانات العهدة...",
-                  style: TextStyle(fontSize: 11.5.sp, fontWeight: FontWeight.w700, color: const Color(0xff1a237e), fontFamily: 'Cairo'),
-                ),
-              ],
-            ),
+          color: isUser ? const Color(0xFF1E88E5) : Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(isUser ? 4 : 16),
+            bottomRight: Radius.circular(isUser ? 16 : 4),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInputSection() {
-    return Container(
-      margin: EdgeInsets.only(left: 4.w, right: 4.w, bottom: 3.0.h, top: 0.8.h),
-      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(35),
-        border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.2),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              textDirection: TextDirection.rtl,
-              style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600, fontSize: 15.0, color: Colors.black87),
-              decoration: InputDecoration(
-                hintText: "استفسر عن نقاط التأمين أو حالة الشحنة...",
-                hintTextDirection: TextDirection.rtl,
-                hintStyle: const TextStyle(color: Colors.black38, fontSize: 13.5, fontFamily: 'Cairo'),
-                filled: true,
-                fillColor: Colors.transparent,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isAudio) ...[
+              Icon(Icons.mic, size: 18, color: isUser ? Colors.white : const Color(0xFF1E88E5)),
+              const SizedBox(width: 6),
+            ],
+            Flexible(
+              child: Text(
+                text,
+                style: TextStyle(
+                  // الحفاظ على حجم الخط القياسي المحدد
+                  fontSize: 15.0,
+                  height: 1.4,
+                  color: isUser ? Colors.white : Colors.black87,
+                  fontWeight: FontWeight.w400,
+                ),
               ),
-              onSubmitted: (_) => _sendMessage(),
             ),
-          ),
-          const SizedBox(width: 8),
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: _controller,
-            builder: (context, value, child) {
-              final hasText = value.text.trim().isNotEmpty;
-              return AnimatedScale(
-                scale: hasText ? 1.0 : 0.9,
-                duration: const Duration(milliseconds: 200),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  decoration: BoxDecoration(
-                    color: hasText ? const Color(0xff1a237e) : Colors.grey[400],
-                    shape: BoxShape.circle,
-                    boxShadow: hasText
-                        ? [BoxShadow(color: const Color(0xff1a237e).withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 3))]
-                        : [],
-                  ),
-                  child: GestureDetector(
-                    onTap: _sendMessage,
-                    child: const Padding(
-                      padding: EdgeInsets.all(12.0),
-                      child: Icon(Icons.send_rounded, color: Colors.white, size: 22),
-                    ),
-                  ),
-                ),
-              );
-            },
+          ],
+        ),
+      ),
+    );
+  }
+
+  // تصميم منطقة الإدخال السفلية
+  Widget _buildInputArea() {
+    final bool hasText = _messageController.text.trim().isNotEmpty;
+    final bool hasAudioReady = _recordedAudioPath != null;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
           ),
         ],
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            // زر الميكروفون
+            GestureDetector(
+              onTap: _handleMicrophonePermissionAndRecord,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _isRecording ? Colors.red.withOpacity(0.1) : Colors.transparent,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _isRecording ? Icons.stop_circle : Icons.mic_rounded,
+                  color: _isRecording ? Colors.red : const Color(0xFF5F6368),
+                  size: 26,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+
+            // حقل النص أو عرض حالة التسجيل
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F3F4),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: _isRecording
+                    ? Row(
+                        children: const [
+                          Icon(Icons.fiber_manual_record, color: Colors.red, size: 14),
+                          SizedBox(width: 8),
+                          Text(
+                            "جاري التسجيل الصوتي...",
+                            style: TextStyle(color: Colors.red, fontSize: 14, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      )
+                    : hasAudioReady
+                        ? Row(
+                            children: [
+                              const Icon(Icons.audio_file, color: Color(0xFF1E88E5), size: 18),
+                              const SizedBox(width: 6),
+                              const Expanded(
+                                child: Text(
+                                  "تسجيل صوتي جاهز للإرسال",
+                                  style: TextStyle(fontSize: 14, color: Colors.black87),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+                                onPressed: () {
+                                  setState(() {
+                                    _recordedAudioPath = null;
+                                  });
+                                },
+                              ),
+                            ],
+                          )
+                        : TextField(
+                            controller: _messageController,
+                            onChanged: (_) => setState(() {}),
+                            style: const TextStyle(fontSize: 15.0),
+                            decoration: const InputDecoration(
+                              hintText: "اكتب استفسارك هنا...",
+                              hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
+                              border: InputBorder.none,
+                            ),
+                          ),
+              ),
+            ),
+
+            const SizedBox(width: 8),
+
+            // زر الإرسال
+            InkWell(
+              onTap: (hasText || hasAudioReady) && !_isLoading ? _sendMessage : null,
+              borderRadius: BorderRadius.circular(24),
+              child: CircleAvatar(
+                radius: 22,
+                backgroundColor: (hasText || hasAudioReady) && !_isLoading
+                    ? const Color(0xFF1E88E5)
+                    : Colors.grey.shade300,
+                child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
