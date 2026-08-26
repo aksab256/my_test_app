@@ -200,20 +200,27 @@ class _SellerScreenState extends State<SellerScreen> {
           ],
         ),
         
-        floatingActionButton: FloatingActionButton(
-          heroTag: "seller_main_chat",
-          backgroundColor: const Color(0xff28a745),
-          elevation: 4,
-          onPressed: () {
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (context) => const ChatSupportWidget(),
-            );
-          },
-          child: const Icon(Icons.support_agent, color: Colors.white, size: 32),
-        ),
+       floatingActionButton: FloatingActionButton(
+  heroTag: "seller_main_chat",
+  backgroundColor: const Color(0xff28a745),
+  elevation: 4,
+  onPressed: () {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ChatSupportWidget(
+        uid: UserSession.userId ?? '',
+        role: 'seller',
+      ),
+    );
+  },
+  child: const Icon(
+    Icons.support_agent,
+    color: Colors.white,
+    size: 32,
+  ),
+),
         
         body: Column(
           children: [

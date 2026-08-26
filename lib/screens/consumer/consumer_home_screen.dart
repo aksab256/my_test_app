@@ -244,10 +244,14 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
             heroTag: "consumer_home_chat_btn",
             onPressed: () {
               showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (context) => const ChatSupportWidget());
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (context) => ChatSupportWidget(
+                  uid: FirebaseAuth.instance.currentUser?.uid ?? '',
+                  role: 'consumer',
+                ),
+              );
             },
             backgroundColor: Colors.transparent,
             elevation: 8,

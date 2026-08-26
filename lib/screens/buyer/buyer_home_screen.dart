@@ -296,7 +296,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with SingleTickerProv
               context: context,
               isScrollControlled: true,
               backgroundColor: Colors.transparent,
-              builder: (context) => const ChatSupportWidget(),
+              builder: (context) => ChatSupportWidget(
+                uid: _currentUserId!,
+                role: 'buyer',
+              ),
             );
           },
           // 🚀 استخدام ScaleTransition لتنفيذ تأثير النبض
