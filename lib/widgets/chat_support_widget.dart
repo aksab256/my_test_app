@@ -5,9 +5,17 @@ import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 class ChatSupportWidget extends StatefulWidget {
-  const ChatSupportWidget({Key? key}) : super(key: key);
+  final String uid;
+  final String role;
+
+  const ChatSupportWidget({
+    Key? key,
+    required this.uid,
+    required this.role,
+  }) : super(key: key);
 
   @override
   State<ChatSupportWidget> createState() => _ChatSupportWidgetState();
@@ -17,18 +25,81 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<Map<String, dynamic>> _messages = [];
-  
+
   final AudioRecorder _audioRecorder = AudioRecorder();
-  
+  final FlutterTts _flutterTts = FlutterTts();
+
   bool _isLoading = false;
   bool _isRecording = false;
+  bool _isPlayingAudio = false;
   String? _recordedAudioPath;
+
+  @override
+  void initState() {
+    super.initState();
+    _initTts();
+  }
+
+  // تهيئة محرك تحويل النص إلى صوت (Text-To-Speech)
+  Future<void> _initTts() async {
+    await _flutterTts.setLanguage("ar");
+    await _flutterTts.setSpeechRate(0.45); // سرعة نطق مناسبة ومفهومة
+    await _flutterTts.setPitch(1.0);
+
+    _flutterTts.setStartHandler(() {
+      if (mounted) {
+        setState(() {
+          _isPlayingAudio = true;
+        });
+      }
+    });
+
+    _flutterTts.setCompletionHandler(() {
+      if (mounted) {
+        setState(() {
+          _isPlayingAudio = false;
+        });
+      }
+    });
+
+    _flutterTts.setErrorHandler((msg) {
+      if (mounted) {
+        setState(() {
+          _isPlayingAudio = false;
+        });
+      }
+    });
+  }
+
+  // تشغيل أو إيقاف نطق النص صوتياً
+  Future<void> _speakText(String text) async {
+    if (_isPlayingAudio) {
+      await _flutterTts.stop();
+      setState(() {
+        _isPlayingAudio = false;
+      });
+    } else {
+      if (text.isNotEmpty) {
+        // تنظيف النص من أجزاء الروابط والعلامات البرمجية قبل القراءة
+        String cleanText = text
+            .replaceAll(RegExp(r'https?://[^\s]+'), '')
+            .replaceAll(RegExp(r'\[.*?\]'), '')
+            .replaceAll('#', '')
+            .trim();
+
+        if (cleanText.isNotEmpty) {
+          await _flutterTts.speak(cleanText);
+        }
+      }
+    }
+  }
 
   @override
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
     _audioRecorder.dispose();
+    _flutterTts.stop();
     super.dispose();
   }
 
@@ -59,9 +130,8 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
 
     // فحص إذن الميكروفون
     var status = await Permission.microphone.status;
-    
+
     if (status.isDenied) {
-      // إظهار رسالة توضيحية للمستخدم أولاً
       bool proceed = await _showPermissionDialog();
       if (!proceed) return;
       status = await Permission.microphone.request();
@@ -75,7 +145,8 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
     if (status.isGranted) {
       if (await _audioRecorder.hasPermission()) {
         final Directory tempDir = await getTemporaryDirectory();
-        final String filePath = '${tempDir.path}/shira_audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        final String filePath =
+            '${tempDir.path}/shira_audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
         await _audioRecorder.start(
           const RecordConfig(encoder: AudioEncoder.aacLc),
@@ -94,8 +165,10 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text("إذن تسجيل الصوت", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16)),
+            title: const Text("إذن تسجيل الصوت",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
             content: const Text(
               "نحتاج الوصول للميكروفون لتتمكن من إرسال الاستفسارات والرسائل الصوتية المباشرة لشيرا.",
               style: TextStyle(fontSize: 15),
@@ -103,15 +176,18 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text("إلغاء", style: TextStyle(color: Colors.grey, fontSize: 15)),
+                child: const Text("إلغاء",
+                    style: TextStyle(color: Colors.grey, fontSize: 15)),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF1E88E5),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text("سماح", style: TextStyle(color: Colors.white, fontSize: 15)),
+                child: const Text("سماح",
+                    style: TextStyle(color: Colors.white, fontSize: 15)),
               ),
             ],
           ),
@@ -123,8 +199,10 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text("الميكروفون محظور", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text("الميكروفون محظور",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         content: const Text(
           "يبدو أنك رفضت الإذن بشكل دائم. يمكنك تفعيله يدويًا من إعدادات التطبيق للاستفادة من الميزة الصوتية.",
           style: TextStyle(fontSize: 15),
@@ -132,15 +210,18 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("إلغاء", style: TextStyle(color: Colors.grey, fontSize: 15)),
+            child: const Text("إلغاء",
+                style: TextStyle(color: Colors.grey, fontSize: 15)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E88E5)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E88E5)),
             onPressed: () {
               Navigator.pop(context);
               openAppSettings();
             },
-            child: const Text("الإعدادات", style: TextStyle(color: Colors.white, fontSize: 15)),
+            child: const Text("الإعدادات",
+                style: TextStyle(color: Colors.white, fontSize: 15)),
           ),
         ],
       ),
@@ -154,7 +235,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
 
     if (textMessage.isEmpty && !hasAudio) return;
 
-    // إضافة الرسالة في الواجهة (سواء نصية أو مؤشر صوت)
+    // إضافة رسالة المستخدم في الواجهة
     setState(() {
       _messages.add({
         "sender": "user",
@@ -178,27 +259,47 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
       http.Response response;
 
       if (hasAudio) {
-        // تجهيز Multipart Request لإرسال الملف الصوتي للباك إند مباشرة
+        // تجهيز Multipart Request وتمرير uid و role والملف الصوتي
         var request = http.MultipartRequest("POST", url);
+        request.fields['uid'] = widget.uid;
+        request.fields['role'] = widget.role;
+        if (textMessage.isNotEmpty) {
+          request.fields['message'] = textMessage;
+        }
+
         request.files.add(await http.MultipartFile.fromPath('file', audioToSend!));
+
         var streamedResponse = await request.send();
         response = await http.Response.fromStream(streamedResponse);
       } else {
-        // إرسال النص العادي كما هو سابقاً
+        // إرسال JSON عادي يتضمن uid و role و message
         response = await http.post(
           url,
           headers: {"Content-Type": "application/json"},
-          body: jsonEncode({"message": textMessage}),
+          body: jsonEncode({
+            "uid": widget.uid,
+            "role": widget.role,
+            "message": textMessage,
+          }),
         );
       }
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final reply = data["reply"] ?? "لم يتم استلام رد من النظام.";
+        final reply = data["message"] ?? data["reply"] ?? "لم يتم استلام رد من النظام.";
 
         setState(() {
-          _messages.add({"sender": "bot", "text": reply});
+          _messages.add({
+            "sender": "bot",
+            "text": reply,
+            "file": data["file"], // في حال أرجع الباك إند ملف تقرير
+          });
         });
+
+        // إذا أرسل المستخدم بصمة صوتية، ينطق المساعد الذكي الرد تلقائياً
+        if (hasAudio) {
+          _speakText(reply);
+        }
       } else {
         setState(() {
           _messages.add({
@@ -273,6 +374,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
                     text: msg["text"],
                     isUser: isUser,
                     isAudio: msg["isAudio"] ?? false,
+                    fileData: msg["file"],
                   );
                 },
               ),
@@ -298,14 +400,19 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
   }
 
   // تصميم فقاعة المحادثة
-  Widget _buildMessageBubble({required String text, required bool isUser, bool isAudio = false}) {
+  Widget _buildMessageBubble({
+    required String text,
+    required bool isUser,
+    bool isAudio = false,
+    Map<String, dynamic>? fileData,
+  }) {
     return Align(
       alignment: isUser ? Alignment.centerLeft : Alignment.centerRight,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.78,
+          maxWidth: MediaQuery.of(context).size.width * 0.82,
         ),
         decoration: BoxDecoration(
           color: isUser ? const Color(0xFF1E88E5) : Colors.white,
@@ -323,25 +430,70 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
             ),
           ],
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (isAudio) ...[
-              Icon(Icons.mic, size: 18, color: isUser ? Colors.white : const Color(0xFF1E88E5)),
-              const SizedBox(width: 6),
-            ],
-            Flexible(
-              child: Text(
-                text,
-                style: TextStyle(
-                  // الحفاظ على حجم الخط القياسي المحدد
-                  fontSize: 15.0,
-                  height: 1.4,
-                  color: isUser ? Colors.white : Colors.black87,
-                  fontWeight: FontWeight.w400,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isAudio) ...[
+                  Icon(Icons.mic,
+                      size: 18, color: isUser ? Colors.white : const Color(0xFF1E88E5)),
+                  const SizedBox(width: 6),
+                ],
+                Flexible(
+                  child: Text(
+                    text,
+                    style: TextStyle(
+                      fontSize: 15.0,
+                      height: 1.4,
+                      color: isUser ? Colors.white : Colors.black87,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+                if (!isUser) ...[
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () => _speakText(text),
+                    child: Icon(
+                      _isPlayingAudio ? Icons.volume_off : Icons.volume_up_rounded,
+                      size: 20,
+                      color: const Color(0xFF1E88E5),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            // عرض رابط التحميل لو الرسال فيها تقرير CSV أو ملف مرفق من السيرفر
+            if (fileData != null && fileData["url"] != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE3F2FD),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.insert_drive_file, color: Color(0xFF1E88E5), size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        fileData["name"] ?? "تحميل التقرير",
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1565C0),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -402,7 +554,11 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
                           SizedBox(width: 8),
                           Text(
                             "جاري التسجيل الصوتي...",
-                            style: TextStyle(color: Colors.red, fontSize: 14, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
                       )
