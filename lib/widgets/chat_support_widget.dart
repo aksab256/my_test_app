@@ -7,6 +7,7 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:http_parser/http_parser.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChatSupportWidget extends StatefulWidget {
   final String uid;
@@ -32,6 +33,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
   final FlutterTts _flutterTts = FlutterTts();
 
   bool _isLoading = false;
+  bool _isFetchingHistory = true;
   bool _isRecording = false;
   bool _isPlayingAudio = false;
   String? _recordedAudioPath;
@@ -43,10 +45,50 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
   void initState() {
     super.initState();
     _initTts();
+    _fetchChatHistory();
     _glowController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 4),
     )..repeat(reverse: true);
+  }
+
+  // جلب آخر 15 رسالة فقط من سجل المحادثات
+  Future<void> _fetchChatHistory() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.uid)
+          .collection('chats')
+          .doc('shira_main')
+          .collection('messages')
+          .orderBy('timestamp', descending: true)
+          .limit(15)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        final docs = snapshot.docs.reversed.toList();
+        setState(() {
+          for (var doc in docs) {
+            final data = doc.data();
+            _messages.add({
+              "sender": data['sender'] ?? 'bot',
+              "text": data['text'] ?? '',
+              "isAudio": data['isAudio'] ?? false,
+              "file": data['file'],
+            });
+          }
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      debugPrint("Error fetching chat history: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isFetchingHistory = false;
+        });
+      }
+    }
   }
 
   // تهيئة محرك تحويل النص إلى صوت (Text-To-Speech)
@@ -338,7 +380,8 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
 
   @override
   Widget build(BuildContext context) {
-    final topPadding = MediaQuery.of(context).padding.top + 45; // مسافة علوية تظهر الصفحة الخلفية للتطبيق
+    // زيادة المسافة العلوية لتقصير النافذة وإظهار جزء واضح من هيدر التطبيق الأصلي
+    final topPadding = MediaQuery.of(context).size.height * 0.18;
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -400,24 +443,31 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
 
                       // منطقة المحادثات والأصناف
                       Expanded(
-                        child: _messages.isEmpty
-                            ? _buildGeminiWelcomeState()
-                            : ListView.builder(
-                                controller: _scrollController,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 12),
-                                itemCount: _messages.length,
-                                itemBuilder: (context, index) {
-                                  final msg = _messages[index];
-                                  final isUser = msg["sender"] == "user";
-                                  return _buildMessageBubble(
-                                    text: msg["text"],
-                                    isUser: isUser,
-                                    isAudio: msg["isAudio"] ?? false,
-                                    fileData: msg["file"],
-                                  );
-                                },
-                              ),
+                        child: _isFetchingHistory
+                            ? const Center(
+                                child: CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Color(0xFF8AB4F8)),
+                                ),
+                              )
+                            : _messages.isEmpty
+                                ? _buildGeminiWelcomeState()
+                                : ListView.builder(
+                                    controller: _scrollController,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 12),
+                                    itemCount: _messages.length,
+                                    itemBuilder: (context, index) {
+                                      final msg = _messages[index];
+                                      final isUser = msg["sender"] == "user";
+                                      return _buildMessageBubble(
+                                        text: msg["text"],
+                                        isUser: isUser,
+                                        isAudio: msg["isAudio"] ?? false,
+                                        fileData: msg["file"],
+                                      );
+                                    },
+                                  ),
                       ),
 
                       // مؤشر التحميل بتأثير توهج ذكي
@@ -442,7 +492,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
                                   colors: [Color(0xFF8AB4F8), Color(0xFFC084FC)],
                                 ).createShader(bounds),
                                 child: const Text(
-                                  "شیرا تفكر الآن...",
+                                  "شيرا تفكر الآن...",
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 13,

@@ -135,7 +135,7 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
           'specialRequestId': FieldValue.delete(),
         });
       }
-      if (context.mounted) Navigator.of(context).pop();
+      // تم الاعتماد على الخروج الآمن من الـ StreamBuilder بدلاً من pop هنا لمنع الخروج المزدوج والشاشة السوداء
     } catch (e) {
       debugPrint("Cancel Error: $e");
     }
@@ -158,11 +158,12 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
         bool isReturning = status == _returningToSeller;
         String verificationCode = isReturning ? (orderData['returnVerificationCode'] ?? "----") : (orderData['verificationCode'] ?? "----");
 
-        // ✅ إصلاح: الخروج التلقائي بقى يغطي كل الحالات النهائية الحقيقية
-        // (كان ناقص: cancelled, no_drivers_available, rejected_by_system, returned_successfully)
+        // ✅ إصلاح: الخروج التلقائي بقى يغطي كل الحالات النهائية الحقيقية بأمان لمنع الشاشة السوداء
         if (_terminalExitStatuses.contains(status)) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (context.mounted) Navigator.of(context).pop();
+            if (context.mounted && Navigator.canPop(context)) {
+              Navigator.of(context).pop();
+            }
           });
         }
 
