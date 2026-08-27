@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:http_parser/http_parser.dart';
 
 class ChatSupportWidget extends StatefulWidget {
   final String uid;
@@ -259,16 +260,29 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget> {
       http.Response response;
 
       if (hasAudio) {
-        // تجهيز Multipart Request وتمرير uid و role والملف الصوتي
+        // 1. إنشاء MultipartRequest
         var request = http.MultipartRequest("POST", url);
+        
+        // 2. إضافة Headers صريحة لمنع انقطاع اتصال الـ SSL أثناء المصافحة
+        request.headers.addAll({
+          'Accept': 'application/json',
+        });
+
         request.fields['uid'] = widget.uid;
         request.fields['role'] = widget.role;
         if (textMessage.isNotEmpty) {
           request.fields['message'] = textMessage;
         }
 
-        request.files.add(await http.MultipartFile.fromPath('file', audioToSend!));
+        // 3. تحديد نوع الملف الصوتي (audio/m4a) بوضوح لضمان قراءته بشكل صحيح في الباك إند
+        final file = await http.MultipartFile.fromPath(
+          'file', 
+          audioToSend!,
+          contentType: MediaType('audio', 'm4a'),
+        );
+        request.files.add(file);
 
+        // 4. إرسال الطلب واستقبال الرد بأمان
         var streamedResponse = await request.send();
         response = await http.Response.fromStream(streamedResponse);
       } else {
