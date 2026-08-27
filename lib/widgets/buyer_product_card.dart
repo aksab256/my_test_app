@@ -311,7 +311,7 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                                         Text(
                                           '${offer.price} ج',
                                           style: GoogleFonts.cairo(
-                                            fontSize: 10.5.sp,
+                                            fontSize: 14.sp,
                                             color: Colors.grey.shade600,
                                             decoration: TextDecoration.lineThrough,
                                           ),
@@ -320,7 +320,7 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                                         Text(
                                           '${offer.offerPrice} ج',
                                           style: GoogleFonts.cairo(
-                                            fontSize: 14.sp,
+                                            fontSize: 18.sp,
                                             fontWeight: FontWeight.w900,
                                             color: Colors.red.shade700,
                                           ),
@@ -331,7 +331,7 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                                     Text(
                                       '${offer.price} ج',
                                       style: GoogleFonts.cairo(
-                                        fontSize: 14.sp,
+                                        fontSize: 18.sp,
                                         fontWeight: FontWeight.w900,
                                         color: Colors.red.shade700,
                                       ),
