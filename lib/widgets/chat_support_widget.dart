@@ -5,9 +5,9 @@ import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 class ChatSupportWidget extends StatefulWidget {
   final String uid;
@@ -30,12 +30,13 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
   final List<Map<String, dynamic>> _messages = [];
 
   final AudioRecorder _audioRecorder = AudioRecorder();
-  final FlutterTts _flutterTts = FlutterTts();
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   bool _isLoading = false;
   bool _isFetchingHistory = true;
   bool _isRecording = false;
   bool _isPlayingAudio = false;
+  String? _currentlyPlayingUrl;
   String? _recordedAudioPath;
 
   // أنيميشن التأثير السحري لجيمناي
@@ -44,7 +45,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
   @override
   void initState() {
     super.initState();
-    _initTts();
+    _initAudioPlayer();
     _fetchChatHistory();
     _glowController = AnimationController(
       vsync: this,
@@ -52,11 +53,52 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
     )..repeat(reverse: true);
   }
 
+  // تهيئة مشغل الصوت للردود الصوتية المباشرة من Gemini
+  void _initAudioPlayer() {
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (mounted) {
+        setState(() {
+          _isPlayingAudio = (state == PlayerState.playing);
+          if (state == PlayerState.completed || state == PlayerState.stopped) {
+            _currentlyPlayingUrl = null;
+          }
+        });
+      }
+    });
+  }
+
+  // تحديد المسار الصحيح للمستخدم حسب نوع حسابه (Role)
+  String _getUserCollection() {
+    switch (widget.role) {
+      case 'seller':
+        return 'sellers';
+      case 'consumer':
+        return 'consumers';
+      case 'sales_representative':
+        return 'salesRep';
+      case 'freelance_agent':
+        return 'freeDrivers';
+      case 'company_agent':
+        return 'deliveryReps';
+      case 'sales_supervisor':
+      case 'delivery_supervisor':
+      case 'sales_manager':
+      case 'delivery_manager':
+      case 'admin':
+      case 'financial':
+        return 'managers';
+      case 'buyer':
+      default:
+        return 'users';
+    }
+  }
+
   // جلب آخر 15 رسالة فقط من سجل المحادثات
   Future<void> _fetchChatHistory() async {
     try {
+      final collectionName = _getUserCollection();
       final snapshot = await FirebaseFirestore.instance
-          .collection('users')
+          .collection(collectionName)
           .doc(widget.uid)
           .collection('chats')
           .doc('shira_main')
@@ -74,6 +116,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
               "sender": data['sender'] ?? 'bot',
               "text": data['text'] ?? '',
               "isAudio": data['isAudio'] ?? false,
+              "audioUrl": data['audioUrl'],
               "file": data['file'],
             });
           }
@@ -91,56 +134,51 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
     }
   }
 
-  // تهيئة محرك تحويل النص إلى صوت (Text-To-Speech)
-  Future<void> _initTts() async {
-    await _flutterTts.setLanguage("ar");
-    await _flutterTts.setSpeechRate(0.45);
-    await _flutterTts.setPitch(1.0);
-
-    _flutterTts.setStartHandler(() {
-      if (mounted) {
-        setState(() {
-          _isPlayingAudio = true;
-        });
-      }
-    });
-
-    _flutterTts.setCompletionHandler(() {
-      if (mounted) {
-        setState(() {
-          _isPlayingAudio = false;
-        });
-      }
-    });
-
-    _flutterTts.setErrorHandler((msg) {
-      if (mounted) {
-        setState(() {
-          _isPlayingAudio = false;
-        });
-      }
-    });
+  // حفظ الرسالة في Firestore لضمان استرجاع التاريخ مستقبلاً
+  Future<void> _saveMessageToFirestore({
+    required String sender,
+    required String text,
+    bool isAudio = false,
+    String? audioUrl,
+    Map<String, dynamic>? file,
+  }) async {
+    try {
+      final collectionName = _getUserCollection();
+      await FirebaseFirestore.instance
+          .collection(collectionName)
+          .doc(widget.uid)
+          .collection('chats')
+          .doc('shira_main')
+          .collection('messages')
+          .add({
+        "sender": sender,
+        "text": text,
+        "isAudio": isAudio,
+        "audioUrl": audioUrl,
+        "file": file,
+        "timestamp": FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint("Error saving message to Firestore: $e");
+    }
   }
 
-  // تشغيل أو إيقاف نطق النص صوتياً
-  Future<void> _speakText(String text) async {
-    if (_isPlayingAudio) {
-      await _flutterTts.stop();
+  // تشغيل أو إيقاف المقطع الصوتي القادم من Gemini TTS
+  Future<void> _playGeminiAudio(String? url) async {
+    if (url == null || url.isEmpty) return;
+
+    if (_isPlayingAudio && _currentlyPlayingUrl == url) {
+      await _audioPlayer.stop();
       setState(() {
         _isPlayingAudio = false;
+        _currentlyPlayingUrl = null;
       });
     } else {
-      if (text.isNotEmpty) {
-        String cleanText = text
-            .replaceAll(RegExp(r'https?://[^\s]+'), '')
-            .replaceAll(RegExp(r'\[.*?\]'), '')
-            .replaceAll('#', '')
-            .trim();
-
-        if (cleanText.isNotEmpty) {
-          await _flutterTts.speak(cleanText);
-        }
-      }
+      await _audioPlayer.stop();
+      setState(() {
+        _currentlyPlayingUrl = url;
+      });
+      await _audioPlayer.play(UrlSource(url));
     }
   }
 
@@ -149,7 +187,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
     _messageController.dispose();
     _scrollController.dispose();
     _audioRecorder.dispose();
-    _flutterTts.stop();
+    _audioPlayer.dispose();
     _glowController.dispose();
     super.dispose();
   }
@@ -284,15 +322,24 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
 
     if (textMessage.isEmpty && !hasAudio) return;
 
+    final userMsgText = hasAudio ? "🎤 [رسالة صوتية]" : textMessage;
+
     setState(() {
       _messages.add({
         "sender": "user",
-        "text": hasAudio ? "🎤 [رسالة صوتية]" : textMessage,
+        "text": userMsgText,
         "isAudio": hasAudio,
         "audioPath": _recordedAudioPath,
       });
       _isLoading = true;
     });
+
+    // حفظ رسالة المستخدم في الهيستوري
+    _saveMessageToFirestore(
+      sender: "user",
+      text: userMsgText,
+      isAudio: hasAudio,
+    );
 
     _messageController.clear();
     final audioToSend = _recordedAudioPath;
@@ -343,17 +390,29 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
         final data = jsonDecode(response.body);
         final reply =
             data["message"] ?? data["reply"] ?? "لم يتم استلام رد من النظام.";
+        final audioUrl = data["audioUrl"];
+        final fileData = data["file"];
 
         setState(() {
           _messages.add({
             "sender": "bot",
             "text": reply,
-            "file": data["file"],
+            "audioUrl": audioUrl,
+            "file": fileData,
           });
         });
 
-        if (hasAudio) {
-          _speakText(reply);
+        // حفظ رد الباك إند في الهيستوري
+        _saveMessageToFirestore(
+          sender: "bot",
+          text: reply,
+          audioUrl: audioUrl,
+          file: fileData,
+        );
+
+        // تشغيل صوت Gemini TTS الأصلي القادم من الخادم فور استلامه
+        if (audioUrl != null && audioUrl.toString().isNotEmpty) {
+          _playGeminiAudio(audioUrl);
         }
       } else {
         setState(() {
@@ -464,6 +523,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
                                         text: msg["text"],
                                         isUser: isUser,
                                         isAudio: msg["isAudio"] ?? false,
+                                        audioUrl: msg["audioUrl"],
                                         fileData: msg["file"],
                                       );
                                     },
@@ -671,8 +731,11 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
     required String text,
     required bool isUser,
     bool isAudio = false,
+    String? audioUrl,
     Map<String, dynamic>? fileData,
   }) {
+    final bool isThisPlaying = _isPlayingAudio && _currentlyPlayingUrl == audioUrl;
+
     return Align(
       alignment: isUser ? Alignment.centerLeft : Alignment.centerRight,
       child: Container(
@@ -725,13 +788,13 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
                     ),
                   ),
                 ),
-                if (!isUser) ...[
+                if (!isUser && audioUrl != null && audioUrl.isNotEmpty) ...[
                   const SizedBox(width: 8),
                   GestureDetector(
-                    onTap: () => _speakText(text),
+                    onTap: () => _playGeminiAudio(audioUrl),
                     child: Icon(
-                      _isPlayingAudio ? Icons.volume_off : Icons.volume_up_rounded,
-                      size: 19,
+                      isThisPlaying ? Icons.stop_circle_rounded : Icons.play_circle_fill_rounded,
+                      size: 24,
                       color: const Color(0xFF8AB4F8),
                     ),
                   ),
