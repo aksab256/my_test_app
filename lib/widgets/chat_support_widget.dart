@@ -402,9 +402,9 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
 
         // تأمين وتصفية الاستجابة لمنع عرض نصوص الأخطاء الخام
         String reply = data["message"] ?? data["reply"] ?? "";
-        if (reply.isEmpty || reply.contains('"incomplete_details"') || reply.contains('"max_output_tokens"')) {
-          reply = "تم استلام الطلب وبانتظار رد المساعد، يرجى المحاولة مرة أخرى.";
-        }
+        if (reply.isEmpty) {
+  reply = "تم استلام الطلب وبانتظار رد المساعد، يرجى المحاولة مرة أخرى.";
+}
 
         final audioUrl = data["audioUrl"];
         final fileData = data["file"];
