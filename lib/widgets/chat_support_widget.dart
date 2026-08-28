@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -315,7 +316,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
     );
   }
 
-  // --- إرسال الرسائل (نص أو صوت) ---
+  // --- إرسال الرسائل (نص أو صوت) مع تأمين الاستلام ومعالجة الـ Timeout ---
   Future<void> _sendMessage() async {
     final textMessage = _messageController.text.trim();
     final hasAudio = _recordedAudioPath != null;
@@ -372,7 +373,12 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
         );
         request.files.add(file);
 
-        var streamedResponse = await request.send();
+        var streamedResponse = await request.send().timeout(
+          const Duration(seconds: 45),
+          onTimeout: () {
+            throw TimeoutException("استغرقت الاستجابة وقتاً أطول من المتوقع.");
+          },
+        );
         response = await http.Response.fromStream(streamedResponse);
       } else {
         response = await http.post(
@@ -383,13 +389,23 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
             "role": widget.role,
             "message": textMessage,
           }),
+        ).timeout(
+          const Duration(seconds: 45),
+          onTimeout: () {
+            throw TimeoutException("استغرقت الاستجابة وقتاً أطول من المتوقع.");
+          },
         );
       }
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final reply =
-            data["message"] ?? data["reply"] ?? "لم يتم استلام رد من النظام.";
+
+        // تأمين وتصفية الاستجابة لمنع عرض نصوص الأخطاء الخام
+        String reply = data["message"] ?? data["reply"] ?? "";
+        if (reply.isEmpty || reply.contains('"incomplete_details"') || reply.contains('"max_output_tokens"')) {
+          reply = "تم استلام الطلب وبانتظار رد المساعد، يرجى المحاولة مرة أخرى.";
+        }
+
         final audioUrl = data["audioUrl"];
         final fileData = data["file"];
 
@@ -414,6 +430,13 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
         if (audioUrl != null && audioUrl.toString().isNotEmpty) {
           _playGeminiAudio(audioUrl);
         }
+      } else if (response.statusCode == 504) {
+        setState(() {
+          _messages.add({
+            "sender": "bot",
+            "text": "انتهت مهلة الاتصال بالخادم (504). جاري معالجة الطلب، يرجى إعادة المحاولة."
+          });
+        });
       } else {
         setState(() {
           _messages.add({
@@ -426,7 +449,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
       setState(() {
         _messages.add({
           "sender": "bot",
-          "text": "عذراً، حدث خطأ أثناء إرسال البيانات: $e"
+          "text": "عذراً، حدث خطأ أثناء الاتصال: ${e is TimeoutException ? 'استغرقت الاستجابة وقتاً طويلاً' : 'تعذر الاتصال بالخادم'}"
         });
       });
     } finally {
