@@ -1,12 +1,11 @@
 // lib/widgets/login_form_widget.dart
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart'; // 👈 لفتح رابط الواتساب
 import 'package:my_test_app/services/akedly_auth_service.dart';
 import 'package:my_test_app/services/user_session.dart';
-import 'package:my_test_app/helpers/auth_service.dart'; // 👈 استيراد الخدمة الأساسية
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:my_test_app/helpers/auth_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dart:convert';
 import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/screens/buyer/buyer_home_screen.dart';
@@ -24,14 +23,15 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   final _formKey = GlobalKey<FormState>();
   String _phone = '';
   bool _isLoading = false;
+  bool _isPendingUser = false; // 👈 لمتابعة حالة الانتظار واظهار زر الواتساب
 
   String? _errorMessage;
   
   final AkedlyAuthService _akedlyService = AkedlyAuthService();
-  final AuthService _authService = AuthService(); // 👈 تفعيل المحرك الأساسي
+  final AuthService _authService = AuthService();
   final Color primaryGreen = const Color(0xff28a745);
 
-  // 🔴 قائمة أرقام مراجعة جوجل بلاي الخاصة بالحسابات الثلاثة
+  // 🔴 قائمة أرقام مراجعة جوجل بلاي
   final List<String> _reviewPhones = [
     '01278287168',
     '201278287168',
@@ -41,11 +41,22 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     '201021070461',
   ];
 
-  void _handleError(String message) {
+  // رقم واتساب الدعم الفني
+  final String _supportWhatsAppNumber = "201021070461"; 
+
+  void _handleError(String message, {bool isPending = false}) {
     setState(() {
       _errorMessage = message;
+      _isPendingUser = isPending;
     });
     debugPrint("System Log Error: $message");
+  }
+
+  Future<void> _openWhatsApp() async {
+    final Uri whatsappUrl = Uri.parse("https://wa.me/$_supportWhatsAppNumber?text=${Uri.encodeComponent("السلام عليكم، محتاج أتابع حالة تفعيل حسابي على أسواق أكسب لرقم الهاتف: $_phone")}");
+    if (await canLaunchUrl(whatsappUrl)) {
+      await launchUrl(whatsappUrl, mode: LaunchMode.externalApplication);
+    }
   }
 
   String _formatPhoneNumber(String phone) {
@@ -64,6 +75,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _isPendingUser = false;
     });
 
     final String formattedPhone = _formatPhoneNumber(_phone);
@@ -72,6 +84,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     try {
       bool userExists = false;
       String? foundRole;
+      bool isPendingStatus = false;
       final collections = ['consumers', 'users', 'sellers', 'pendingSellers'];
 
       final String phoneWithZero = cleanInputPhone.startsWith('0') ? cleanInputPhone : '0$cleanInputPhone';
@@ -81,11 +94,17 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       for (var col in collections) {
         var query = await FirebaseFirestore.instance
             .collection(col)
-            .where('phone', whereIn: searchVariations) // 👈 تم توحيد الحقل لـ phone
+            .where('phone', whereIn: searchVariations)
             .limit(1)
             .get();
         if (query.docs.isNotEmpty) {
           userExists = true;
+          final docData = query.docs.first.data();
+          
+          if (col == 'pendingSellers' || docData['status'] == 'pending') {
+            isPendingStatus = true;
+          }
+
           foundRole = col == 'users' ? 'buyer' : (col == 'sellers' ? 'seller' : col == 'consumers' ? 'consumer' : 'pending');
           break;
         }
@@ -97,7 +116,14 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         return;
       }
 
-      // 🔴 فحص استثناء مراجعة جوجل: عدم استدعاء Akedly لو الرقم مخصص للمراجعة
+      // 🛑 حظر الإرسال وتوفير الرسايل لو الحساب تحت المراجعة/الانتظار
+      if (isPendingStatus || foundRole == 'pending') {
+        setState(() => _isLoading = false);
+        _handleError("⏳ طلبك قيد المراجعة حالياً من قبل الإدارة. يرجى التواصل معنا للتفعيل.", isPending: true);
+        return;
+      }
+
+      // 🔴 استثناء مراجعة جوجل: عدم استدعاء Akedly
       if (_reviewPhones.contains(cleanInputPhone) || _reviewPhones.contains(formattedPhone)) {
         setState(() => _isLoading = false);
         _showOtpDialog("TEST_STEP_REVIEW", formattedPhone, foundRole!);
@@ -180,7 +206,6 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     final String cleanInputPhone = _phone.trim();
     final String formattedPhone = _formatPhoneNumber(_phone);
 
-    // 🔴 فحص التحقق الخاص بمراجعة جوجل دون استدعاء Akedly
     if (_reviewPhones.contains(cleanInputPhone) || _reviewPhones.contains(formattedPhone)) {
       isVerified = (code == '123456');
     } else {
@@ -189,16 +214,13 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
     if (isVerified) {
       try {
-        // ✨ تطبيق المعادلة الذكية المتفق عليها
         final String cleanPhone = _phone.trim().startsWith('0') ? _phone.trim() : '0${_phone.trim()}';
         final String smartEmail = "$cleanPhone@aksab.com";
         final String generatedPass = "Rabia_$cleanPhone";
 
-        // ✅ تسجيل الدخول الرسمي وحفظ كافة البيانات في الذاكرة الموقتة والدائمة
         String finalRole = await _authService.signInWithEmailAndPassword(smartEmail, generatedPass);
 
         if (mounted) {
-          // تحميل البيانات في الـ Provider الخاص بالمشتري (الرادار والطلبات)
           await Provider.of<BuyerDataProvider>(context, listen: false).initializeData(
             FirebaseAuth.instance.currentUser?.uid,
             UserSession.ownerId,
@@ -255,10 +277,26 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.red.withOpacity(0.3), width: 1.5),
               ),
-              child: Text(
-                _errorMessage!,
-                style: TextStyle(color: Colors.red[900], fontSize: 13, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
+              child: Column(
+                children: [
+                  Text(
+                    _errorMessage!,
+                    style: TextStyle(color: Colors.red[900], fontSize: 13, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (_isPendingUser) ...[
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      onPressed: _openWhatsApp,
+                      icon: const Icon(Icons.chat, color: Colors.white),
+                      label: const Text("تواصل عبر واتساب للتفعيل", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xff25D366),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    )
+                  ]
+                ],
               ),
             ),
         ],
