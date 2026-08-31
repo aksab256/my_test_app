@@ -31,6 +31,16 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   final AuthService _authService = AuthService(); // 👈 تفعيل المحرك الأساسي
   final Color primaryGreen = const Color(0xff28a745);
 
+  // 🔴 قائمة أرقام مراجعة جوجل بلاي الخاصة بالحسابات الثلاثة
+  final List<String> _reviewPhones = [
+    '01278287168',
+    '201278287168',
+    '01551445210',
+    '201551445210',
+    '01021070461',
+    '201021070461',
+  ];
+
   void _handleError(String message) {
     setState(() {
       _errorMessage = message;
@@ -57,14 +67,15 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     });
 
     final String formattedPhone = _formatPhoneNumber(_phone);
+    final String cleanInputPhone = _phone.trim();
 
     try {
       bool userExists = false;
       String? foundRole;
       final collections = ['consumers', 'users', 'sellers', 'pendingSellers'];
 
-      final String phoneWithZero = _phone.trim().startsWith('0') ? _phone.trim() : '0${_phone.trim()}';
-      final String phoneWithoutZero = _phone.trim().startsWith('0') ? _phone.trim().substring(1) : _phone.trim();
+      final String phoneWithZero = cleanInputPhone.startsWith('0') ? cleanInputPhone : '0$cleanInputPhone';
+      final String phoneWithoutZero = cleanInputPhone.startsWith('0') ? cleanInputPhone.substring(1) : cleanInputPhone;
       final List<String> searchVariations = [phoneWithZero, phoneWithoutZero, formattedPhone];
 
       for (var col in collections) {
@@ -83,6 +94,13 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       if (!userExists) {
         setState(() => _isLoading = false);
         _handleError("❌ خطأ: الرقم غير مسجل في اسواق.");
+        return;
+      }
+
+      // 🔴 فحص استثناء مراجعة جوجل: عدم استدعاء Akedly لو الرقم مخصص للمراجعة
+      if (_reviewPhones.contains(cleanInputPhone) || _reviewPhones.contains(formattedPhone)) {
+        setState(() => _isLoading = false);
+        _showOtpDialog("TEST_STEP_REVIEW", formattedPhone, foundRole!);
         return;
       }
 
@@ -158,7 +176,16 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   Future<void> _verifyAndLogin(String stepId, String code, String phone) async {
     setState(() => _isLoading = true);
 
-    bool isVerified = await _akedlyService.verifyOtp(stepId, code);
+    bool isVerified = false;
+    final String cleanInputPhone = _phone.trim();
+    final String formattedPhone = _formatPhoneNumber(_phone);
+
+    // 🔴 فحص التحقق الخاص بمراجعة جوجل دون استدعاء Akedly
+    if (_reviewPhones.contains(cleanInputPhone) || _reviewPhones.contains(formattedPhone)) {
+      isVerified = (code == '123456');
+    } else {
+      isVerified = await _akedlyService.verifyOtp(stepId, code);
+    }
 
     if (isVerified) {
       try {
