@@ -19,7 +19,7 @@ class DeliveryMapView extends StatefulWidget {
   });
 
   @override
-  State<DeliveryMapView> meState() => _DeliveryMapViewState();
+  State<DeliveryMapView> createState() => _DeliveryMapViewState();
 }
 
 class _DeliveryMapViewState extends State<DeliveryMapView> {
