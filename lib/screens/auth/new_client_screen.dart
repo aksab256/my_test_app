@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:sizer/sizer.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:my_test_app/data_sources/client_data_source.dart';
 import 'package:my_test_app/screens/auth/client_selection_step.dart';
 import 'package:my_test_app/screens/auth/client_details_step.dart';
@@ -77,27 +78,67 @@ class _NewClientScreenState extends State<NewClientScreen> {
         child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
           icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF2D9E68), size: 70),
-          title: Text('تم التسجيل بنجاح!',
-            style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68))),
+          title: Text(
+            'تم التسجيل بنجاح!',
+            style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68), fontFamily: 'Cairo'),
+          ),
           content: Text(
             isSeller
-                ? "شكراً لانضمامك لأسرة رابية أحلى. طلبك قيد المراجعة حالياً، وسنقوم بتفعيل حسابك خلال 24 ساعة كحد أقصى."
-                : "أهلاً بك في رابية أحلى! حسابك جاهز الآن، ابدأ رحلة توفيرك وجمع نقاطك من اليوم.",
+                ? "شكراً لانضمامك لأسرة أسواق أكسب. طلبك قيد المراجعة حالياً، وسنقوم بتفعيل حسابك خلال 24 ساعة كحد أقصى."
+                : "أهلاً بك في أسواق أكسب! حسابك جاهز الآن، ابدأ رحلة توفيرك وجمع نقاطك من اليوم.",
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13.sp, color: Colors.black87),
+            style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: Colors.black87, fontFamily: 'Cairo', height: 1.4),
           ),
           actions: [
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2D9E68),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                  padding: const EdgeInsets.symmetric(vertical: 15),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 💬 زر الواتساب للموردين فقط للرقم 01131502688
+                if (isSeller) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF25D366),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onPressed: () async {
+                        const phoneNumber = "201131502688";
+                        final message = Uri.encodeComponent("مرحباً أسواق أكسب، قمت بالتسجيل كمورد للتو وأود متابعة تفعيل حسابي.");
+                        final whatsappUrl = Uri.parse("https://wa.me/$phoneNumber?text=$message");
+                        
+                        if (await canLaunchUrl(whatsappUrl)) {
+                          await launchUrl(whatsappUrl, mode: LaunchMode.externalApplication);
+                        }
+                      },
+                      icon: const Icon(Icons.chat_rounded, color: Colors.white, size: 22),
+                      label: Text(
+                        'التواصل عبر الواتساب لمتابعة التفعيل',
+                        style: TextStyle(color: Colors.white, fontSize: 12.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+
+                // 🟢 زر الانتقال لتسجيل الدخول الأساسي
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2D9E68),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                    ),
+                    onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false),
+                    child: Text(
+                      'الذهاب لتسجيل الدخول',
+                      style: TextStyle(color: Colors.white, fontSize: 13.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+                    ),
+                  ),
                 ),
-                onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false),
-                child: Text('الذهاب لتسجيل الدخول', style: TextStyle(color: Colors.white, fontSize: 13.sp, fontWeight: FontWeight.bold)),
-              ),
+              ],
             ),
           ],
         ),
@@ -290,7 +331,7 @@ class _LogoHeader extends StatelessWidget {
             style: TextStyle(
                 fontSize: 22.sp, fontWeight: FontWeight.w900, color: const Color(0xFF1A1A1A))),
         SizedBox(height: 0.5.h),
-        Text('خطوات بسيطة وتبدأ تجربتك الفريدة مع رابية أحلى',
+        Text('خطوات بسيطة وتبدأ تجربتك الفريدة مع أسواق أكسب',
             style: TextStyle(fontSize: 11.sp, color: Colors.grey.shade600)),
       ],
     );
@@ -321,4 +362,3 @@ class _Footer extends StatelessWidget {
     );
   }
 }
-
