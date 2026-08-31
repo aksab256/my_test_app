@@ -2,18 +2,50 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../services/area_service.dart';
 import '../widgets/delivery_map_view.dart';
 import '../constants/delivery_constants.dart';
 
+// نموذج تكوين المحافظات (قابل للتوسع بسهولة)
+class GovernorateConfig {
+  final String id;
+  final String name;
+  final String assetPath;
+  final LatLng center;
+
+  const GovernorateConfig({
+    required this.id,
+    required this.name,
+    required this.assetPath,
+    required this.center,
+  });
+}
+
+// قائمة المحافظات المتاحة حالياً (يمكن إضافة أي محافظة إضافية هنا مستقبلاً)
+final List<GovernorateConfig> availableGovernorates = [
+  const GovernorateConfig(
+    id: 'alexandria',
+    name: 'الإسكندرية',
+    assetPath: 'assets/OSMB-bc319d822a17aa9ad1089fc05e7d4e752460f877.geojson',
+    center: LatLng(31.2001, 29.9187),
+  ),
+  const GovernorateConfig(
+    id: 'buhayrah',
+    name: 'البحيرة',
+    assetPath: 'assets/governorates/AlBuhayrah.json',
+    center: LatLng(31.0379, 30.4725),
+  ),
+];
+
 class DeliveryAreaScreen extends StatefulWidget {
   final String currentSellerId;
-  final bool hasWriteAccess; // تم جعلها اختيارية لتجنب أخطاء الـ Navigation
+  final bool hasWriteAccess;
 
   const DeliveryAreaScreen({
     super.key,
     required this.currentSellerId,
-    this.hasWriteAccess = true, // 👈 القيمة الافتراضية هنا تحل مشكلة الـ Build
+    this.hasWriteAccess = true,
   });
 
   @override
@@ -24,8 +56,10 @@ class _DeliveryAreaScreenState extends State<DeliveryAreaScreen> {
   final AreaService _areaService = AreaService();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // المحافظة المختارة حالياً (الافتراضية الإسكندرية)
+  late GovernorateConfig _selectedGovernorate;
+
   // 1. حالات إدارة البيانات
-  Map<String, dynamic>? _geoJsonData;
   List<String> _selectedAreasFromDB = [];
   List<String> _currentSelectedAreas = [];
 
@@ -35,18 +69,15 @@ class _DeliveryAreaScreenState extends State<DeliveryAreaScreen> {
   String? _notificationMessage;
   Color _notificationColor = Colors.green;
 
-  // ----------------------------------------------------------------------
-  // LIFECYCLE & DATA LOADING
-  // ----------------------------------------------------------------------
   @override
   void initState() {
     super.initState();
+    _selectedGovernorate = availableGovernorates.first;
     _initializeData();
   }
 
   Future<void> _initializeData() async {
     setState(() => _isLoading = true);
-    // تحميل المناطق المحددة سابقاً من Firestore
     await _loadSelectedAreasFromDB();
     setState(() => _isLoading = false);
   }
@@ -58,7 +89,6 @@ class _DeliveryAreaScreenState extends State<DeliveryAreaScreen> {
 
       if (sellerSnap.exists) {
         final data = sellerSnap.data();
-        // استخدام الثابت الخاص بمجالات التوصيل
         final List<dynamic> areas = data?[FIRESTORE_DELIVERY_AREAS_FIELD] ?? [];
 
         setState(() {
@@ -71,10 +101,6 @@ class _DeliveryAreaScreenState extends State<DeliveryAreaScreen> {
       _showNotification('❌ فشل تحميل مناطق التوصيل المحفوظة.', isError: true);
     }
   }
-
-  // ----------------------------------------------------------------------
-  // HANDLERS
-  // ----------------------------------------------------------------------
 
   void _updateCurrentSelection(List<String> selectedAreas) {
     setState(() {
@@ -96,7 +122,6 @@ class _DeliveryAreaScreenState extends State<DeliveryAreaScreen> {
       selectedAreaNames: _currentSelectedAreas,
     );
 
-    // بعد الحفظ، إعادة تحميل لضمان مزامنة حالة الـ UI
     await _loadSelectedAreasFromDB();
 
     if (result['success']) {
@@ -114,18 +139,12 @@ class _DeliveryAreaScreenState extends State<DeliveryAreaScreen> {
       _notificationMessage = message;
       _notificationColor = isError ? Colors.red : const Color(0xff28a745);
     });
-    // إخفاء الرسالة بعد 5 ثواني
     Future.delayed(const Duration(seconds: 5), () {
       if (mounted) {
         setState(() => _notificationMessage = null);
       }
     });
   }
-
-
-  // ----------------------------------------------------------------------
-  // UI BUILDER
-  // ----------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -174,15 +193,47 @@ class _DeliveryAreaScreenState extends State<DeliveryAreaScreen> {
                 ),
               ),
 
-            // 🛑 حالة التحميل
+            // 🛑 اختيار المحافظة (Dropdown)
+            const Text(
+              'اختر المحافظة:',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<GovernorateConfig>(
+              value: _selectedGovernorate,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              items: availableGovernorates.map((gov) {
+                return DropdownMenuItem<GovernorateConfig>(
+                  value: gov,
+                  child: Text(gov.name),
+                );
+              }).toList(),
+              onChanged: (GovernorateConfig? newGov) {
+                if (newGov != null && newGov != _selectedGovernorate) {
+                  setState(() {
+                    _selectedGovernorate = newGov;
+                  });
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+
+            // 🛑 حالة التحميل وتمرير ملف المحافظة إلى الـ Map View
             if (_isLoading)
-              const Center(child: Padding(
-                padding: EdgeInsets.all(32.0),
-                child: CircularProgressIndicator(color: Color(0xff28a745)),
-              ))
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32.0),
+                  child: CircularProgressIndicator(color: Color(0xff28a745)),
+                ),
+              )
             else
               DeliveryMapView(
-                initialGeoJsonData: _geoJsonData,
+                key: ValueKey(_selectedGovernorate.id),
+                geoJsonAssetPath: _selectedGovernorate.assetPath,
+                mapCenter: _selectedGovernorate.center,
                 initialSelectedAreas: _selectedAreasFromDB,
                 onAreasChanged: _updateCurrentSelection,
               ),

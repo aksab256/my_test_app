@@ -4,25 +4,22 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 
-// الإحداثيات الافتراضية (مركز الإسكندرية وما حولها بناءً على الكود القديم)
-const LatLng MAP_CENTER = LatLng(31.2001, 29.9187);
-const double MAP_ZOOM = 10.0;
-const String GEOJSON_FILE_PATH = 'assets/OSMB-bc319d822a17aa9ad1089fc05e7d4e752460f877.geojson';
-
 class DeliveryMapView extends StatefulWidget {
-  final Map<String, dynamic>? initialGeoJsonData;
+  final String geoJsonAssetPath;
+  final LatLng mapCenter;
   final List<String> initialSelectedAreas;
   final Function(List<String> selectedAreas) onAreasChanged;
 
   const DeliveryMapView({
     super.key,
-    required this.initialGeoJsonData,
+    required this.geoJsonAssetPath,
+    required this.mapCenter,
     required this.initialSelectedAreas,
     required this.onAreasChanged,
   });
 
   @override
-  State<DeliveryMapView> createState() => _DeliveryMapViewState();
+  State<DeliveryMapView> meState() => _DeliveryMapViewState();
 }
 
 class _DeliveryMapViewState extends State<DeliveryMapView> {
@@ -40,17 +37,30 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
     _loadGeoJsonAndInitialize();
   }
 
+  @override
+  void didUpdateWidget(covariant DeliveryMapView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // إذا تغير مسار المحافظة يقوم بتحميل الملف الجديد فوراً
+    if (widget.geoJsonAssetPath != oldWidget.geoJsonAssetPath) {
+      _loadGeoJsonAndInitialize();
+    } else if (widget.initialSelectedAreas != oldWidget.initialSelectedAreas) {
+      _selectedAreaNames = List.from(widget.initialSelectedAreas);
+      _updateMapAndPolygons(_selectedAreaNames);
+    }
+  }
+
   Future<void> _loadGeoJsonAndInitialize() async {
-    _geoJsonData = widget.initialGeoJsonData;
-    if (_geoJsonData == null) {
-      try {
-        final geoJsonString = await rootBundle.loadString(GEOJSON_FILE_PATH);
-        _geoJsonData = jsonDecode(geoJsonString) as Map<String, dynamic>;
-        _loadingError = null;
-      } catch (e) {
-        _loadingError = '❌ فشل تحميل ملف GeoJSON من الأصول.';
-        debugPrint('FATAL ERROR Loading GeoJSON: $e');
-      }
+    setState(() {
+      _isLoading = true;
+      _loadingError = null;
+    });
+
+    try {
+      final geoJsonString = await rootBundle.loadString(widget.geoJsonAssetPath);
+      _geoJsonData = jsonDecode(geoJsonString) as Map<String, dynamic>;
+    } catch (e) {
+      _loadingError = '❌ فشل تحميل خريطة المحافظة.';
+      debugPrint('ERROR Loading GeoJSON: $e');
     }
 
     if (!mounted) return;
@@ -61,14 +71,11 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
         _parseGeoJsonToGooglePolygons(_selectedAreaNames);
       }
     });
-  }
 
-  @override
-  void didUpdateWidget(covariant DeliveryMapView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.initialSelectedAreas != oldWidget.initialSelectedAreas) {
-      _selectedAreaNames = List.from(widget.initialSelectedAreas);
-      _updateMapAndPolygons(_selectedAreaNames);
+    if (_mapController != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLng(widget.mapCenter),
+      );
     }
   }
 
@@ -80,7 +87,6 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
     _updateMapAndPolygons(newSelection);
   }
 
-  // تحويل بيانات GeoJSON إلى مضلعات متوافقة مع Google Maps
   void _parseGeoJsonToGooglePolygons(List<String> areaNames) {
     if (_geoJsonData == null || areaNames.isEmpty) {
       setState(() => _gMapsPolygons = {});
@@ -225,9 +231,9 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: GoogleMap(
-              initialCameraPosition: const CameraPosition(
-                target: MAP_CENTER,
-                zoom: MAP_ZOOM,
+              initialCameraPosition: CameraPosition(
+                target: widget.mapCenter,
+                zoom: 10.0,
               ),
               onMapCreated: (controller) {
                 _mapController = controller;
@@ -305,4 +311,3 @@ class _MultiSelectAreaDialogState extends State<MultiSelectAreaDialog> {
     );
   }
 }
-
