@@ -1,8 +1,11 @@
+// lib/screens/buyer/traders_screen.dart
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 // استيراد الـ Widgets الخاصة بك
 import '../../widgets/traders_header_widget.dart';
@@ -10,8 +13,39 @@ import '../../widgets/traders_list_widget.dart';
 import '../../widgets/traders_filter_widget.dart';
 import '../../widgets/buyer_mobile_nav_widget.dart';
 
-// 🎯 استيراد صفحة الطلبات مباشرة لضمان عمل التوجيه المباشر
+// استيراد صفحة الطلبات مباشرة
 import 'package:my_test_app/screens/buyer/my_orders_screen.dart';
+
+// 🎯 نموذج تكوين المحافظات القابل للتوسع
+class GovernorateConfig {
+  final String id;
+  final String name;
+  final String assetPath;
+  final LatLng center;
+
+  const GovernorateConfig({
+    required this.id,
+    required this.name,
+    required this.assetPath,
+    required this.center,
+  });
+}
+
+// 🎯 قائمة المحافظات المتاحة حالياً
+final List<GovernorateConfig> availableGovernorates = [
+  const GovernorateConfig(
+    id: 'alexandria',
+    name: 'الإسكندرية',
+    assetPath: 'assets/OSMB-bc319d822a17aa9ad1089fc05e7d4e752460f877.geojson',
+    center: LatLng(31.2001, 29.9187),
+  ),
+  const GovernorateConfig(
+    id: 'buhayrah',
+    name: 'البحيرة',
+    assetPath: 'assets/governorates/AlBuhayrah.json',
+    center: LatLng(31.0379, 30.4725),
+  ),
+];
 
 class Coordinates {
   final double lat;
@@ -38,11 +72,10 @@ class _TradersScreenState extends State<TradersScreen> {
   List<String> _categories = [];
   bool _isLoading = true;
   
-  // 🎯 إضافة متغير لتحديد رتبة المستخدم
   String _userRole = 'consumer'; 
   
   Coordinates? _userCoordinates;
-  Map<String, List<Coordinates>> _areaCoordinatesMap = {};
+  final Map<String, List<Coordinates>> _areaCoordinatesMap = {};
 
   @override
   void initState() {
@@ -56,18 +89,15 @@ class _TradersScreenState extends State<TradersScreen> {
     switch (index) {
       case 0:
         break;
-      
       case 1:
         Navigator.of(context).pop(); 
         break;
-
       case 2:
         Navigator.push(
           context, 
           MaterialPageRoute(builder: (context) => const MyOrdersScreen())
         );
         break;
-
       case 3:
         Navigator.pushReplacementNamed(context, '/wallet');
         break;
@@ -89,37 +119,47 @@ class _TradersScreenState extends State<TradersScreen> {
       }
     }
 
-    await _fetchAndProcessGeoJson();
     _userCoordinates = await _getUserLocation();
+    
+    // 🎯 جلب كافة ملفات GeoJSON للمحافظات المتاحة لتحليل كافة المضلعات
+    await _fetchAllGeoJsonFiles();
+    
     await _loadTraders();
 
     if (mounted) setState(() => _isLoading = false);
   }
 
-  Future<void> _fetchAndProcessGeoJson() async {
-    try {
-      final String jsonString = await rootBundle.loadString('assets/OSMB-bc319d822a17aa9ad1089fc05e7d4e752460f877.geojson');
-      final data = json.decode(jsonString);
-      if (data['features'] != null) {
-        for (var feature in data['features']) {
-          final areaName = feature['properties']?['name'];
-          final geometry = feature['geometry'];
-          if (areaName != null && geometry != null) {
-            List polygonCoords = [];
-            if (geometry['type'] == 'MultiPolygon') {
-              polygonCoords = geometry['coordinates'][0][0];
-            } else if (geometry['type'] == 'Polygon') {
-              polygonCoords = geometry['coordinates'][0];
-            }
-            
-            if (polygonCoords.length >= 3) {
-              _areaCoordinatesMap[areaName] = polygonCoords.map<Coordinates>((coord) => 
-                  Coordinates(lat: coord[1].toDouble(), lng: coord[0].toDouble())).toList();
+  // 🎯 دالة جديدة تقوم بقراءة كل ملفات المحافظات المتاحة بدلاً من الإسكندرية فقط
+  Future<void> _fetchAllGeoJsonFiles() async {
+    _areaCoordinatesMap.clear();
+
+    for (var gov in availableGovernorates) {
+      try {
+        final String jsonString = await rootBundle.loadString(gov.assetPath);
+        final data = json.decode(jsonString);
+        if (data['features'] != null) {
+          for (var feature in data['features']) {
+            final areaName = feature['properties']?['name'];
+            final geometry = feature['geometry'];
+            if (areaName != null && geometry != null) {
+              List polygonCoords = [];
+              if (geometry['type'] == 'MultiPolygon') {
+                polygonCoords = geometry['coordinates'][0][0];
+              } else if (geometry['type'] == 'Polygon') {
+                polygonCoords = geometry['coordinates'][0];
+              }
+              
+              if (polygonCoords.length >= 3) {
+                _areaCoordinatesMap[areaName] = polygonCoords.map<Coordinates>((coord) => 
+                    Coordinates(lat: coord[1].toDouble(), lng: coord[0].toDouble())).toList();
+              }
             }
           }
         }
+      } catch (e) {
+        debugPrint("GeoJSON Error for ${gov.name}: $e");
       }
-    } catch (e) { debugPrint("GeoJSON Error: $e"); }
+    }
   }
 
   Future<Coordinates?> _getUserLocation() async {
