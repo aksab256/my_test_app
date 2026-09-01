@@ -48,23 +48,68 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
     }
   }
 
-  // 🎯 استخراج اسم المنطقة بمرونة عالية لدعم مختلف صيغ الـ GeoJSON للمحافظات
+  // 🎯 استخراج اسم المنطقة بمرونة عالية لدعم الإسكندرية والبحيرة وأي محافظة مستقبلية
   String? _extractAreaName(Map<String, dynamic> properties) {
-    if (properties.containsKey('name') && properties['name'] != null && properties['name'].toString().isNotEmpty) {
-      return properties['name'].toString();
+    // 1. الاحتفاظ بنفس طريقة الإسكندرية والأولويات الأصلية كأولوية قصوى
+    if (properties.containsKey('name') &&
+        properties['name'] != null &&
+        properties['name'].toString().trim().isNotEmpty) {
+      return properties['name'].toString().trim();
     }
-    if (properties.containsKey('name:ar') && properties['name:ar'] != null) {
-      return properties['name:ar'].toString();
+    if (properties.containsKey('name:ar') &&
+        properties['name:ar'] != null &&
+        properties['name:ar'].toString().trim().isNotEmpty) {
+      return properties['name:ar'].toString().trim();
     }
-    if (properties.containsKey('shapeName') && properties['shapeName'] != null) {
-      return properties['shapeName'].toString();
+    if (properties.containsKey('shapeName') &&
+        properties['shapeName'] != null &&
+        properties['shapeName'].toString().trim().isNotEmpty) {
+      return properties['shapeName'].toString().trim();
     }
-    if (properties.containsKey('ADM3_AR') && properties['ADM3_AR'] != null) {
-      return properties['ADM3_AR'].toString();
+    if (properties.containsKey('ADM3_AR') &&
+        properties['ADM3_AR'] != null &&
+        properties['ADM3_AR'].toString().trim().isNotEmpty) {
+      return properties['ADM3_AR'].toString().trim();
     }
-    if (properties.containsKey('ADM2_AR') && properties['ADM2_AR'] != null) {
-      return properties['ADM2_AR'].toString();
+    if (properties.containsKey('ADM2_AR') &&
+        properties['ADM2_AR'] != null &&
+        properties['ADM2_AR'].toString().trim().isNotEmpty) {
+      return properties['ADM2_AR'].toString().trim();
     }
+
+    // 2. دعم صيغ GADM للمحافظات الأخرى (مثل البحيرة - NL_NAME_2 & NAME_2)
+    if (properties.containsKey('NL_NAME_2') &&
+        properties['NL_NAME_2'] != null &&
+        properties['NL_NAME_2'].toString().trim() != 'NA' &&
+        properties['NL_NAME_2'].toString().trim().isNotEmpty) {
+      return properties['NL_NAME_2'].toString().trim();
+    }
+    if (properties.containsKey('NAME_2') &&
+        properties['NAME_2'] != null &&
+        properties['NAME_2'].toString().trim().isNotEmpty) {
+      return properties['NAME_2'].toString().trim();
+    }
+
+    // 3. دعم إضافي صريح للتقسيمات والمراكز المتنوعة للمحافظات المتبقية
+    for (String key in [
+      'localname',
+      'NAME_3',
+      'NL_NAME_3',
+      'ADM1_AR',
+      'ADM3_EN',
+      'ADM2_EN',
+      'name:en',
+      'name_ar',
+      'name_en'
+    ]) {
+      if (properties.containsKey(key) &&
+          properties[key] != null &&
+          properties[key].toString().trim() != 'NA' &&
+          properties[key].toString().trim().isNotEmpty) {
+        return properties[key].toString().trim();
+      }
+    }
+
     return null;
   }
 
@@ -76,7 +121,8 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
 
     try {
       debugPrint('📂 Attempting to load asset: ${widget.geoJsonAssetPath}');
-      final geoJsonString = await rootBundle.loadString(widget.geoJsonAssetPath);
+      final geoJsonString =
+          await rootBundle.loadString(widget.geoJsonAssetPath);
       _geoJsonData = jsonDecode(geoJsonString) as Map<String, dynamic>;
       debugPrint('✅ Asset loaded successfully: ${widget.geoJsonAssetPath}');
     } catch (e, stackTrace) {
@@ -119,7 +165,8 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
     try {
       final features = _geoJsonData!['features'] as List;
       for (var feature in features) {
-        final Map<String, dynamic> props = Map<String, dynamic>.from(feature['properties'] ?? {});
+        final Map<String, dynamic> props =
+            Map<String, dynamic>.from(feature['properties'] ?? {});
         final String? name = _extractAreaName(props);
 
         if (name != null && areaNames.contains(name)) {
@@ -127,7 +174,8 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
           if (geometry['type'] == 'Polygon') {
             final List coords = geometry['coordinates'][0];
             List<LatLng> polygonPoints = coords
-                .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
+                .map((c) =>
+                    LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
                 .toList();
 
             newPolygons.add(
@@ -144,7 +192,8 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
             for (int i = 0; i < multiCoords.length; i++) {
               final List coords = multiCoords[i][0];
               List<LatLng> polygonPoints = coords
-                  .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
+                  .map((c) => LatLng(
+                      (c[1] as num).toDouble(), (c[0] as num).toDouble()))
                   .toList();
 
               newPolygons.add(
@@ -206,12 +255,14 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
 
     if (_loadingError != null) {
-      return Center(child: Text(_loadingError!, style: const TextStyle(color: Colors.red)));
+      return Center(
+          child: Text(_loadingError!, style: const TextStyle(color: Colors.red)));
     }
 
     final List<dynamic> features = _geoJsonData!['features'] as List? ?? [];
     final List<String> allAreaNames = features
-        .map((f) => _extractAreaName(Map<String, dynamic>.from(f['properties'] ?? {})))
+        .map((f) =>
+            _extractAreaName(Map<String, dynamic>.from(f['properties'] ?? {})))
         .where((name) => name != null && name.isNotEmpty)
         .cast<String>()
         .toList();
@@ -223,7 +274,8 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('اختيار مناطق التوصيل:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const Text('اختيار مناطق التوصيل:',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         InkWell(
           onTap: () async {
@@ -284,7 +336,8 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
 class MultiSelectAreaDialog extends StatefulWidget {
   final List<String> allAreas;
   final List<String> initialSelection;
-  const MultiSelectAreaDialog({super.key, required this.allAreas, required this.initialSelection});
+  const MultiSelectAreaDialog(
+      {super.key, required this.allAreas, required this.initialSelection});
 
   @override
   State<MultiSelectAreaDialog> createState() => _MultiSelectAreaDialogState();
@@ -331,9 +384,11 @@ class _MultiSelectAreaDialogState extends State<MultiSelectAreaDialog> {
             onPressed: () => Navigator.pop(context),
             child: const Text('إلغاء')),
         ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xff28a745)),
+          style:
+              ElevatedButton.styleFrom(backgroundColor: const Color(0xff28a745)),
           onPressed: () => Navigator.pop(context, _selectedItems),
-          child: Text('حفظ (${_selectedItems.length})', style: const TextStyle(color: Colors.white)),
+          child: Text('حفظ (${_selectedItems.length})',
+              style: const TextStyle(color: Colors.white)),
         ),
       ],
     );
