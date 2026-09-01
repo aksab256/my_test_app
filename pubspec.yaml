@@ -112,5 +112,6 @@ flutter:
     - assets/
     - assets/images/
     - assets/images/shira_logo.png
+    - assets/governorates/
 
 # تخطي وإلغاء كاش الإصدار القديم تماماً لإجبار جيت هاب بيبلاين على الالتزام بالإصدار الحديث
