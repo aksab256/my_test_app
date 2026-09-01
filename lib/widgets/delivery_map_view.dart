@@ -40,13 +40,32 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
   @override
   void didUpdateWidget(covariant DeliveryMapView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // إذا تغير مسار المحافظة يقوم بتحميل الملف الجديد فوراً
     if (widget.geoJsonAssetPath != oldWidget.geoJsonAssetPath) {
       _loadGeoJsonAndInitialize();
     } else if (widget.initialSelectedAreas != oldWidget.initialSelectedAreas) {
       _selectedAreaNames = List.from(widget.initialSelectedAreas);
       _updateMapAndPolygons(_selectedAreaNames);
     }
+  }
+
+  // 🎯 استخراج اسم المنطقة بمرونة عالية لدعم مختلف صيغ الـ GeoJSON للمحافظات
+  String? _extractAreaName(Map<String, dynamic> properties) {
+    if (properties.containsKey('name') && properties['name'] != null && properties['name'].toString().isNotEmpty) {
+      return properties['name'].toString();
+    }
+    if (properties.containsKey('name:ar') && properties['name:ar'] != null) {
+      return properties['name:ar'].toString();
+    }
+    if (properties.containsKey('shapeName') && properties['shapeName'] != null) {
+      return properties['shapeName'].toString();
+    }
+    if (properties.containsKey('ADM3_AR') && properties['ADM3_AR'] != null) {
+      return properties['ADM3_AR'].toString();
+    }
+    if (properties.containsKey('ADM2_AR') && properties['ADM2_AR'] != null) {
+      return properties['ADM2_AR'].toString();
+    }
+    return null;
   }
 
   Future<void> _loadGeoJsonAndInitialize() async {
@@ -56,11 +75,14 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
     });
 
     try {
+      debugPrint('📂 Attempting to load asset: ${widget.geoJsonAssetPath}');
       final geoJsonString = await rootBundle.loadString(widget.geoJsonAssetPath);
       _geoJsonData = jsonDecode(geoJsonString) as Map<String, dynamic>;
-    } catch (e) {
+      debugPrint('✅ Asset loaded successfully: ${widget.geoJsonAssetPath}');
+    } catch (e, stackTrace) {
       _loadingError = '❌ فشل تحميل خريطة المحافظة.';
-      debugPrint('ERROR Loading GeoJSON: $e');
+      debugPrint('❌ ERROR Loading GeoJSON (${widget.geoJsonAssetPath}): $e');
+      debugPrint('Stacktrace: $stackTrace');
     }
 
     if (!mounted) return;
@@ -97,12 +119,16 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
     try {
       final features = _geoJsonData!['features'] as List;
       for (var feature in features) {
-        final String? name = feature['properties']['name'];
+        final Map<String, dynamic> props = Map<String, dynamic>.from(feature['properties'] ?? {});
+        final String? name = _extractAreaName(props);
+
         if (name != null && areaNames.contains(name)) {
           final geometry = feature['geometry'];
           if (geometry['type'] == 'Polygon') {
             final List coords = geometry['coordinates'][0];
-            List<LatLng> polygonPoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+            List<LatLng> polygonPoints = coords
+                .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
+                .toList();
 
             newPolygons.add(
               Polygon(
@@ -117,7 +143,9 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
             final List multiCoords = geometry['coordinates'];
             for (int i = 0; i < multiCoords.length; i++) {
               final List coords = multiCoords[i][0];
-              List<LatLng> polygonPoints = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+              List<LatLng> polygonPoints = coords
+                  .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
+                  .toList();
 
               newPolygons.add(
                 Polygon(
@@ -183,7 +211,7 @@ class _DeliveryMapViewState extends State<DeliveryMapView> {
 
     final List<dynamic> features = _geoJsonData!['features'] as List? ?? [];
     final List<String> allAreaNames = features
-        .map((f) => f['properties']['name'] as String?)
+        .map((f) => _extractAreaName(Map<String, dynamic>.from(f['properties'] ?? {})))
         .where((name) => name != null && name.isNotEmpty)
         .cast<String>()
         .toList();
