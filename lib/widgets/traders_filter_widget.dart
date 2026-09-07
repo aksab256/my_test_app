@@ -59,3 +59,4 @@ class TradersFilterWidget extends StatelessWidget {
     );
   }
 }
+

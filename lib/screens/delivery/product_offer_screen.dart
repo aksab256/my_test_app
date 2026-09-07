@@ -372,3 +372,4 @@ class _BottomBarButtons extends StatelessWidget {
     );
   }
 }
+

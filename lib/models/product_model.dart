@@ -39,3 +39,4 @@ enum ProductSortOption {
   priceAsc,                                            
   priceDesc,                                         
 }
+

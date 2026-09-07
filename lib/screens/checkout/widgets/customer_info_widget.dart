@@ -118,3 +118,4 @@ class CustomerInfoWidget extends StatelessWidget {
     );
   }
 }
+

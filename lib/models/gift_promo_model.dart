@@ -109,3 +109,4 @@ class GiftPromoModel {
   // يجب حذفها لاحقاً وتعديل الـ DataSource لاستخدام toJson()
   Map<String, dynamic> toMap() => toJson();
 }
+

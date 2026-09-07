@@ -64,3 +64,4 @@ class ConsumerProductDetailsScreen extends StatelessWidget {
     );
   }
 }
+

@@ -139,3 +139,4 @@ class TraderSidebarWidget extends StatelessWidget {
     );
   }
 }
+

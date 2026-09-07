@@ -17,3 +17,4 @@ class ConsumerStoreScreen extends StatelessWidget {
     );
   }
 }
+

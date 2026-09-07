@@ -45,7 +45,7 @@ class ConsumerSideMenu extends StatelessWidget {
                 leading: const Icon(Icons.privacy_tip_outlined, color: Color(0xFF43A047), size: 28),
                 title: const Text('سياسة الخصوصية', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 onTap: () async {
-                  final url = Uri.parse('https://aksab.shop/');
+                  final url = Uri.parse('https://aksabtech.com/privacy.html');
                   if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
                 },
               ),
@@ -302,4 +302,5 @@ class ConsumerCategoriesBanner extends StatelessWidget {
     );
   }
 }
+
 

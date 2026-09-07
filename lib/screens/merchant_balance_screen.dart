@@ -182,3 +182,4 @@ class _MerchantPointBalanceScreenState extends State<MerchantPointBalanceScreen>
     );
   }
 }
+

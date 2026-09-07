@@ -10,7 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 final FirebaseAuth _auth = FirebaseAuth.instance;
 
 // [الروابط الرسمية المعتمدة]
-const String _privacyPolicyUrl = 'https://aksab.shop/';
+const String _privacyPolicyUrl = 'https://aksabtech.com/privacy.html';
 const String _facebookUrl = 'https://www.facebook.com/share/1APHYGD7m6/';
 const String _whatsappUrl = 'https://wa.me/201021070462'; // رقم الواتساب الجديد
 const String _supportEmail = 'Support@aksab.shop'; // إيميل الدومين الرسمي
@@ -331,3 +331,4 @@ class BuyerHeaderWidget extends StatelessWidget {
     );
   }
 }
+

@@ -182,3 +182,4 @@ class _BuyerProductListScreenState extends State<BuyerProductListScreen> {
     );
   }
 }
+

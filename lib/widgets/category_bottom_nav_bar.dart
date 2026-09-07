@@ -60,3 +60,4 @@ class CategoryBottomNavBar extends StatelessWidget {
     );
   }
 }
+

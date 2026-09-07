@@ -289,3 +289,4 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
     return Icons.delivery_dining;
   }
 }
+

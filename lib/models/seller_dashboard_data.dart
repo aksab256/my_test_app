@@ -33,3 +33,4 @@ class SellerDashboardData {
   // 🔵 تأكد من تحديث الـ factory اللي بيقرأ من الـ Map في الكنترولر (إذا كان موجوداً هناك)
   // بحيث يقرأ ['status'] ?? 'inactive'
 }
+

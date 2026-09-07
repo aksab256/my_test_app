@@ -37,3 +37,4 @@ InputDecoration customInputDecoration({String? hintText, Widget? suffixIcon}) {
     ),
   );
 }
+

@@ -113,3 +113,4 @@ class _BuyerCategoryScreenState extends State<BuyerCategoryScreen> {
     );
   }
 }
+

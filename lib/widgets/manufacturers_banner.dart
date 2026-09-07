@@ -189,3 +189,4 @@ class _ManufacturersBannerState extends State<ManufacturersBanner> {
     );
   }
 }
+

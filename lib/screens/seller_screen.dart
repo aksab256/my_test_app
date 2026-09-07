@@ -243,7 +243,7 @@ class _SellerScreenState extends State<SellerScreen> {
                       onPressed: () async {
                         final Uri emailLaunchUri = Uri(
                           scheme: 'mailto',
-                          path: 'support@aksab.shop',
+                          path: 'Support@aksab.shop',
                           query: 'subject=استفسار عن تفعيل حساب التاجر: ${UserSession.userId}',
                         );
                         if (await canLaunchUrl(emailLaunchUri)) {

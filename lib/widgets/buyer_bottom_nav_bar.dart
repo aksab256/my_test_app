@@ -64,3 +64,4 @@ class BuyerBottomNavBar extends StatelessWidget {
     );
   }
 }
+

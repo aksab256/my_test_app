@@ -108,7 +108,7 @@ class _FooterWidget extends StatelessWidget {
   const _FooterWidget({required this.isAccepted, required this.onChanged});
 
   void _launchPrivacyUrl() async {
-    final Uri url = Uri.parse('https://aksab.shop/');
+    final Uri url = Uri.parse('https://aksabtech.com/privacy.html');
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       debugPrint('Could not launch $url');
     }

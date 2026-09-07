@@ -109,3 +109,4 @@ class CashbackProvider with ChangeNotifier {
     }
   }
 }
+

@@ -169,3 +169,4 @@ class OffersController with ChangeNotifier {
     }
   }
 }
+

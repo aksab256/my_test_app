@@ -131,3 +131,4 @@ class DeliveryMerchantSidebarWidget extends StatelessWidget {
     );
   }
 }
+

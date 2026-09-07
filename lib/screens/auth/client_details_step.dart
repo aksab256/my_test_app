@@ -518,7 +518,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
       activeColor: const Color(0xFF2D9E68),
       title: InkWell(
         onTap: () async {
-          final url = Uri.parse('https://aksab.shop/');
+          final url = Uri.parse('https://aksabtech.com/privacy.html');
           if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
         },
         child: RichText(
@@ -577,4 +577,5 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
     );
   }
 }
+
 

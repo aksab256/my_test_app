@@ -103,7 +103,7 @@ class _SellerSidebarState extends State<SellerSidebar> {
 
   // دالة مساعدة لفتح الرابط
   void _launchPrivacyUrl() async {
-    final Uri url = Uri.parse('https://aksab.shop/');
+    final Uri url = Uri.parse('https://aksabtech.com/privacy.html');
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       debugPrint('Could not launch $url');
     }
@@ -240,3 +240,4 @@ class _SidebarItem extends StatelessWidget {
     );
   }
 }
+

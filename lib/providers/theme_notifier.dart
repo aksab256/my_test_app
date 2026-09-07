@@ -92,3 +92,4 @@ final darkTheme = ThemeData(
     foregroundColor: Colors.white,
   ),
 );
+

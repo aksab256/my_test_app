@@ -203,3 +203,4 @@ class InvoiceDetailsScreen extends StatelessWidget {
     return dateVal.toString();
   }
 }
+

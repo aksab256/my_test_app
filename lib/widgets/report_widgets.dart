@@ -379,3 +379,4 @@ class ChartFrame extends StatelessWidget {
     );
   }
 }
+

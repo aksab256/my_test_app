@@ -451,3 +451,4 @@ class _ConsumerStoreSearchScreenState extends State<ConsumerStoreSearchScreen> {
   }
 }
 
+

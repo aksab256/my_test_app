@@ -37,3 +37,4 @@ class TradersHeaderWidget extends StatelessWidget {
     );
   }
 }
+

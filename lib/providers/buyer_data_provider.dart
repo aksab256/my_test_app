@@ -213,3 +213,4 @@ class BuyerDataProvider with ChangeNotifier {
 
   void _updateCartCountFromLocal() { _cartCount = 3; }
 }
+

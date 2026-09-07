@@ -70,3 +70,4 @@ class DeliveryService {
     return Geolocator.distanceBetween(startLat, startLng, endLat, endLng) / 1000;
   }
 }
+

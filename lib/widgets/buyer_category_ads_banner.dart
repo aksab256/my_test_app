@@ -58,3 +58,4 @@ class BuyerCategoryAdsBanner extends StatelessWidget {
     );
   }
 }
+

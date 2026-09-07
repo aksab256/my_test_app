@@ -111,3 +111,4 @@ class _BannerCard extends StatelessWidget {
     );
   }
 }
+
