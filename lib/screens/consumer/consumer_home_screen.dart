@@ -282,7 +282,7 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
                   ),
                   child: const CircleAvatar(
                     radius: 24,
-                    backgroundImage: AssetImage('assets/images/shira_avatar.png'),
+                    backgroundImage: AssetImage('assets/images/shira_logo.png'),
                   ),
                 ),
               ),
