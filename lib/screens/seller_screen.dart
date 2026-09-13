@@ -200,27 +200,52 @@ class _SellerScreenState extends State<SellerScreen> {
           ],
         ),
         
-       floatingActionButton: FloatingActionButton(
-  heroTag: "seller_main_chat",
-  backgroundColor: const Color(0xff28a745),
-  elevation: 4,
-  onPressed: () {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => ChatSupportWidget(
-        uid: UserSession.userId ?? '',
-        role: 'seller',
-      ),
-    );
-  },
-  child: const Icon(
-    Icons.support_agent,
-    color: Colors.white,
-    size: 32,
-  ),
-),
+        floatingActionButton: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF00E5FF).withOpacity(0.4),
+                    blurRadius: 12,
+                    spreadRadius: 3,
+                  ),
+                ],
+              ),
+            ),
+            FloatingActionButton(
+              heroTag: "seller_main_chat",
+              backgroundColor: const Color(0xFF1F2937),
+              elevation: 6,
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) => ChatSupportWidget(
+                    uid: UserSession.userId ?? '',
+                    role: 'seller',
+                  ),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF00E5FF), width: 1.8),
+                ),
+                child: const CircleAvatar(
+                  radius: 24,
+                  backgroundImage: AssetImage('assets/images/shira_logo.png'),
+                ),
+              ),
+            ),
+          ],
+        ),
         
         body: Column(
           children: [

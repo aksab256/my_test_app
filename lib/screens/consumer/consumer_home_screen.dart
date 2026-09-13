@@ -240,54 +240,53 @@ class _ConsumerHomeScreenState extends State<ConsumerHomeScreen> with TickerProv
         ),
         floatingActionButton: ScaleTransition(
           scale: _pulseAnimation,
-          child: FloatingActionButton(
-            heroTag: "consumer_home_chat_btn",
-            onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (context) => ChatSupportWidget(
-                  uid: FirebaseAuth.instance.currentUser?.uid ?? '',
-                  role: 'consumer',
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // 🔹 التأثير الضوئي الخلفي (Glow Effect)
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF00E5FF).withOpacity(0.4),
+                      blurRadius: 12,
+                      spreadRadius: 3,
+                    ),
+                  ],
                 ),
-              );
-            },
-            backgroundColor: Colors.transparent,
-            elevation: 8,
-            child: Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(colors: [Color(0xff1a237e), Color(0xFF3F51B5)]),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xff1a237e).withOpacity(0.4),
-                    blurRadius: 15,
-                    spreadRadius: 2,
-                  )
-                ],
               ),
-              child: ClipOval(
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Image.asset(
-                    'assets/images/shira_logo.png',
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Center(
-                        child: Icon(
-                          Icons.auto_awesome,
-                          color: Colors.white,
-                          size: 30,
-                        ),
-                      );
-                    },
+              // 🔹 الزر الرئيسي مع الأوفاتار الرسمي لشيرا
+              FloatingActionButton(
+                heroTag: "consumer_home_chat_btn",
+                backgroundColor: const Color(0xFF1F2937),
+                elevation: 6,
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (context) => ChatSupportWidget(
+                      uid: FirebaseAuth.instance.currentUser?.uid ?? '',
+                      role: 'consumer',
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFF00E5FF), width: 1.8),
+                  ),
+                  child: const CircleAvatar(
+                    radius: 24,
+                    backgroundImage: AssetImage('assets/images/shira_avatar.png'),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
         ),
         bottomNavigationBar: const SafeArea(
