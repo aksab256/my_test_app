@@ -403,8 +403,8 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
         // تأمين وتصفية الاستجابة لمنع عرض نصوص الأخطاء الخام
         String reply = data["message"] ?? data["reply"] ?? "";
         if (reply.isEmpty) {
-  reply = "تم استلام الطلب وبانتظار رد المساعد، يرجى المحاولة مرة أخرى.";
-}
+          reply = "تم استلام الطلب وبانتظار رد المساعد، يرجى المحاولة مرة أخرى.";
+        }
 
         final audioUrl = data["audioUrl"];
         final fileData = data["file"];
@@ -801,7 +801,7 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
                   const SizedBox(width: 6),
                 ],
                 Flexible(
-                  child: Text(
+                  child: SelectableText(
                     text,
                     style: TextStyle(
                       fontSize: 14.5,
