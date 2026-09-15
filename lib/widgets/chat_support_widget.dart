@@ -8,6 +8,7 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:audioplayers/audioplayers.dart';
 
 class ChatSupportWidget extends StatefulWidget {
@@ -353,12 +354,35 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
     try {
       final url = Uri.parse("https://shirachat-tmfag3rhdq-uc.a.run.app");
       http.Response response;
+final currentUser = FirebaseAuth.instance.currentUser;
 
+if (currentUser == null) {
+  setState(() {
+    _messages.add({
+      "sender": "bot",
+      "text": "انتهت جلسة تسجيل الدخول، يرجى تسجيل الدخول مرة أخرى."
+    });
+  });
+  return;
+}
+
+final idToken = await currentUser.getIdToken();
+
+if (idToken == null || idToken.isEmpty) {
+  setState(() {
+    _messages.add({
+      "sender": "bot",
+      "text": "تعذر تأمين الاتصال بشيرا، يرجى تسجيل الدخول مرة أخرى."
+    });
+  });
+  return;
+}
       if (hasAudio) {
         var request = http.MultipartRequest("POST", url);
-        request.headers.addAll({
-          'Accept': 'application/json',
-        });
+       request.headers.addAll({
+  'Accept': 'application/json',
+  'Authorization': 'Bearer $idToken',
+});
 
         request.fields['uid'] = widget.uid;
         request.fields['role'] = widget.role;
@@ -383,7 +407,10 @@ class _ChatSupportWidgetState extends State<ChatSupportWidget>
       } else {
         response = await http.post(
           url,
-          headers: {"Content-Type": "application/json"},
+          headers: {
+  "Content-Type": "application/json",
+  "Authorization": "Bearer $idToken",
+},
           body: jsonEncode({
             "uid": widget.uid,
             "role": widget.role,
