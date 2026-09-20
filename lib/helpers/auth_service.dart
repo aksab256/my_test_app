@@ -157,7 +157,8 @@ class AuthService {
     final rest = digits.startsWith('20') ? digits.substring(2) : digits;
     final withZero = rest.startsWith('0') ? rest : '0$rest';
     final withoutZero = rest.startsWith('0') ? rest.substring(1) : rest;
-    final variations = [withZero, withoutZero, digits];
+    final withCountry = '20$withoutZero'; // F-routing: 20-form stored by backend registration.
+    final variations = [withZero, withoutZero, digits, withCountry];
 
     for (var colName in collections) {
       try {

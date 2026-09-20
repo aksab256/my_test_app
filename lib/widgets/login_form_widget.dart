@@ -232,7 +232,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
 
 
-        String finalRole = await _authService.signInWithMint(customToken: _mintedToken!, phone: _phone);
+        String finalRole = await _authService.signInWithMint(customToken: _mintedToken!, phone: phone); // F-routing: formatted phone covers all stored forms.
 
         if (mounted) {
           await Provider.of<BuyerDataProvider>(context, listen: false).initializeData(
