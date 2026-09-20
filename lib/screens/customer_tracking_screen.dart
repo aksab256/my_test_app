@@ -371,31 +371,6 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
     );
   }
 
-// F4: handover code visible only to its creator (vault ACL). Anyone else
-// never learns it from this screen (previously it leaked to all viewers).
-class _CreatorCodeText extends StatelessWidget {
-  final String orderId;
-  final bool isCreator;
-  const _CreatorCodeText({required this.orderId, required this.isCreator});
-  @override
-  Widget build(BuildContext context) {
-    if (!isCreator) return const SizedBox.shrink();
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('specialRequests')
-          .doc(orderId)
-          .collection('proof')
-          .doc('vault')
-          .snapshots(),
-      builder: (context, snap) {
-        final code = (snap.hasData && snap.data!.exists)
-            ? ((snap.data!.data() as Map<String, dynamic>)['pickupCode']?.toString() ?? "----")
-            : "----";
-        return Text(code, style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.red[900]));
-      },
-    );
-  }
-}
 
   Future<void> _issueDeliveryCode() async {
     final code = (1000 + Random().nextInt(9000)).toString();
@@ -578,6 +553,32 @@ class _CreatorCodeText extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+// F4: handover code visible only to its creator (vault ACL). Anyone else
+// never learns it from this screen (previously it leaked to all viewers).
+class _CreatorCodeText extends StatelessWidget {
+  final String orderId;
+  final bool isCreator;
+  const _CreatorCodeText({required this.orderId, required this.isCreator});
+  @override
+  Widget build(BuildContext context) {
+    if (!isCreator) return const SizedBox.shrink();
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('specialRequests')
+          .doc(orderId)
+          .collection('proof')
+          .doc('vault')
+          .snapshots(),
+      builder: (context, snap) {
+        final code = (snap.hasData && snap.data!.exists)
+            ? ((snap.data!.data() as Map<String, dynamic>)['pickupCode']?.toString() ?? "----")
+            : "----";
+        return Text(code, style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.red[900]));
+      },
     );
   }
 }
