@@ -8,6 +8,7 @@ import 'package:my_test_app/models/user_role.dart';
 import 'package:my_test_app/models/category_model.dart';
 import 'package:my_test_app/models/product_model.dart' hide CategoryModel;
 import 'package:my_test_app/repositories/product_repository.dart';
+import 'package:my_test_app/services/analytics_service.dart';
 
 // ✅ استيراد الشريط السفلي
 import 'package:my_test_app/widgets/category_bottom_nav_bar.dart';
@@ -41,6 +42,7 @@ class _SearchScreenState extends State<SearchScreen> {
   
   // ✅ مؤقت لتأخير البحث أثناء الكتابة (Debounce) لتقليل استهلاك السيرفر
   Timer? _debounce;
+  String _lastLoggedSearch = '';
 
   @override
   void initState() {
@@ -122,6 +124,21 @@ class _SearchScreenState extends State<SearchScreen> {
       if (mounted) {
         setState(() {
           _searchResults = results;
+          // 📊 سلوكي: تنفيذ بحث (مرة واحدة لكل صياغة، حد أدنى حرفان).
+          if (searchTerm.length >= 2 && searchTerm != _lastLoggedSearch) {
+            _lastLoggedSearch = searchTerm;
+            AnalyticsService.logEvent(
+              eventName: AnalyticsEvents.searchProducts,
+              eventData: AnalyticsEventBuilder.searchProducts(
+                searchTerm: searchTerm,
+                mainCategoryId: _selectedMainCategory,
+                subCategoryId: _selectedSubCategory,
+                sortOption: _selectedSort.name,
+                resultCount: results.length,
+                role: widget.userRole == UserRole.consumer ? 'consumer' : 'buyer',
+              ),
+            );
+          }
           _isLoading = false;
         });
       }

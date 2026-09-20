@@ -7,6 +7,7 @@ import 'package:my_test_app/theme/app_theme.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/utils/offer_data_model.dart';
+import 'package:my_test_app/services/analytics_service.dart';
 
 final FirebaseFirestore _db = FirebaseFirestore.instance;
 
@@ -26,6 +27,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   List<OfferModel> _filteredOffers = []; 
   bool _isLoading = true;
   String? _currentProductId;
+  bool _viewLogged = false;
 
   @override
   void didChangeDependencies() {
@@ -63,6 +65,20 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
       if (productDoc.exists) {
         _productData = productDoc.data();
+        if (!_viewLogged) {
+          _viewLogged = true;
+          // 📊 سلوكي فقط: مشاهدة تفاصيل منتج (B2B). userId يُختم server-side.
+          AnalyticsService.logEvent(
+            eventName: AnalyticsEvents.viewProduct,
+            eventData: AnalyticsEventBuilder.viewProduct(
+              productId: _currentProductId!,
+              productName: _productData?['name']?.toString(),
+              mainId: _productData?['mainId']?.toString(),
+              subId: _productData?['subId']?.toString(),
+              role: 'buyer',
+            ),
+          );
+        }
       }
 
       List<OfferModel> allOffers = [];
@@ -109,6 +125,21 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         availableStock: offer.stock,
         minOrderQuantity: offer.minQty ?? 1,
         maxOrderQuantity: offer.maxQty ?? 9999,
+      );
+
+      // 📊 سلوكي: إضافة للسلة من شاشة التفاصيل (بعد نجاح الإضافة فقط).
+      AnalyticsService.logEvent(
+        eventName: AnalyticsEvents.addToCart,
+        eventData: AnalyticsEventBuilder.addToCart(
+          productId: _currentProductId!,
+          offerId: offer.offerId,
+          sellerId: offer.sellerId,
+          quantity: offer.minQty ?? 1,
+          price: (offer.price is num) ? offer.price.toDouble() : 0.0,
+          unit: offer.unitName,
+          role: 'buyer',
+          screen: 'product_details',
+        ),
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -214,4 +245,3 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 }
-

@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 // استيراد الـ Controller الجديد
 import 'package:my_test_app/controllers/checkout_controller.dart';
+import 'package:my_test_app/services/analytics_service.dart';
 
 // استيراد الأجزاء الأخرى
 import 'widgets/customer_info_widget.dart';
@@ -40,6 +41,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _isConsumer = false;
   bool _useCashback = false;
   bool _isLoading = true;
+  bool _checkoutStartedLogged = false;
 
   @override
   void initState() {
@@ -138,6 +140,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         );
       });
       return;
+    }
+
+    // 📊 سلوكي: بدء Checkout (مرة واحدة لكل فتح شاشة، بعد التأكد من وجود أصناف).
+    if (!_checkoutStartedLogged) {
+      _checkoutStartedLogged = true;
+      AnalyticsService.logEvent(
+        eventName: AnalyticsEvents.checkoutStarted,
+        eventData: AnalyticsEventBuilder.checkoutStarted(
+          itemsCount: _checkoutOrders.length,
+          totalAmount: _originalOrderTotal,
+          sellerIds: _groupedSellerOrders
+              .map((g) => (g['sellerId'] ?? '').toString())
+              .where((s) => s.isNotEmpty)
+              .toList(),
+          role: _loggedUser['role']?.toString(),
+        ),
+      );
     }
 
     await _fetchCashback(_loggedUser['id'] ?? '');

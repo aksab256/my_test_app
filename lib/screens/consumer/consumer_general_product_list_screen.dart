@@ -6,6 +6,7 @@ import 'package:sizer/sizer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
+import 'package:my_test_app/services/analytics_service.dart';
 import 'package:my_test_app/widgets/buyer_product_header.dart';
 import 'package:my_test_app/screens/consumer/consumer_widgets.dart';
 import '../../theme/app_theme.dart';
@@ -429,6 +430,20 @@ class _GeneralProductGroupCardState extends State<_GeneralProductGroupCard> {
           content: Text('تم إضافة المنتج إلى السلة بنجاح'),
           backgroundColor: AppTheme.primaryGreen,
           duration: Duration(seconds: 2),
+        ),
+      );
+      // 📊 سلوكي: إضافة للسلة (B2C) — نهاية try = بعد نجاح الإضافة فقط.
+      AnalyticsService.logEvent(
+        eventName: AnalyticsEvents.addToCart,
+        eventData: AnalyticsEventBuilder.addToCart(
+          productId: _selectedOffer['productId']?.toString() ?? '',
+          offerId: _selectedOffer['offerId']?.toString(),
+          sellerId: _selectedOffer['sellerId']?.toString(),
+          quantity: 1,
+          price: (unit['price'] as num).toDouble(),
+          unit: unit['unitName']?.toString(),
+          role: 'consumer',
+          screen: 'consumer_general',
         ),
       );
     } catch (error) {

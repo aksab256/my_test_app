@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
+import 'package:my_test_app/services/analytics_service.dart';
 import 'package:my_test_app/widgets/buyer_product_header.dart';
 import 'package:my_test_app/screens/consumer/consumer_widgets.dart';
 import '../../theme/app_theme.dart';
@@ -229,6 +230,20 @@ class _ProductCard extends StatelessWidget {
   }
 
   void _addToCart(CartProvider cart, dynamic unit, String name, String img) {
+    // 📊 سلوكي: نية إضافة للسلة (B2C) — cart محلية فورية، والفشل هنا لا يُسجَّل كحدث.
+    AnalyticsService.logEvent(
+      eventName: AnalyticsEvents.addToCart,
+      eventData: AnalyticsEventBuilder.addToCart(
+        productId: offer['productId']?.toString() ?? '',
+        offerId: offer['offerId']?.toString(),
+        sellerId: offer['ownerId']?.toString(),
+        quantity: 1,
+        price: (unit['price'] as num).toDouble(),
+        unit: unit['unitName']?.toString(),
+        role: 'consumer',
+        screen: 'consumer_list',
+      ),
+    );
     cart.addItemToCart(
       offerId: offer['offerId'],
       productId: offer['productId'],

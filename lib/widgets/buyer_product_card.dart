@@ -86,6 +86,20 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
           ),
         );
       }
+      // 📊 سلوكي: إضافة للسلة من كارت المنتج (نهاية try = بعد نجاح الإضافة فقط).
+      AnalyticsService.logEvent(
+        eventName: AnalyticsEvents.addToCart,
+        eventData: AnalyticsEventBuilder.addToCart(
+          productId: widget.productId,
+          offerId: offer.offerId,
+          sellerId: offer.sellerId,
+          quantity: qty,
+          price: finalPrice,
+          unit: offer.unitName,
+          role: currentUserRole,
+          screen: 'buyer_product_card',
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
