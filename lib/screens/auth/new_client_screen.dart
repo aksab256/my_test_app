@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:sizer/sizer.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:my_test_app/data_sources/client_data_source.dart';
+import 'package:my_test_app/services/akedly_auth_service.dart';
 import 'package:my_test_app/screens/auth/client_selection_step.dart';
 import 'package:my_test_app/screens/auth/client_details_step.dart';
 
@@ -18,7 +17,7 @@ class NewClientScreen extends StatefulWidget {
 
 class _NewClientScreenState extends State<NewClientScreen> {
   final PageController _pageController = PageController();
-  final ClientDataSource _dataSource = ClientDataSource();
+  final AkedlyAuthService _regService = AkedlyAuthService();
 
   String _selectedCountry = 'egypt';
   String _selectedUserType = '';
@@ -146,46 +145,121 @@ class _NewClientScreenState extends State<NewClientScreen> {
     );
   }
 
+  String _registerErrorMessage(int status) {
+    switch (status) {
+      case 400:
+        return '❌ رمز التحقق أو البيانات غير صحيحة.';
+      case 409:
+        return '❌ هذا الرقم مسجل بالفعل. سجّل الدخول.';
+      case 410:
+        return '❌ انتهت صلاحية الكود. أعد التسجيل.';
+      case 429:
+        return '❌ محاولات كثيرة. حاول لاحقًا.';
+      default:
+        return '❌ تعذّر إتمام التسجيل حاليًا.';
+    }
+  }
+
+  Future<String?> _promptOtpDialog() {
+    final ctrl = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('كود التفعيل', style: TextStyle(fontFamily: 'Cairo'), textAlign: TextAlign.center),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          maxLength: 10,
+          textAlign: TextAlign.center,
+          decoration: const InputDecoration(hintText: 'أدخل الكود المرسل لهاتفك'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo')),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
+            child: const Text('تأكيد', style: TextStyle(fontFamily: 'Cairo')),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _handleRegistration() async {
     final phoneValue = _controllers['phone']!.text.trim();
     
-    // ✅ توليد كلمة مرور تلقائية متوافقة مع OTP لضمان التسجيل في Firebase
-    final String generatedPass = "Rabia_$phoneValue";
-    _controllers['password']!.text = generatedPass;
-    _controllers['confirmPassword']!.text = generatedPass;
+    // F3: no client-side passwords - identity is created server-side after OTP proof.
+    // F3: no generated passwords anymore.
+    // F3: password controllers no longer used for registration.
+    // F3: confirm-password controller no longer used for registration.
 
     if (phoneValue.isEmpty || phoneValue.length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ يرجى إدخال رقم هاتف صحيح')));
       return;
     }
 
-    String smartEmail = "$phoneValue@aksab.com";
+    // F3: smart email is assigned server-side; the client sends profile only.
 
     setState(() => _isSaving = true);
     try {
       // ✅ إرسال البيانات للـ DataSource مع الاحتفاظ بكل الحقول دون اختصار
-      await _dataSource.registerClient(
-        fullname: _controllers['fullname']!.text,
-        ownerName: _controllers['ownerName']!.text,
-        email: smartEmail,
-        phone: phoneValue,
-        password: generatedPass, // تمرير الباسورد المولدة تلقائياً
-        address: _controllers['address']!.text,
-        country: _selectedCountry,
-        userType: _selectedUserType,
-        location: _location,
-        logoUrl: _logoUrl,
-        crUrl: _crUrl,
-        tcUrl: _tcUrl,
-        merchantName: _controllers['merchantName']!.text,
-        businessType: _controllers['businessType']!.text,
-        additionalPhone: _controllers['additionalPhone']!.text,
+      // F3: step 1 - backend OTP-proves the unknown phone and binds the role server-side.
+      if (_selectedUserType != 'buyer' &&
+          _selectedUserType != 'seller' &&
+          _selectedUserType != 'consumer') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ يرجى اختيار نوع الحساب أولاً')));
+        }
+        return;
+      }
+      final send = await _regService.registerSend(phoneValue, _selectedUserType);
+      if (!send.isSuccess) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(send.message ?? '❌ تعذّر بدء التسجيل')));
+        }
+        return;
+      }
+      final txID = send.data ?? '';
+      if (txID.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('❌ تعذّر بدء التسجيل')));
+        }
+        return;
+      }
+
+      final otp = await _promptOtpDialog();
+      if (otp == null || otp.isEmpty) return;
+
+      // F3: step 2 - server verifies OTP then creates the passwordless identity + role doc.
+      await _regService.registerVerify(
+        transactionReqID: txID,
+        otp: otp,
+        phoneNumber: phoneValue,
+        profile: {
+          'fullname': _controllers['fullname']!.text,
+          'ownerName': _controllers['ownerName']!.text,
+          'address': _controllers['address']!.text,
+          'country': _selectedCountry,
+          'additionalPhone': _controllers['additionalPhone']!.text,
+          'merchantName': _controllers['merchantName']!.text,
+          'businessType': _controllers['businessType']!.text,
+          'logoUrl': _logoUrl,
+          'crUrl': _crUrl,
+          'tcUrl': _tcUrl,
+          if (_location != null) 'location': _location,
+        },
       );
 
-      await FirebaseAuth.instance.signOut();
 
       if (mounted) {
         _showSuccessDialog();
+      }
+    } on RegisterException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_registerErrorMessage(e.statusCode))));
       }
     } catch (e) {
       if (mounted) {

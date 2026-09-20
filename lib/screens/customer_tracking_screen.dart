@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart'; // محرك الخرائط الجديد
 import 'package:sizer/sizer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 import 'dart:ui' as ui;
-import 'dart:math' show cos, sqrt, asin, atan2, pi;
+import 'dart:math' show cos, sqrt, asin, atan2, pi, Random;
 import 'package:flutter/services.dart';
 
 class CustomerTrackingScreen extends StatefulWidget {
@@ -171,17 +172,14 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   ),
                   onPressed: () async {
+                    // F16: single rating event. Marker only; counters are applied
+                    // exactly once by the submitRating trigger. No status write
+                    // (delivery flips server-side via /verify-handover only).
                     await FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).update({
-                      'rating': selectedRating,
+                      'ratingByCustomer': selectedRating,
                       'customerComment': commentController.text,
-                      'status': 'delivered'
+                      'ratedAt': FieldValue.serverTimestamp(),
                     });
-                    if (driverId.isNotEmpty) {
-                      await FirebaseFirestore.instance.collection('freeDrivers').doc(driverId).update({
-                        'totalStars': FieldValue.increment(selectedRating),
-                        'reviewsCount': FieldValue.increment(1),
-                      });
-                    }
                     if (context.mounted) Navigator.of(context).popUntil((route) => route.isFirst);
                   },
                   child: const Text("تأكيد التقييم", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
@@ -245,7 +243,8 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
 
         var orderData = orderSnapshot.data!.data() as Map<String, dynamic>;
         String status = orderData['status'] ?? "pending";
-        bool isRated = orderData.containsKey('rating');
+        // F16: rated iff the single rating marker exists (written once per order).
+        bool isRated = orderData['ratingByCustomer'] != null;
 
         // ✅ إصلاح: التعامل مع الحالات النهائية بشكل صريح (بدل .contains('cancelled')
         // اللي كان بيمسك 'driver_cancelled_reseeking' غلط ويخرج العميل من الشاشة
@@ -275,7 +274,6 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
         }
 
         String? driverId = orderData['driverId'];
-        String verificationCode = orderData['verificationCode'] ?? "----";
         GeoPoint pickup = orderData['pickupLocation'];
         GeoPoint dropoff = orderData['dropoffLocation'];
         LatLng pickupLatLng = LatLng(pickup.latitude, pickup.longitude);
@@ -360,7 +358,7 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                       Align(
                         alignment: Alignment.bottomCenter,
                         child: SafeArea(
-                          child: _buildUnifiedBottomPanel(context, status, orderData, driverData, verificationCode),
+                          child: _buildUnifiedBottomPanel(context, status, orderData, driverData),
                         ),
                       ),
                   ],
@@ -373,7 +371,73 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
     );
   }
 
-  Widget _buildUnifiedBottomPanel(BuildContext context, String status, Map<String, dynamic> order, Map<String, dynamic>? driver, String code) {
+// F4: handover code visible only to its creator (vault ACL). Anyone else
+// never learns it from this screen (previously it leaked to all viewers).
+class _CreatorCodeText extends StatelessWidget {
+  final String orderId;
+  final bool isCreator;
+  const _CreatorCodeText({required this.orderId, required this.isCreator});
+  @override
+  Widget build(BuildContext context) {
+    if (!isCreator) return const SizedBox.shrink();
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('specialRequests')
+          .doc(orderId)
+          .collection('proof')
+          .doc('vault')
+          .snapshots(),
+      builder: (context, snap) {
+        final code = (snap.hasData && snap.data!.exists)
+            ? ((snap.data!.data() as Map<String, dynamic>)['pickupCode']?.toString() ?? "----")
+            : "----";
+        return Text(code, style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.red[900]));
+      },
+    );
+  }
+}
+
+  Future<void> _issueDeliveryCode() async {
+    final code = (1000 + Random().nextInt(9000)).toString();
+    try {
+      // F4 option A: the receiver mints the delivery code once (set-once rule);
+      // the driver can only present it to /verify-handover, never read or set it.
+      await FirebaseFirestore.instance
+          .collection('specialRequests')
+          .doc(widget.orderId)
+          .collection('proof')
+          .doc('vault')
+          .set({'deliveryCode': code}, SetOptions(merge: true));
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('كود التسليم', style: TextStyle(fontFamily: 'Cairo'), textAlign: TextAlign.center),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('أظهر هذا الكود للمندوب عند الاستلام', style: TextStyle(fontFamily: 'Cairo'), textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                Text(code, style: const TextStyle(fontSize: 42, fontWeight: FontWeight.w900)),
+              ],
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('تم', style: TextStyle(fontFamily: 'Cairo')),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تعذّر إصدار الكود (ربما صدر مسبقًا)")));
+      }
+    }
+  }
+
+  Widget _buildUnifiedBottomPanel(BuildContext context, String status, Map<String, dynamic> order, Map<String, dynamic>? driver) {
     double progress = 0.1;
     String statusDesc = "بانتظار قبول مندوب...";
     Color mainColor = Colors.orange;
@@ -430,11 +494,38 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                   const Icon(Icons.security, color: Colors.amber),
                   const SizedBox(width: 10),
                   const Text("كود التسليم: ", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-                  Text(code, style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w900, color: Colors.red[900])),
+                  _CreatorCodeText(
+                    orderId: widget.orderId,
+                    isCreator: FirebaseAuth.instance.currentUser?.uid == order['userId'],
+                  ),
                 ],
               ),
             ),
           ],
+
+          // F4 option A: receiver-issued delivery code for picked_up -> delivered.
+          if (status == 'picked_up')
+            Container(
+              margin: const EdgeInsets.only(bottom: 15),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.green)),
+              child: Column(
+                children: [
+                  const Text('كود تسليم العميل', style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green[800]),
+                      onPressed: _issueDeliveryCode,
+                      icon: const Icon(Icons.vpn_key, color: Colors.white),
+                      label: const Text("إصدار كود التسليم", style: TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const Text('أظهر الكود للمندوب عند الاستلام', style: TextStyle(fontFamily: 'Cairo', fontSize: 12)),
+                ],
+              ),
+            ),
 
           // خلال إعادة البحث عن مندوب، لا يوجد مندوب حالي لعرضه
           if (status != 'driver_cancelled_reseeking' && status != 'pending')

@@ -160,7 +160,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with SingleTickerProv
         if (token != null) {
           await _db.collection('users').doc(_currentUserId).update({
             'fcmToken': token,
-            'role': 'buyer',
+            // F1: role is server-owned; never self-asserted.
             'lastTokenUpdate': FieldValue.serverTimestamp(),
             'notificationsEnabled': true,
           });

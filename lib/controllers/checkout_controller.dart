@@ -39,10 +39,10 @@ Map<String, dynamic> removeNullValues(Map<String, dynamic> obj) {
 class CheckoutController {
     static final facebookAppEvents = FacebookAppEvents();
 
-    static Future<String?> _getSellerPhone(String id, bool isConsumer) async {
+    static Future<String?> _getSellerPhone(FirebaseFirestore db, String id, bool isConsumer) async {
         try {
             final collectionName = isConsumer ? "deliverySupermarkets" : "sellers";
-            final doc = await FirebaseFirestore.instance.collection(collectionName).doc(id).get();
+            final doc = await db.collection(collectionName).doc(id).get();
             if (doc.exists) {
                 return doc.data()?['phone']?.toString() ?? doc.data()?['mobile']?.toString();
             }
@@ -52,16 +52,18 @@ class CheckoutController {
         return null;
     }
 
-    static Future<double> fetchCashback(String userId, String userRole) async {
+    static Future<double> fetchCashback(String userId, String userRole, {FirebaseFirestore? firestore}) async {
         if (userId.isEmpty) return 0.0;
         final bool isConsumer = (userRole == 'consumer');
         final String usersCollectionName = isConsumer ? "consumers" : "users";
         final String cashbackFieldName = isConsumer ? "cashbackBalance" : "cashback";
 
         try {
-            final userDoc = await FirebaseFirestore.instance.collection(usersCollectionName).doc(userId).get();
+            // Test seam: defaults preserve the production wiring exactly.
+            final FirebaseFirestore db = firestore ?? FirebaseFirestore.instance;
+            final userDoc = await db.collection(usersCollectionName).doc(userId).get();
             if (userDoc.exists) {
-                return (userDoc.data()?[cashbackFieldName] as num?)?.toDouble() ?? 0.0;
+                return max(0.0, double.tryParse((userDoc.data()?[cashbackFieldName] ?? '0').toString()) ?? 0.0);
             }
         } catch (e) {
             debugPrint('❌ Error fetching cashback: $e');
@@ -78,9 +80,13 @@ class CheckoutController {
         required double finalTotalAmount,
         required bool useCashback,
         required dynamic selectedPaymentMethod,
+        // Test seams: defaults preserve the production wiring exactly.
+        FirebaseFirestore? firestore,
+        Future<List<String>> Function(Map<String, dynamic> payload)? secureOrdersHandler,
         }) async {
 
         final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
+        final FirebaseFirestore db = firestore ?? FirebaseFirestore.instance;
         
         // التحقق من سلامة البيانات لمنع تمرير قيم null للسيرفر
         if (checkoutOrders.isEmpty || loggedUser['id'] == null) {
@@ -163,16 +169,16 @@ class CheckoutController {
             
             for (final sellerId in groupedItems.keys) {
                 if (!isConsumer) {
-                    final sellerSnap = await FirebaseFirestore.instance.collection("sellers").doc(sellerId).get();
+                    final sellerSnap = await db.collection("sellers").doc(sellerId).get();
                     commissionRatesCache[sellerId] = (sellerSnap.data()?['commissionRate'] as num?)?.toDouble() ?? 0.0;
                 }
-                sellerPhonesCache[sellerId] = await _getSellerPhone(sellerId, isConsumer);
+                sellerPhonesCache[sellerId] = await _getSellerPhone(db, sellerId, isConsumer);
             }
 
             if (needsSecureProcessing) {
                 // استدعاء السيرفر الإقليمي والـ Cloud Function المعتمدة لخصم وضبط عهدة الطلبات وهداياها
-                final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'us-central1')
-                    .httpsCallable('createOrdersWithPromos');
+                // Test seam: secureOrdersHandler replaces the Cloud Function call in tests.
+                    // (Cloud Function invoked in the else branch below when no test handler is given.)
 
                 final List<Map<String, dynamic>> allOrdersData = [];
                 for (final sellerId in groupedItems.keys) {
@@ -211,17 +217,25 @@ class CheckoutController {
                 }
 
                 // تمرير المعرفات والمصفوفات بالأسماء المطابقة تماماً لكود الـ Cloud Function المسترجع لضمان النجاح المالي
-                final result = await callable.call(removeNullValues({
+                final Map<String, dynamic> securePayload = removeNullValues({
                     'userId': safeLoggedUser['id'],
                     'ordersData': allOrdersData,
                     'cashbackToReserve': discountUsed, // نقاط التأمين / الكاش باك المراد حجزها وإدارتها بالسيرفر
                     'total_insurance_points': discountUsed,
                     'action': 'lock_assets',
                     'checkoutId': 'CH-${safeLoggedUser['id']}-${DateTime.now().millisecondsSinceEpoch}',
-                }));
+                });
 
-                if (result.data != null && result.data['orderIds'] is List) {
+                if (secureOrdersHandler != null) {
+                    successfulOrderIds.addAll(await secureOrdersHandler(securePayload));
+                } else {
+                    final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+                        .httpsCallable('createOrdersWithPromos');
+
+                    final result = await callable.call(securePayload);
+                    if (result.data != null && result.data['orderIds'] is List) {
                     successfulOrderIds.addAll(List<String>.from(result.data['orderIds']));
+                    }
                 }
             } else {
                 // المعالجة المباشرة العادية للعمليات النقدية أو طلبات المستهلكين (Firebase Direct)
@@ -267,13 +281,13 @@ class CheckoutController {
                         'deliveryHandled': false,
                     };
                     
-                    final docRef = await FirebaseFirestore.instance.collection(ordersCollectionName).add(removeNullValues(orderData));
+                    final docRef = await db.collection(ordersCollectionName).add(removeNullValues(orderData));
                     successfulOrderIds.add(docRef.id);
                     await docRef.update({'orderId': docRef.id});
                 }
 
                 if (discountUsed > 0 && successfulOrderIds.isNotEmpty) {
-                    await FirebaseFirestore.instance.collection(usersCollectionName).doc(safeLoggedUser['id']).update({
+                    await db.collection(usersCollectionName).doc(safeLoggedUser['id']).update({
                         cashbackFieldName: currentCashback - discountUsed
                     });
                 }

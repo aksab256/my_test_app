@@ -2,7 +2,7 @@ name: my_test_app
 description: A new Flutter project.
 publish_to: 'none'
 # تم تحديث الإصدار ليكون Build 21 جاهز للرفع النهائي لتطبيق ربيع أحلى
-version: 1.0.2+25
+version: 1.1.0+26
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -84,6 +84,8 @@ dev_dependencies:
     sdk: flutter
 
   flutter_lints: ^6.0.0
+  # Tests only: fake Firestore for unit-testing providers (no production use)
+  fake_cloud_firestore: ^4.0.0
   # أدوات توليد الأيقونات والـ Splash
   flutter_launcher_icons: ^0.14.4
   flutter_native_splash: ^2.4.0

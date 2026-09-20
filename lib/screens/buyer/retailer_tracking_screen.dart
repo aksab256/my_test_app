@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+/* F4: firebase_auth intentionally not imported here; vault readability proves creatorhood. */
 import 'package:google_maps_flutter/google_maps_flutter.dart'; // المحرك الجديد
 import 'package:sizer/sizer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 import 'dart:ui' as ui;
-import 'dart:math' show cos, sqrt, asin, atan2, pi;
+import 'dart:math' show cos, sqrt, asin, atan2, pi, Random;
 import 'package:flutter/services.dart';
 
 class RetailerTrackingScreen extends StatefulWidget {
@@ -156,7 +157,6 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
         String status = orderData['status'] ?? "pending";
         String? originalOrderId = orderData['originalOrderId'];
         bool isReturning = status == _returningToSeller;
-        String verificationCode = isReturning ? (orderData['returnVerificationCode'] ?? "----") : (orderData['verificationCode'] ?? "----");
 
         // ✅ إصلاح: الخروج التلقائي بقى يغطي كل الحالات النهائية الحقيقية بأمان لمنع الشاشة السوداء
         if (_terminalExitStatuses.contains(status)) {
@@ -263,7 +263,27 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
                       Align(
                         alignment: Alignment.bottomCenter,
                         child: SafeArea(
-                          child: _buildRetailerBottomPanel(context, status, orderData, driverData, originalOrderId, verificationCode, isReturning),
+                          child: StreamBuilder<DocumentSnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('specialRequests')
+                                .doc(widget.orderId)
+                                .collection('proof')
+                                .doc('vault')
+                                .snapshots(),
+                            builder: (context, vaultSnap) {
+                              final vault = (vaultSnap.hasData && vaultSnap.data!.exists)
+                                  ? vaultSnap.data!.data() as Map<String, dynamic>
+                                  : null;
+                              // F4: codes come from the creator-bound vault, never inline.
+                              // A readable vault also proves the viewer is the creator.
+                              final String verificationCode = isReturning
+                                  ? (vault?['returnCode']?.toString() ?? "----")
+                                  : (vault?['pickupCode']?.toString() ?? "----");
+                              final bool canIssueReturnCode = isReturning
+                                  && vault != null && vault['returnCode'] == null;
+                              return _buildRetailerBottomPanel(context, status, orderData, driverData, originalOrderId, verificationCode, isReturning, widget.orderId, canIssueReturnCode);
+                            },
+                          ),
                         ),
                       ),
                   ],
@@ -276,7 +296,28 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
     );
   }
 
-  Widget _buildRetailerBottomPanel(BuildContext context, String status, Map<String, dynamic> order, Map<String, dynamic>? driver, String? originalOrderId, String code, bool isReturning) {
+  Future<void> _issueReturnCode(String orderId) async {
+    final code = (1000 + Random().nextInt(9000)).toString();
+    try {
+      // F4: the return code is issued by the receiving merchant into the
+      // creator-bound vault (set-once); the driver can only present it.
+      await FirebaseFirestore.instance
+          .collection('specialRequests')
+          .doc(orderId)
+          .collection('proof')
+          .doc('vault')
+          .set({'returnCode': code}, SetOptions(merge: true));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم إصدار كود الإخلاء — أعطه للمندوب بعد استلام المرتجع")));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تعذّر إصدار الكود")));
+      }
+    }
+  }
+
+  Widget _buildRetailerBottomPanel(BuildContext context, String status, Map<String, dynamic> order, Map<String, dynamic>? driver, String? originalOrderId, String code, bool isReturning, String orderId, bool canIssueReturnCode) {
     double progress = 0.1;
     String statusDesc = "جاري البحث عن مندوب لتمثيل العهدة...";
     Color mainColor = isReturning ? Colors.red : Colors.orange;
@@ -356,6 +397,18 @@ class _RetailerTrackingScreenState extends State<RetailerTrackingScreen> {
                     style: TextStyle(fontSize: 10.sp, color: Colors.black87, fontFamily: 'Cairo', fontWeight: FontWeight.w600, height: 1.4),
                   ),
                 ],
+              ),
+            ),
+
+          // F4: merchant-issued return code (same custody pattern as dispatch).
+          if (isReturning && canIssueReturnCode)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red[900]),
+                onPressed: () => _issueReturnCode(orderId),
+                icon: const Icon(Icons.vpn_key, color: Colors.white),
+                label: const Text("إصدار كود الإخلاء للمرتجع", style: TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
               ),
             ),
 

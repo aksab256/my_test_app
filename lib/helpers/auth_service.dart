@@ -86,6 +86,120 @@ class AuthService {
     }
   }
 
+  /// F3: backend-mediated sign-in. The session comes from a server-minted
+  /// Firebase Custom Token (OTP already verified server-side). No derived
+  /// email/password is constructed or used anywhere in this path.
+  Future<String> signInWithMint(
+      {required String customToken, required String phone}) async {
+    try {
+      final userCredential = await _auth.signInWithCustomToken(customToken);
+
+      final User? user = userCredential.user;
+      if (user == null) throw Exception("user-null");
+
+      Map<String, dynamic> userData;
+      try {
+        userData = await _getUserDataByPhone(phone);
+      } catch (e) {
+        debugPrint("⚠️ تحذير: فشل جلب البيانات الإضافية: $e");
+        userData = {'role': 'buyer'};
+      }
+
+      final String userRole = userData['role'];
+
+      if (userRole == 'pending') {
+        await _auth.signOut();
+        throw 'auth/account-not-active';
+      }
+
+      final String? repCode = userData['repCode'];
+      final String? repName = userData['repName'];
+      final String userAddress = userData['address'] ?? '';
+      final String? userFullName = userData['fullname'] ?? userData['fullName'];
+      final String? merchantName = userData['merchantName'];
+      final String phoneToShow = userData['phone'] ?? phone;
+
+      final dynamic userLocation = userData['location'];
+
+      final String effectiveOwnerId = (userData['parentSellerId'] != null)
+          ? userData['parentSellerId']
+          : (userData['sellerId'] != null ? userData['sellerId'] : user.uid);
+
+      await _saveUserToLocalStorage(
+        id: user.uid,
+        ownerId: effectiveOwnerId,
+        role: userRole,
+        fullname: userFullName,
+        address: userAddress,
+        merchantName: merchantName,
+        phone: phoneToShow,
+        location: userLocation,
+        isSubUser: userData['isSubUser'] ?? false,
+        repCode: repCode,
+        repName: repName,
+      );
+
+      return userRole;
+    } on FirebaseAuthException catch (e) {
+      throw e.code;
+    } catch (e) {
+      if (e == 'auth/account-not-active') rethrow;
+      debugPrint("🚨 Error in AuthService: $e");
+      throw 'auth/unknown-error';
+    }
+  }
+
+  /// F3: role lookup by phone for mint sessions (the custom-token user may
+  /// carry no synthetic email). Mirrors [_getUserDataByEmail] mapping.
+  Future<Map<String, dynamic>> _getUserDataByPhone(String phone) async {
+    final collections = ['sellers', 'consumers', 'users', 'pendingSellers', 'subUsers'];
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    final rest = digits.startsWith('20') ? digits.substring(2) : digits;
+    final withZero = rest.startsWith('0') ? rest : '0$rest';
+    final withoutZero = rest.startsWith('0') ? rest.substring(1) : rest;
+    final variations = [withZero, withoutZero, digits];
+
+    for (var colName in collections) {
+      try {
+        DocumentSnapshot? docSnap;
+        if (colName == 'subUsers') {
+          for (final v in variations) {
+            final d = await _db.collection(colName).doc(v).get();
+            if (d.exists) {
+              docSnap = d;
+              break;
+            }
+          }
+        }
+
+        if (docSnap != null && docSnap.exists) {
+          final Map<String, dynamic> data = docSnap.data() as Map<String, dynamic>;
+          return {...data, 'role': data['role'] ?? 'seller', 'isSubUser': true};
+        }
+
+        final snap = await _db
+            .collection(colName)
+            .where('phone', whereIn: variations)
+            .limit(1)
+            .get();
+
+        if (snap.docs.isNotEmpty) {
+          final Map<String, dynamic> data =
+              snap.docs.first.data() as Map<String, dynamic>;
+
+          String role = data['role'] ?? 'buyer';
+          if (colName == 'sellers') role = 'seller';
+          else if (colName == 'consumers') role = 'consumer';
+
+          return {...data, 'role': role, 'isSubUser': false};
+        }
+      } catch (e) {
+        debugPrint("⚠️ خطأ في قراءة $colName: $e");
+      }
+    }
+    return {'role': 'buyer'};
+  }
+
   Future<void> _saveUserToLocalStorage({
     required String id,
     required String ownerId,

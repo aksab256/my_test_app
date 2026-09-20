@@ -152,10 +152,8 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
 
   Future<void> _submitRating(String driverId, double rating) async {
     try {
-      await FirebaseFirestore.instance.collection('freeDrivers').doc(driverId).update({
-        'totalStars': FieldValue.increment(rating),
-        'reviewsCount': FieldValue.increment(1),
-      });
+      // F16: marker only; the submitRating trigger applies counters exactly
+      // once on proof-backed delivered orders.
       await FirebaseFirestore.instance.collection('specialRequests').doc(widget.orderId).update({
         'ratingByCustomer': rating,
         'ratedAt': FieldValue.serverTimestamp(),
@@ -176,7 +174,8 @@ class _OrderBubbleState extends State<OrderBubble> with SingleTickerProviderStat
         String status = data['status'] ?? 'pending';
         String? vehicleType = data['vehicleType'];
 
-        if (status == 'delivered' && !_ratingShown) {
+        // F16: dialog only for unrated delivered orders (marker written once).
+        if (status == 'delivered' && !_ratingShown && data['ratingByCustomer'] == null) {
           _ratingShown = true;
           Future.microtask(() => _showRatingDialog(data['driverId'], data['driverName'] ?? "المندوب"));
           return const SizedBox.shrink();

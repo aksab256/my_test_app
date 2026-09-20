@@ -263,6 +263,14 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
     }
   }
 
+  /// F3: creation frozen — shows notice instead. Existing sub-users and
+  /// [_addSubUser] are preserved untouched for the later delegation decision.
+  void _subUsersFrozenNotice() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('إضافة الموظفين متوقفة مؤقتًا')),
+    );
+  }
+
   Future<void> _addSubUser() async {
     final phone = _subUserPhoneController.text.trim();
     if (phone.isEmpty) {
@@ -361,7 +369,8 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
                     _buildModernField("رقم هاتف الموظف", _subUserPhoneController, Icons.phone_android, isNum: true),
                     _buildRoleDropdown(),
                     SizedBox(height: 1.h),
-                    _buildMainButton("إضافة موظف جديد", Icons.person_add, _addSubUser, color: Colors.blueGrey[800]!),
+                    // F3: sub-user creation FROZEN (business decision pending) — existing data untouched.
+                    _buildMainButton("إضافة موظف جديد", Icons.person_add, _subUsersFrozenNotice, color: Colors.blueGrey[800]!),
                     SizedBox(height: 3.h),
                     _buildSubUsersList(),
                     

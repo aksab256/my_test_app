@@ -136,6 +136,13 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
 
     try {
       final user = FirebaseAuth.instance.currentUser;
+      // F4: dispatch requires an authenticated creator (vault binding).
+      if (user == null) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('سجّل الدخول أولاً لإرسال الطلب')));
+        return;
+      }
       final String securityCode = _generateOTP();
 
       // ✅ التعديل الجوهري: إرسال GeoPoint صافي لعدم ضرب شاشة المندوب
@@ -162,12 +169,23 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
         // (كانت شغالة صح لأن undefined falsy في JS، بس التصريح الصريح أوضح وأأمن للصيانة)
         'insurance_points': 0,
         'moneyLocked': false,
-        'verificationCode': securityCode,
         'createdAt': FieldValue.serverTimestamp(),
         'requestSource': 'retailer',
         'originalOrderId': widget.order.id,
         'orderFinalAmount': widget.order.finalAmount,
         'details': "🛒 استلام من: $merchantName\n👤 تسليم لعميل: ${widget.order.customerName}\n💰 تحصيل كاش: ${widget.order.finalAmount} ج.م",
+      });
+
+      // F4: handover proof vault — creator-bound, never inline (driver must not read it).
+      await FirebaseFirestore.instance
+          .collection('specialRequests')
+          .doc(radarRef.id)
+          .collection('proof')
+          .doc('vault')
+          .set({
+        'creatorUid': user.uid,
+        'pickupCode': securityCode,
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
       await FirebaseFirestore.instance.collection('consumerorders').doc(widget.order.id).update({

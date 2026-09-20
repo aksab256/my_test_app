@@ -552,10 +552,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
                   return;
                 }
                 if (_formKey.currentState?.validate() ?? false) {
-                  // ✅ تعيين باسوورد تلقائية خلف الكواليس لضمان عمل Firebase Auth بـ OTP
-                  final phone = widget.controllers['phone']?.text ?? "0000";
-                  widget.controllers['password']?.text = "Rabia_$phone";
-                  
+                  // F3: no client-side passwords - identity is created server-side after OTP proof.
                   try {
                     await facebookAppEvents.logCompletedRegistration(registrationMethod: widget.selectedUserType);
                   } catch (e) {

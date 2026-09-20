@@ -20,7 +20,10 @@ class BannerItem {
 }
 
 class BuyerDataProvider with ChangeNotifier {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore;
+  // Test seam: defaults preserve the production wiring exactly.
+  BuyerDataProvider({FirebaseFirestore? firestore})
+      : _firestore = firestore ?? FirebaseFirestore.instance;
 
   String _userName = 'مرحباً بك!';
   LoggedInUser? _loggedInUser;

@@ -1,12 +1,13 @@
 // lib/providers/cashback_provider.dart
 
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../providers/buyer_data_provider.dart';
 
 class CashbackProvider with ChangeNotifier {
   final BuyerDataProvider _buyerData;
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db;
 
   // إضافة متغيرات داخلية لتخزين البيانات
   double _availableBalance = 0.0;
@@ -18,7 +19,9 @@ class CashbackProvider with ChangeNotifier {
   List<Map<String, dynamic>> get offersList => _offersList;
   bool get isLoading => _isLoading;
 
-  CashbackProvider(this._buyerData);
+  // Test seam: defaults preserve the production wiring exactly.
+  CashbackProvider(this._buyerData, {FirebaseFirestore? db})
+      : _db = db ?? FirebaseFirestore.instance;
 
   Future<double> fetchCashbackBalance() async {
     final userId = _buyerData.currentUserId;
@@ -29,7 +32,7 @@ class CashbackProvider with ChangeNotifier {
     try {
       final userDoc = await _db.collection('users').doc(userId).get();
       if (userDoc.exists) {
-        _availableBalance = double.tryParse((userDoc.data()?['cashback'] ?? '0').toString()) ?? 0.0;
+        _availableBalance = max(0.0, double.tryParse((userDoc.data()?['cashback'] ?? '0').toString()) ?? 0.0);
       } else {
         _availableBalance = 0.0;
       }
@@ -38,6 +41,14 @@ class CashbackProvider with ChangeNotifier {
     } catch (e) { 
       return 0.0; 
     }
+  }
+
+  /// Tolerant rule-date parsing: accepts Timestamp or ISO-8601 String.
+  /// Anything else is invalid (null) and the rule is skipped.
+  static DateTime? _parseRuleDate(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.tryParse(value);
+    return null;
   }
 
   Future<List<Map<String, dynamic>>> fetchAvailableOffers() async {
@@ -62,8 +73,8 @@ class CashbackProvider with ChangeNotifier {
       for (var docSnap in querySnapshot.docs) {
         final data = docSnap.data();
         
-        DateTime? startDate = (data['startDate'] as Timestamp?)?.toDate();
-        DateTime? endDate = (data['endDate'] as Timestamp?)?.toDate();
+        DateTime? startDate = _parseRuleDate(data['startDate']);
+        DateTime? endDate = _parseRuleDate(data['endDate']);
 
         if (startDate == null || endDate == null || now.isBefore(startDate) || now.isAfter(endDate)) continue;
 
@@ -80,7 +91,7 @@ class CashbackProvider with ChangeNotifier {
               .get();
 
           for (var order in ordersQuery.docs) {
-            progressAmount += double.tryParse((order.data()['totalAmount'] ?? '0').toString()) ?? 0.0;
+            progressAmount += double.tryParse((order.data()['total'] ?? '0').toString()) ?? 0.0;
           }
         }
 

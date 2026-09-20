@@ -3,7 +3,10 @@ import '../models/order_model.dart';
 import 'dart:developer' as developer;
 
 class OrderDataSource {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db;
+  // Test seam: defaults preserve the production wiring exactly.
+  OrderDataSource({FirebaseFirestore? db})
+      : _db = db ?? FirebaseFirestore.instance;
 
   // الثوابت لتوحيد مسميات الحالات
   static const String STATUS_NEW = 'new-order';

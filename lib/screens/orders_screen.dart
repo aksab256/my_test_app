@@ -9,7 +9,9 @@ import 'package:sizer/sizer.dart';
 
 class OrdersScreen extends StatefulWidget {
   final String sellerId;
-  const OrdersScreen({super.key, required this.sellerId});
+  // Test seam: defaults preserve the production wiring exactly.
+  final OrderDataSource? dataSource;
+  const OrdersScreen({super.key, required this.sellerId, this.dataSource});
 
   @override
   State<OrdersScreen> createState() => _OrdersScreenState();
@@ -17,13 +19,14 @@ class OrdersScreen extends StatefulWidget {
 
 class _OrdersScreenState extends State<OrdersScreen> {
   late Future<List<OrderModel>> _ordersFuture;
-  final OrderDataSource _dataSource = OrderDataSource();
+  late final OrderDataSource _dataSource;
   List<OrderModel> _loadedOrders = [];
   String _selectedFilter = 'all';
 
   @override
   void initState() {
     super.initState();
+    _dataSource = widget.dataSource ?? OrderDataSource();
     _refreshOrders();
   }
 

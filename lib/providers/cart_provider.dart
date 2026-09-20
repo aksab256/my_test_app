@@ -98,8 +98,13 @@ class SellerOrderData {
 // 🛒 Cart Provider
 // =========================================================================
 class CartProvider with ChangeNotifier {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final MarketplaceDataService _dataService = MarketplaceDataService();
+  final FirebaseFirestore _db;
+  final MarketplaceDataService _dataService;
+
+  // Test seam: defaults preserve the production wiring exactly.
+  CartProvider({FirebaseFirestore? db, MarketplaceDataService? dataService})
+      : _db = db ?? FirebaseFirestore.instance,
+        _dataService = dataService ?? MarketplaceDataService();
 
   List<CartItem> _cartItems = [];
   Map<String, SellerOrderData> _sellersOrders = {};
@@ -322,9 +327,9 @@ class CartProvider with ChangeNotifier {
       tempSellersOrders[sellerId]!.items.add(item);
     }
 
-    _totalProductsAmount = 0.0;
-    _totalDeliveryFees = 0.0;
-    _hasCheckoutErrors = false;
+    double totalProductsAmount = 0.0;
+    double totalDeliveryFees = 0.0;
+    bool hasCheckoutErrors = false;
 
     for (var sellerId in tempSellersOrders.keys) {
       final sellerData = tempSellersOrders[sellerId]!;
@@ -344,13 +349,16 @@ class CartProvider with ChangeNotifier {
         sellerData.deliveryFee = 0.0;
       } else {
         sellerData.isMinOrderMet = true;
-        _totalDeliveryFees += sellerData.deliveryFee;
+        totalDeliveryFees += sellerData.deliveryFee;
         final promos = await _getGiftPromosBySellerId(sellerId);
         sellerData.giftedItems = _calculateGifts(sellerData, promos);
       }
-      _totalProductsAmount += sellerData.total;
+      totalProductsAmount += sellerData.total;
     }
     _sellersOrders = tempSellersOrders;
+    _totalProductsAmount = totalProductsAmount;
+    _totalDeliveryFees = totalDeliveryFees;
+    _hasCheckoutErrors = hasCheckoutErrors;
     await _saveCartToLocal(tempSellersOrders);
     notifyListeners();
   }

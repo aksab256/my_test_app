@@ -22,6 +22,7 @@ class LoginFormWidget extends StatefulWidget {
 class _LoginFormWidgetState extends State<LoginFormWidget> {
   final _formKey = GlobalKey<FormState>();
   String _phone = '';
+  String? _mintedToken;
   bool _isLoading = false;
   bool _isPendingUser = false; // 👈 لمتابعة حالة الانتظار واظهار زر الواتساب
 
@@ -31,15 +32,15 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   final AuthService _authService = AuthService();
   final Color primaryGreen = const Color(0xff28a745);
 
-  // 🔴 قائمة أرقام مراجعة جوجل بلاي
-  final List<String> _reviewPhones = [
-    '01278287168',
-    '201278287168',
-    '01551445210',
-    '201551445210',
-    '01021070461',
-    '201021070461',
-  ];
+  // F3: reviewer bypass removed from production.
+  final List<String> _reviewPhones = const []; // F3: review bypass removed.
+
+
+
+
+
+
+
 
   // رقم واتساب الدعم الفني
   final String _supportWhatsAppNumber = "201131502688"; 
@@ -82,10 +83,10 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     final String cleanInputPhone = _phone.trim();
 
     try {
-      bool userExists = false;
+      bool userExists = true; // F3-auth-compat: existence is decided by backend /send.
       String? foundRole;
       bool isPendingStatus = false;
-      final collections = ['consumers', 'users', 'sellers', 'pendingSellers'];
+      final collections = <String>[]; // F3-auth-compat: no client pre-auth lookup; backend /send owns it.
 
       final String phoneWithZero = cleanInputPhone.startsWith('0') ? cleanInputPhone : '0$cleanInputPhone';
       final String phoneWithoutZero = cleanInputPhone.startsWith('0') ? cleanInputPhone.substring(1) : cleanInputPhone;
@@ -124,7 +125,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       }
 
       // 🔴 استثناء مراجعة جوجل: عدم استدعاء Akedly
-      if (_reviewPhones.contains(cleanInputPhone) || _reviewPhones.contains(formattedPhone)) {
+      if (false) { // F3: review bypass disabled.
         setState(() => _isLoading = false);
         _showOtpDialog("TEST_STEP_REVIEW", formattedPhone, foundRole!);
         return;
@@ -134,7 +135,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       setState(() => _isLoading = false);
 
       if (result.isSuccess) {
-        _showOtpDialog(result.data ?? "", formattedPhone, foundRole!);
+        _showOtpDialog(result.data ?? "", formattedPhone, ''); // F3-auth-compat: role resolves post-auth.
       } else {
         _handleError("⚠️ فشل إرسال كود التفعيل: ${result.message}");
       }
@@ -199,6 +200,18 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     );
   }
 
+  /// F3: backend-mediated mint — replaces deterministic password login.
+  /// Returns true only when a server-minted custom token was obtained.
+  Future<bool> _mintAndStore(String stepId, String code) async {
+    _mintedToken = null;
+    try {
+      _mintedToken = await _akedlyService.mintTransaction(transactionReqID: stepId, otp: code);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _verifyAndLogin(String stepId, String code, String phone) async {
     setState(() => _isLoading = true);
 
@@ -206,19 +219,20 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     final String cleanInputPhone = _phone.trim();
     final String formattedPhone = _formatPhoneNumber(_phone);
 
-    if (_reviewPhones.contains(cleanInputPhone) || _reviewPhones.contains(formattedPhone)) {
-      isVerified = (code == '123456');
+    if (false) { // F3: review bypass disabled.
+
     } else {
       isVerified = await _akedlyService.verifyOtp(stepId, code);
     }
 
+    isVerified = await _mintAndStore(stepId, code);
     if (isVerified) {
       try {
-        final String cleanPhone = _phone.trim().startsWith('0') ? _phone.trim() : '0${_phone.trim()}';
-        final String smartEmail = "$cleanPhone@aksab.com";
-        final String generatedPass = "Rabia_$cleanPhone";
 
-        String finalRole = await _authService.signInWithEmailAndPassword(smartEmail, generatedPass);
+
+
+
+        String finalRole = await _authService.signInWithMint(customToken: _mintedToken!, phone: _phone);
 
         if (mounted) {
           await Provider.of<BuyerDataProvider>(context, listen: false).initializeData(

@@ -236,8 +236,16 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
     try {
       final user = FirebaseAuth.instance.currentUser;
+      // F4: dispatch requires an authenticated creator (vault binding).
+      if (user == null) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('سجّل الدخول أولاً لإرسال الطلب')));
+        return;
+      }
+      final String pickupCode = (1000 + Random().nextInt(9000)).toString();
 
-      await FirebaseFirestore.instance.collection('specialRequests').add({
+      final radarRef = await FirebaseFirestore.instance.collection('specialRequests').add({
         'userId': user?.uid ?? 'anonymous',
 
         // ✅ الربط الصحيح مع UserSession:
@@ -261,12 +269,23 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         'requestSource': 'consumer',
         'createdAt': FieldValue.serverTimestamp(),
         // ✅ إصلاح: توليد كود عشوائي حقيقي بمساحة أكبر (1000-9999) بدل الاعتماد على millisecond
-        'verificationCode': (1000 + Random().nextInt(9000)).toString(),
         'insurance_points': 0,
         // ✅ إصلاح الباج: moneyLocked يجب أن تبدأ false، والباك إند (financialSettlementEngine)
         // هو المسؤول عن ضبطها true فعليًا عند حجز العهدة لحظة قبول المندوب للطلب.
         // إبقاؤها true من الفرونت كانت تمنع تنفيذ handleInsuranceLocking بالكامل.
         'moneyLocked': false,
+      });
+
+      // F4: handover proof vault — creator-bound, never inline (driver must not read it).
+      await FirebaseFirestore.instance
+          .collection('specialRequests')
+          .doc(radarRef.id)
+          .collection('proof')
+          .doc('vault')
+          .set({
+        'creatorUid': user.uid,
+        'pickupCode': pickupCode,
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
       if (mounted) {

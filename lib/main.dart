@@ -7,6 +7,7 @@ import 'package:sizer/sizer.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -234,7 +235,7 @@ class MyApp extends StatelessWidget {
       DocumentSnapshot config = await FirebaseFirestore.instance.collection('app_config').doc('version_control').get();
       if (config.exists) {
         int latestVersion = config['min_version'];
-        int currentVersion = 21; // رقم الإصدار الحالي لتطبيقك
+        int currentVersion = 26; // F-release: matches pubspec build +26 (min_version gate source).
         if (currentVersion < latestVersion) {
           _showUpdateDialog(context, config['update_url']);
         }
@@ -501,10 +502,20 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   Future<LoggedInUser?> _checkUserLoginStatus() async {
     final prefs = await SharedPreferences.getInstance();
+    // F3: Firebase Auth session is the trust source — local state alone grants nothing.
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+    if (firebaseUser == null) {
+      await prefs.remove('loggedUser');
+      return null;
+    }
     final userJson = prefs.getString('loggedUser');
     if (userJson != null) {
       try {
         await UserSession.loadSession();
+        if (UserSession.userId != FirebaseAuth.instance.currentUser?.uid) {
+          await prefs.remove('loggedUser');
+          return null;
+        }
         final user = LoggedInUser.fromJson(jsonDecode(userJson));
         await Provider.of<BuyerDataProvider>(context, listen: false)
             .initializeData(user.id, user.id, user.fullname);
