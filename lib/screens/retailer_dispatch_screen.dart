@@ -65,7 +65,7 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
     if (mounted) {
       setState(() {
         _pricingDetails = results;
-        _estimatedPrice = results['totalPrice']!;
+        _estimatedPrice = _pricingDetails['totalPrice']!;
       });
     }
   }
@@ -159,9 +159,11 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
 
         'pickupAddress': _pickupAddress,
         'dropoffAddress': _dropoffAddress,
-        'totalPrice': _pricingDetails['totalPrice'],
-        'commissionAmount': _pricingDetails['commissionAmount'],
-        'driverNet': _pricingDetails['driverNet'],
+        // Server-priced: totalPrice/commissionAmount/driverNet are computed by the
+        // backend trigger (serverPriceDelivery) from raw inputs only. The client
+        // estimate (_pricingDetails) is display-only and is never written here.
+        // (removed: server-priced, see note above)
+        // (removed: server-priced, see note above)
         'vehicleType': 'motorcycle',
         'status': 'pending',
         // ✅ إصلاح اتساق: تصريح واضح بالحقول اللي الباك إند (financialSettlementEngine)

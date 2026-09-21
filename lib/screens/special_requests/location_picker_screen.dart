@@ -222,8 +222,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     try {
       final results = await _deliveryService.calculateDetailedTripCost(distanceInKm: distance, vehicleType: vehicleType);
       setState(() {
-        _estimatedPrice = results['totalPrice']!;
         _pricingDetails = results;
+        _estimatedPrice = _pricingDetails['totalPrice']!;
       });
     } catch (e) {
       debugPrint("Pricing Error: $e");
@@ -260,9 +260,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         'pickupAddress': _pickupAddress,
         'dropoffLocation': GeoPoint(_dropoffLocation!.latitude, _dropoffLocation!.longitude),
         'dropoffAddress': _dropoffAddress,
-        'totalPrice': _pricingDetails['totalPrice'],
-        'driverNet': _pricingDetails['driverNet'],
-        'commissionAmount': _pricingDetails['commissionAmount'],
+        // Server-priced: totalPrice/commissionAmount/driverNet are computed by the
+        // backend trigger (serverPriceDelivery) from raw inputs only. The client
+        // estimate (_pricingDetails) is display-only and is never written here.
+        // (removed: server-priced, see note above)
+        // (removed: server-priced, see note above)
         'vehicleType': _selectedVehicle,
         'details': _detailsController.text,
         'status': 'pending',
