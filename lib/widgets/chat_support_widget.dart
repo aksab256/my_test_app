@@ -398,7 +398,7 @@ if (idToken == null || idToken.isEmpty) {
         request.files.add(file);
 
         var streamedResponse = await request.send().timeout(
-          const Duration(seconds: 45),
+          const Duration(seconds: 90),
           onTimeout: () {
             throw TimeoutException("استغرقت الاستجابة وقتاً أطول من المتوقع.");
           },
@@ -417,7 +417,7 @@ if (idToken == null || idToken.isEmpty) {
             "message": textMessage,
           }),
         ).timeout(
-          const Duration(seconds: 45),
+          const Duration(seconds: 90),
           onTimeout: () {
             throw TimeoutException("استغرقت الاستجابة وقتاً أطول من المتوقع.");
           },
@@ -428,12 +428,12 @@ if (idToken == null || idToken.isEmpty) {
         final data = jsonDecode(response.body);
 
         // تأمين وتصفية الاستجابة لمنع عرض نصوص الأخطاء الخام
-        String reply = data["message"] ?? data["reply"] ?? "";
+        String reply = data["fullText"] ?? data["message"] ?? data["reply"] ?? "";
         if (reply.isEmpty) {
           reply = "تم استلام الطلب وبانتظار رد المساعد، يرجى المحاولة مرة أخرى.";
         }
 
-        final audioUrl = data["audioUrl"];
+        final audioUrl = data["audioUrl"] ?? data["audio_url"];
         final fileData = data["file"];
 
         setState(() {
