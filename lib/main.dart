@@ -235,7 +235,7 @@ class MyApp extends StatelessWidget {
       DocumentSnapshot config = await FirebaseFirestore.instance.collection('app_config').doc('version_control').get();
       if (config.exists) {
         int latestVersion = config['min_version'];
-        int currentVersion = 26; // F-release: matches pubspec build +26 (min_version gate source).
+        int currentVersion = 27; // F-release: matches pubspec build +27 (min_version gate source).
         if (currentVersion < latestVersion) {
           _showUpdateDialog(context, config['update_url']);
         }

@@ -15,6 +15,23 @@ import 'package:my_test_app/screens/seller_screen.dart';
 class LoginFormWidget extends StatefulWidget {
   const LoginFormWidget({super.key});
 
+  /// Maps backend mint statuses to user-facing messages (no blanket
+  /// "wrong code" for every failure). Pure + unit-tested.
+  static String mintErrorMessage(int statusCode) {
+    switch (statusCode) {
+      case 400:
+        return '❌ كود التحقق غير صحيح.';
+      case 410:
+        return '❌ انتهت صلاحية الكود أو تم استخدامه. اطلب كودًا جديدًا.';
+      case 429:
+        return '⚠️ محاولات كثيرة. حاول لاحقًا.';
+      case 503:
+        return '⚠️ خدمة التحقق غير متاحة حاليًا. حاول لاحقًا.';
+      default:
+        return '❌ كود التحقق خاطئ.';
+    }
+  }
+
   @override
   State<LoginFormWidget> createState() => _LoginFormWidgetState();
 }
@@ -201,32 +218,40 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   }
 
   /// F3: backend-mediated mint — replaces deterministic password login.
-  /// Returns true only when a server-minted custom token was obtained.
-  Future<bool> _mintAndStore(String stepId, String code) async {
+  /// A single /mint call both verifies the OTP upstream and consumes the
+  /// transaction atomically. Never call /verify beforehand: it would burn
+  /// the single-use transaction and every later /mint would fail with 410,
+  /// showing "wrong code" for a correct code. Returns null on success, or
+  /// the [MintException] carrying the backend status for UI mapping.
+  Future<MintException?> _mintAndStore(String stepId, String code) async {
     _mintedToken = null;
     try {
       _mintedToken = await _akedlyService.mintTransaction(transactionReqID: stepId, otp: code);
-      return true;
+      return null;
+    } on MintException catch (e) {
+      return e;
     } catch (_) {
-      return false;
+      return MintException(-1, '');
     }
   }
+
+
 
   Future<void> _verifyAndLogin(String stepId, String code, String phone) async {
     setState(() => _isLoading = true);
 
-    bool isVerified = false;
+    final MintException? mintError = await _mintAndStore(stepId, code);
     final String cleanInputPhone = _phone.trim();
     final String formattedPhone = _formatPhoneNumber(_phone);
 
     if (false) { // F3: review bypass disabled.
 
     } else {
-      isVerified = await _akedlyService.verifyOtp(stepId, code);
+
     }
 
-    isVerified = await _mintAndStore(stepId, code);
-    if (isVerified) {
+
+    if (mintError == null) {
       try {
 
 
@@ -249,7 +274,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
       }
     } else {
       setState(() => _isLoading = false);
-      _handleError("❌ كود التحقق خاطئ.");
+      _handleError(LoginFormWidget.mintErrorMessage(mintError.statusCode));
     }
   }
 
