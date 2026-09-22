@@ -15,6 +15,25 @@ import 'package:my_test_app/screens/seller_screen.dart';
 class LoginFormWidget extends StatefulWidget {
   const LoginFormWidget({super.key});
 
+  /// Google Play review numbers: local 123456 check only — never touches
+  /// Akeedly, sends no SMS, creates no transaction, calls no mint.
+  static const String reviewStepId = 'REVIEW_LOCAL';
+  static const String reviewCode = '123456';
+  static const List<String> reviewPhones = <String>[
+    '01278287168',
+    '201278287168',
+    '01551445210',
+    '201551445210',
+    '01021070461',
+    '201021070461',
+  ];
+
+  /// Exact match on the normalized variants only — normal numbers fall
+  /// through to the Akeedly path untouched.
+  static bool isReviewNumber(String cleanInputPhone, String formattedPhone) =>
+      reviewPhones.contains(cleanInputPhone) ||
+      reviewPhones.contains(formattedPhone);
+
   /// Maps backend mint statuses to user-facing messages (no blanket
   /// "wrong code" for every failure). Pure + unit-tested.
   static String mintErrorMessage(int statusCode) {
@@ -49,8 +68,8 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   final AuthService _authService = AuthService();
   final Color primaryGreen = const Color(0xff28a745);
 
-  // F3: reviewer bypass removed from production.
-  final List<String> _reviewPhones = const []; // F3: review bypass removed.
+
+
 
 
 
@@ -148,6 +167,17 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         return;
       }
 
+      // Google Play review numbers: local dialog, never calls Akeedly.
+      if (LoginFormWidget.isReviewNumber(cleanInputPhone, formattedPhone)) {
+        setState(() => _isLoading = false);
+        _showOtpDialog(
+          LoginFormWidget.reviewStepId,
+          formattedPhone,
+          '',
+        );
+        return;
+      }
+
       final result = await _akedlyService.sendOtpDetailed(formattedPhone);
       setState(() => _isLoading = false);
 
@@ -223,6 +253,31 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   /// the single-use transaction and every later /mint would fail with 410,
   /// showing "wrong code" for a correct code. Returns null on success, or
   /// the [MintException] carrying the backend status for UI mapping.
+  /// Review sign-in with the historic derived email/password identity.
+  /// Used only for Play review numbers after the local 123456 check.
+  Future<void> _reviewSignIn() async {
+    try {
+      final String cleanPhone = _phone.trim().startsWith('0')
+          ? _phone.trim()
+          : '0${_phone.trim()}';
+      final String smartEmail = '$cleanPhone@aksab.com';
+      final String generatedPass = 'Rabia_$cleanPhone';
+      final String finalRole =
+          await _authService.signInWithEmailAndPassword(smartEmail, generatedPass);
+      if (mounted) {
+        await Provider.of<BuyerDataProvider>(context, listen: false).initializeData(
+          FirebaseAuth.instance.currentUser?.uid,
+          UserSession.ownerId,
+          UserSession.merchantName ?? 'مستخدم اسواق اكسب',
+        );
+        _navigateToHome(finalRole);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+      _handleError('❌ فشل الدخول: عذراً، لم نتمكن من إتمام العملية.');
+    }
+  }
+
   Future<MintException?> _mintAndStore(String stepId, String code) async {
     _mintedToken = null;
     try {
@@ -239,6 +294,17 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
   Future<void> _verifyAndLogin(String stepId, String code, String phone) async {
     setState(() => _isLoading = true);
+
+    // Google Play review path: local code check only — no verify, no mint.
+    if (stepId == LoginFormWidget.reviewStepId) {
+      if (code == LoginFormWidget.reviewCode) {
+        await _reviewSignIn();
+      } else {
+        setState(() => _isLoading = false);
+        _handleError('❌ كود التحقق غير صحيح.');
+      }
+      return;
+    }
 
     final MintException? mintError = await _mintAndStore(stepId, code);
     final String cleanInputPhone = _phone.trim();
