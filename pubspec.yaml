@@ -1,8 +1,8 @@
 name: my_test_app
 description: A new Flutter project.
 publish_to: 'none'
-# تم تحديث الإصدار ليكون Build 21 جاهز للرفع النهائي لتطبيق ربيع أحلى
-version: 1.1.1+27
+# تم تحديث الإصدار ليكون Build 28 جاهز للرفع النهائي لتطبيق ربيع أحلى
+version: 1.1.1+28
 
 environment:
   sdk: '>=3.2.0 <4.0.0'

@@ -229,13 +229,20 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  /// Build number of this release. Must match the `+N` suffix of `version`
+  /// in pubspec.yaml. The force-update gate compares it against Firestore
+  /// `app_config/version_control.min_version`: any installed build with a
+  /// lower number is forced to update, so this constant must move with
+  /// every release or the new build would force-update itself.
+  static const int currentBuildNumber = 28;
+
   // ✅ دالة التحديث الإجباري
   void _checkUpdate(BuildContext context) async {
     try {
       DocumentSnapshot config = await FirebaseFirestore.instance.collection('app_config').doc('version_control').get();
       if (config.exists) {
         int latestVersion = config['min_version'];
-        int currentVersion = 27; // F-release: matches pubspec build +27 (min_version gate source).
+        int currentVersion = currentBuildNumber; // Single source of truth above.
         if (currentVersion < latestVersion) {
           _showUpdateDialog(context, config['update_url']);
         }
