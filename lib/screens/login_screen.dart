@@ -41,14 +41,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // شعار أسواق أكسب
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: Image.asset(
-                        'assets/images/splash_screen.jpg',
-                        height: 110,
-                        width: 110,
-                        fit: BoxFit.cover,
-                      ),
+                    Image.asset(
+                      'assets/flutter_logo.png',
+                      height: 100,
+                      width: 100,
+                      fit: BoxFit.contain,
                     ),
                     SizedBox(height: 2.h),
                     Text(

@@ -534,7 +534,20 @@ class _AuthWrapperState extends State<AuthWrapper> {
       future: _userFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return Scaffold(
+            body: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.asset(
+                  'assets/images/splash_screen.jpg',
+                  fit: BoxFit.cover,
+                ),
+                const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                ),
+              ],
+            ),
+          );
         }
         if (snapshot.hasData && snapshot.data != null) {
           final user = snapshot.data!;
