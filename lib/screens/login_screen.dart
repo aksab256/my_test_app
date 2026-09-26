@@ -41,12 +41,20 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // شعار أسواق أكسب
-                    const Icon(Icons.account_circle, size: 100, color: primaryGreen),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: Image.asset(
+                        'assets/images/splash_screen.jpg',
+                        height: 110,
+                        width: 110,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
                     SizedBox(height: 2.h),
                     Text(
                       'أهلاً بك في أسواق أكسب',
                       style: TextStyle(
-                        fontSize: 22.sp,
+                        fontSize: 24.sp,
                         fontWeight: FontWeight.w900,
                         color: const Color(0xFF1A1A1A)
                       ),
