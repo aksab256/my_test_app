@@ -9,6 +9,7 @@ import 'dart:async';
 import 'dart:convert'; // لإدارة بيانات JSON
 import 'package:http/http.dart' as http; // البديل المتوافق مع إصدارك
 import 'package:sizer/sizer.dart';
+import '../../helpers/places_api_helper.dart';
 import '../../services/delivery_service.dart';
 import '../../services/user_session.dart';
 
@@ -33,7 +34,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   // ⚠️ TODO أمني: نقل مفتاح Google Maps API بعيدًا عن الكود المصدري
   // (متفق على تأجيله - backlog)
-  final String _apiKey = "AIzaSyB4Nu0SHkkoSQi9gMjxNK5pfnqbKSrS5fg";
+  final String _apiKey = "AIzaSyDkKyX-w0P1SBgOCmqjfZVMOGUiAiCbhLA"; // نفس مفتاح الخرائط في AndroidManifest وclient_details_step
   List<dynamic> _searchResults = [];
 
   PickerStep _currentStep = PickerStep.pickup;
@@ -151,12 +152,23 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ),
                 onChanged: (value) async {
                   if (value.length > 2) {
-                    final url = Uri.parse('https://maps.googleapis.com/maps/api/place/autocomplete/json?input=$value&key=$_apiKey&language=ar&components=country:eg');
-                    final response = await http.get(url);
-                    if (response.statusCode == 200) {
+                    final url = Uri.parse('https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${Uri.encodeComponent(value)}&key=$_apiKey&language=ar&components=country:eg');
+                    final response = await _safeGet(url);
+                    if (response == null) {
+                        debugPrint('Places autocomplete: no response');
+                      } else if (response.statusCode != 200) {
+                        debugPrint('Places autocomplete HTTP: ${response.statusCode}');
+                      }
+                      if (response != null && response.statusCode == 200) {
                       final data = json.decode(response.body);
-                      if (data['status'] == 'OK') {
-                        setModalState(() => _searchResults = data['predictions']);
+                      final status = parsePlacesStatus(data['status']);
+                      if (status != PlacesApiStatus.ok) {
+                        debugPrint(placesLogLine('autocomplete', status, data['error_message']));
+                        setModalState(() => _searchResults = []);
+                      }
+                      if (status == PlacesApiStatus.ok) {
+                        final predictions = data['predictions'];
+                          setModalState(() => _searchResults = predictions is List ? predictions : []);
                       }
                     }
                   }
@@ -174,18 +186,41 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                     leading: const Icon(Icons.location_on_outlined, color: Colors.blue),
                     title: Text(prediction['description'] ?? "", style: const TextStyle(fontFamily: 'Cairo', fontSize: 13)),
                     onTap: () async {
+                      final messenger = ScaffoldMessenger.of(context);
                       Navigator.pop(context);
                       setState(() => _isLoading = true);
-                      final detailUrl = Uri.parse('https://maps.googleapis.com/maps/api/place/details/json?place_id=${prediction['place_id']}&fields=geometry&key=$_apiKey');
-                      final res = await http.get(detailUrl);
-                      if (res.statusCode == 200) {
+                      final detailUrl = Uri.parse('https://maps.googleapis.com/maps/api/place/details/json?place_id=${Uri.encodeComponent(prediction['place_id'].toString())}&fields=geometry&key=$_apiKey');
+                      final res = await _safeGet(detailUrl);
+                      if (res == null) {
+                        debugPrint('Place details: no response');
+                      } else if (res.statusCode != 200) {
+                        debugPrint('Place details HTTP: ${res.statusCode}');
+                      }
+                      if (res != null && res.statusCode == 200) {
                         final data = json.decode(res.body);
-                        final loc = data['result']['geometry']['location'];
-                        LatLng newPos = LatLng(loc['lat'], loc['lng']);
+                        final detailsStatus = parsePlacesStatus(data['status']);
+                        if (detailsStatus != PlacesApiStatus.ok) {
+                          debugPrint(placesLogLine('details', detailsStatus, data['error_message']));
+                          if (mounted) {
+                            messenger.showSnackBar(SnackBar(content: Text(placesUserMessage(detailsStatus), style: const TextStyle(fontFamily: 'Cairo'))));
+                          }
+                          setState(() => _isLoading = false);
+                          return;
+                        }
+                        final loc = parsePlaceDetailsLocation(data);
+                        if (loc == null) {
+                          debugPrint(placesLogLine('details', detailsStatus, 'missing geometry'));
+                          if (mounted) {
+                            messenger.showSnackBar(const SnackBar(content: Text('تعذر تحديد موقع هذا المكان', style: TextStyle(fontFamily: 'Cairo'))));
+                          }
+                          setState(() => _isLoading = false);
+                          return;
+                        }
+                        LatLng newPos = LatLng(loc['lat']!, loc['lng']!);
                         _moveCamera(newPos);
                         setState(() {
                           _currentMapCenter = newPos;
-                          _tempAddress = prediction['description'];
+                          _tempAddress = prediction['description']?.toString() ?? _tempAddress;
                         });
                       }
                       setState(() => _isLoading = false);
@@ -198,6 +233,16 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         ),
       ),
     );
+  }
+
+  /// GET آمن للشبكة: يعيد null بدل رمي الاستثناء. لا يسجل URLs أو مفاتيح أبدًا.
+  Future<http.Response?> _safeGet(Uri url) async {
+    try {
+      return await http.get(url);
+    } catch (e) {
+      debugPrint('Places network error: $e');
+      return null;
+    }
   }
 
   void _handleNextStep() async {
