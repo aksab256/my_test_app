@@ -60,6 +60,31 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
   String _phone = '';
   String? _mintedToken;
   bool _isLoading = false;
+
+  /// Cooldown after a successful OTP send to block repeated '/send'
+  /// requests from fast retries. Armed only on HTTP 200 with a valid
+  /// transactionReqID. No periodic timer: pure DateTime state.
+  static const int otpCooldownSeconds = OtpSendCooldown.windowSeconds;
+  DateTime? _lastOtpSentAt;
+  String? _activeTransactionReqID;
+
+  /// Pure cooldown logic, delegated to [OtpSendCooldown] so it is
+  /// unit-testable without a widget.
+  static bool isCooldownActive(DateTime? lastSentAt, DateTime now,
+      {int cooldownSeconds = otpCooldownSeconds}) =>
+      OtpSendCooldown.isActive(lastSentAt, now,
+          cooldownSeconds: cooldownSeconds);
+
+  static int cooldownRemainingSeconds(DateTime? lastSentAt, DateTime now,
+      {int cooldownSeconds = otpCooldownSeconds}) =>
+      OtpSendCooldown.remaining(lastSentAt, now,
+          cooldownSeconds: cooldownSeconds);
+
+  bool get _isInCooldown => isCooldownActive(_lastOtpSentAt, DateTime.now());
+
+  int get _cooldownRemaining =>
+      cooldownRemainingSeconds(_lastOtpSentAt, DateTime.now());
+
   bool _isPendingUser = false; // 👈 لمتابعة حالة الانتظار واظهار زر الواتساب
 
   String? _errorMessage;
@@ -178,11 +203,32 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         return;
       }
 
+      // Cooldown: block a new '/send' within 60s of a successful send.
+      if (_isInCooldown) {
+        setState(() => _isLoading = false);
+        _handleError(
+          'تم إرسال كود التحقق. يرجى الانتظار $_cooldownRemaining ثانية قبل طلب كود جديد.',
+        );
+        return;
+      }
+
       final result = await _akedlyService.sendOtpDetailed(formattedPhone);
       setState(() => _isLoading = false);
 
       if (result.isSuccess) {
-        _showOtpDialog(result.data ?? "", formattedPhone, ''); // F3-auth-compat: role resolves post-auth.
+        final txId = (result.data ?? '').trim();
+        if (txId.isNotEmpty) {
+          // Keep the transaction for the verify flow and arm the cooldown.
+          _activeTransactionReqID = txId;
+          _lastOtpSentAt = DateTime.now();
+          // Single refresh when the cooldown expires to re-enable the
+          // button (no periodic timer, no background service).
+          Future.delayed(const Duration(seconds: otpCooldownSeconds), () {
+            if (mounted) setState(() {});
+          });
+        }
+
+        _showOtpDialog(_activeTransactionReqID ?? txId, formattedPhone, ''); // F3-auth-compat: role resolves post-auth.
       } else {
         _handleError("⚠️ فشل إرسال كود التفعيل: ${result.message}");
       }
@@ -418,9 +464,9 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
         gradient: LinearGradient(colors: [primaryGreen, const Color(0xff1e7e34)]),
       ),
       child: ElevatedButton(
-        onPressed: _isLoading ? null : _submitLogin,
+        onPressed: (_isLoading || _isInCooldown) ? null : _submitLogin,
         style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
-        child: _isLoading ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)) : const Text('إرسال كود التفعيل', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        child: _isLoading ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)) : _isInCooldown ? const Text('تم إرسال الكود — انتظر قبل طلب كود جديد', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)) : const Text('إرسال كود التفعيل', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -453,5 +499,27 @@ class _InputGroup extends StatelessWidget {
       validator: validator,
       onSaved: onSaved,
     );
+  }
+}
+
+/// Pure OTP-send cooldown policy for the login flow.
+///
+/// The window starts at the last successful '/send' (HTTP 200 with a valid
+/// transactionReqID). No timers, no I/O: the widget stores a DateTime and
+/// consults these helpers. Unit-tested in test/otp_send_cooldown_test.dart.
+class OtpSendCooldown {
+  static const int windowSeconds = 60;
+
+  static bool isActive(DateTime? lastSentAt, DateTime now,
+      {int cooldownSeconds = windowSeconds}) {
+    if (lastSentAt == null) return false;
+    return now.difference(lastSentAt).inSeconds < cooldownSeconds;
+  }
+
+  static int remaining(DateTime? lastSentAt, DateTime now,
+      {int cooldownSeconds = windowSeconds}) {
+    if (lastSentAt == null) return 0;
+    final left = cooldownSeconds - now.difference(lastSentAt).inSeconds;
+    return left > 0 ? left : 0;
   }
 }
