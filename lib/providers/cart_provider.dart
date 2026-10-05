@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
 import 'package:my_test_app/services/marketplace_data_service.dart';
+import 'package:my_test_app/utils/quantity_limits.dart';
 
 // =========================================================================
 // 💡 هياكل البيانات المساعدة (Models)
@@ -115,12 +116,17 @@ class CartProvider with ChangeNotifier {
   double _totalProductsAmount = 0.0;
   double _totalDeliveryFees = 0.0;
   bool _hasCheckoutErrors = false;
+  final Map<String, String> _quantityErrors = {};
 
   Map<String, SellerOrderData> get sellersOrders => _sellersOrders;
   double get totalProductsAmount => _totalProductsAmount;
   double get totalDeliveryFees => _totalDeliveryFees;
   double get finalTotal => _totalProductsAmount + _totalDeliveryFees;
   bool get hasCheckoutErrors => _hasCheckoutErrors;
+  Map<String, String> get quantityErrors => Map.unmodifiable(_quantityErrors);
+  bool get hasQuantityErrors => _quantityErrors.isNotEmpty;
+  String? quantityErrorFor(String offerId, int unitIndex) =>
+      _quantityErrors['$offerId::$unitIndex'];
   int get cartTotalItems => _cartItems.where((item) => !item.isGift).length;
   int get itemCount => cartTotalItems;
   int get cartTotalQuantity {
@@ -249,8 +255,8 @@ class CartProvider with ChangeNotifier {
   // 🚀 تحسين: جلب التفاصيل بذكاء حسب نوع المستخدم لتقليل الـ Try/Catch
   Future<Map<String, dynamic>> _getProductOfferDetails(String offerId, int unitIndex, {String userRole = 'buyer'}) async {
     int productMinQty = 1;
-    int productMaxQty = 9999;
-    int actualAvailableStock = 9999;
+    int? productMaxQty;
+    int? actualAvailableStock;
     double currentPrice = 0.0;
 
     try {
@@ -264,7 +270,18 @@ class CartProvider with ChangeNotifier {
             final unitData = units[unitIndex] as Map<String, dynamic>?;
             currentPrice = (unitData?['price'] as num?)?.toDouble() ?? 0.0;
           }
-          return {'minQty': 1, 'maxQty': 9999, 'stock': 9999, 'currentPrice': currentPrice};
+          return {
+            'minQty': (data['minOrder'] as num?)?.toInt() ?? 1,
+            'maxQty': (data['maxOrder'] as num?)?.toInt(),
+            'stock': (unitIndex >= 0 &&
+                    units != null &&
+                    unitIndex < units.length)
+                ? ((units[unitIndex] as Map<String, dynamic>)['availableStock']
+                    as num?)
+                    ?.toInt()
+                : null,
+            'currentPrice': currentPrice
+          };
         }
       }
 
@@ -273,7 +290,7 @@ class CartProvider with ChangeNotifier {
       if (offerDoc.exists) {
         final data = offerDoc.data()!;
         productMinQty = (data['minOrder'] as num?)?.toInt() ?? 1;
-        productMaxQty = (data['maxOrder'] as num?)?.toInt() ?? 9999;
+        productMaxQty = (data['maxOrder'] as num?)?.toInt();
         if (unitIndex != -1 && data['units'] is List && unitIndex < (data['units'] as List).length) {
           final unitData = data['units'][unitIndex] as Map<String, dynamic>?;
           if (unitData != null) {
@@ -330,6 +347,7 @@ class CartProvider with ChangeNotifier {
     double totalProductsAmount = 0.0;
     double totalDeliveryFees = 0.0;
     bool hasCheckoutErrors = false;
+    _quantityErrors.clear();
 
     for (var sellerId in tempSellersOrders.keys) {
       final sellerData = tempSellersOrders[sellerId]!;
@@ -341,6 +359,7 @@ class CartProvider with ChangeNotifier {
       for (var item in sellerData.items) {
         final details = await _getProductOfferDetails(item.offerId, item.unitIndex, userRole: userRole);
         if (details['currentPrice'] > 0.0) item.price = details['currentPrice'];
+        _validateCartItemAgainstStock(item, details);
         sellerData.total += (item.price * item.quantity);
       }
 
@@ -379,17 +398,22 @@ class CartProvider with ChangeNotifier {
     String? mainId,
     String? subId,
     int minOrderQuantity = 1,
-    int availableStock = 9999,
-    int maxOrderQuantity = 9999,
+    int? availableStock,
+    int? maxOrderQuantity,
   }) async {
     // تحديث فوري للـ UI قبل أي عمليات Firestore 🎯
-    final int finalMaxQuantity = min(availableStock, maxOrderQuantity);
+    final limits = resolveQuantityLimits(
+      availableStock: availableStock,
+      productMin: minOrderQuantity,
+      productMax: maxOrderQuantity,
+    );
     final index = _cartItems.indexWhere((item) => item.offerId == offerId && item.unitIndex == unitIndex);
     int existingQuantity = (index != -1) ? _cartItems[index].quantity : 0;
     final newTotalQuantity = existingQuantity + quantityToAdd;
 
-    if (quantityToAdd < minOrderQuantity) throw Exception('أقل من الحد الأدنى');
-    if (newTotalQuantity > finalMaxQuantity) throw Exception('تجاوز الحد المتاح');
+    if (!limits.hasValidQuantity) throw Exception(quantityErrorMessage(QuantityInvalidReason.minAboveStock, limits, availableStock: availableStock));
+    if (quantityToAdd < limits.effectiveMin) throw Exception('أقل من الحد الأدنى');
+    if (limits.effectiveMax != null && newTotalQuantity > limits.effectiveMax!) throw Exception('تجاوز الحد المتاح');
 
     _cartItems.removeWhere((item) => item.isGift);
 
@@ -419,6 +443,30 @@ class CartProvider with ChangeNotifier {
     loadCartAndRecalculate(userRole);
   }
 
+  static QuantityLimits _limitsFromDetails(Map<String, dynamic> details) {
+    return resolveQuantityLimits(
+      availableStock: details['stock'] as int?,
+      productMin: (details['minQty'] as num?)?.toInt(),
+      productMax: (details['maxQty'] as num?)?.toInt(),
+    );
+  }
+
+  static String _itemKey(CartItem item) => '${item.offerId}::${item.unitIndex}';
+
+  void _validateCartItemAgainstStock(
+      CartItem item, Map<String, dynamic> details) {
+    if (!details.containsKey('stock')) return;
+    final limits = _limitsFromDetails(details);
+    final reason = limits.validate(item.quantity);
+    final key = _itemKey(item);
+    if (reason == null) {
+      _quantityErrors.remove(key);
+    } else {
+      _quantityErrors[key] = quantityErrorMessage(reason, limits,
+          availableStock: details['stock'] as int?);
+    }
+  }
+
   Future<void> changeQty(CartItem item, int delta, String userRole) async {
     final index = _cartItems.indexWhere((i) => i.offerId == item.offerId && !i.isGift);
     if (index == -1) return;
@@ -426,7 +474,15 @@ class CartProvider with ChangeNotifier {
     final newQty = _cartItems[index].quantity + delta;
     if (newQty <= 0) {
       await removeItem(_cartItems[index], userRole);
+
       return;
+    }
+
+    final details =
+        await _getProductOfferDetails(item.offerId, item.unitIndex, userRole: userRole);
+    if (details.containsKey('stock')) {
+      final limits = _limitsFromDetails(details);
+      if (limits.validate(newQty) != null) return;
     }
 
     _cartItems[index].quantity = newQty;
@@ -454,9 +510,50 @@ class CartProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  Future<List<String>> validateCheckoutQuantities(
+      List<Map<String, dynamic>> groupedOrders, String userRole) async {
+    final List<String> errors = [];
+    for (final group in groupedOrders) {
+      final sellerId = (group['sellerId'] ?? '').toString();
+      final sellerName = (group['sellerName'] ?? '').toString();
+      final items = (group['items'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .toList() ??
+          [];
+      for (final item in items) {
+        if (item['isGift'] == true) continue;
+        final offerId = (item['offerId'] ?? '').toString();
+        final unitIndex = (item['unitIndex'] as num?)?.toInt() ?? 0;
+        final qty = (item['quantity'] as num?)?.toInt() ?? 0;
+        final details =
+            await _getProductOfferDetails(offerId, unitIndex, userRole: userRole);
+        if (!details.containsKey('stock')) continue;
+        final limits = _limitsFromDetails(details);
+        final reason = limits.validate(qty);
+        if (reason != null) {
+          errors.add(
+              '${item['name'] ?? 'صنف'} ($sellerName): ${quantityErrorMessage(reason, limits, availableStock: details['stock'] as int?)}');
+        }
+      }
+      final rules = await _getSellerBusinessRules(sellerId, userRole);
+      double sellerTotal = 0.0;
+      for (final item in items) {
+        if (item['isGift'] == true) continue;
+        sellerTotal += ((item['price'] as num?)?.toDouble() ?? 0.0) *
+            ((item['quantity'] as num?)?.toDouble() ?? 0.0);
+      }
+      final minTotal = (rules['minTotal'] as num?)?.toDouble() ?? 0.0;
+      if (minTotal > 0 && sellerTotal < minTotal) {
+        errors.add(
+            'طلب $sellerName أقل من الحد الأدنى (${minTotal.toStringAsFixed(2)}).');
+      }
+    }
+    return errors;
+  }
+
   Future<void> proceedToCheckout(BuildContext context, String userRole) async {
     await loadCartAndRecalculate(userRole);
-    if (_hasCheckoutErrors) return;
+    if (_hasCheckoutErrors || _quantityErrors.isNotEmpty) return;
 
     final ordersToProceed = <CartItem>[];
     final itemsToKeep = <CartItem>[];

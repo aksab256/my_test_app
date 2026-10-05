@@ -414,14 +414,14 @@ class _GeneralProductGroupCardState extends State<_GeneralProductGroupCard> {
         price: (unit['price'] as num).toDouble(),
         unit: unit['unitName']?.toString() ?? 'وحدة',
         unitIndex: 0, // المؤشر الافتراضي للوحدة الأولى المعروضة
-        quantityToAdd: 1,
+        quantityToAdd: (((_selectedOffer['minOrder'] as num?)?.toInt() ?? 1) < 1) ? 1 : ((_selectedOffer['minOrder'] as num?)?.toInt() ?? 1),
         imageUrl: img,
         userRole: 'consumer',
         mainId: _selectedOffer['mainCategoryId']?.toString(), // جلب معرف القسم الرئيسي إن وجد
         subId: _selectedOffer['subCategoryId']?.toString(),   // جلب معرف القسم الفرعي إن وجد
         minOrderQuantity: (_selectedOffer['minOrder'] as num?)?.toInt() ?? 1,
-        availableStock: (unit['availableStock'] as num?)?.toInt() ?? 9999,
-        maxOrderQuantity: (_selectedOffer['maxOrder'] as num?)?.toInt() ?? 9999,
+        availableStock: (unit['availableStock'] as num?)?.toInt(),
+        maxOrderQuantity: (_selectedOffer['maxOrder'] as num?)?.toInt(),
       );
 
       // تنبيه نجاح العملية

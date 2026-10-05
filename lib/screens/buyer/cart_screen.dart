@@ -137,7 +137,8 @@ class _CartScreenState extends State<CartScreen> {
         ...sellerData.items.map((item) => CartItemCard(
           item: item,
           isWarning: !isMinOrderMet,
-          itemError: sellerData.hasProductErrors ? "خطأ في الكمية/المخزون" : null,
+          itemError: Provider.of<CartProvider>(context, listen: false)
+              .quantityErrorFor(item.offerId, item.unitIndex),
         )).toList(),
         const Divider(thickness: 1, height: 30),
       ],

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:my_test_app/theme/app_theme.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
 import 'package:collection/collection.dart'; // لاستخدام firstOrNull
+import 'package:my_test_app/utils/quantity_limits.dart';
 
 class TraderOfferCard extends StatelessWidget {
   final Map<String, dynamic> offerData;
@@ -33,7 +34,14 @@ class TraderOfferCard extends StatelessWidget {
     final price = (unit['price'] as num?)?.toDouble() ?? (offerData['price'] as num?)?.toDouble() ?? 0.0;
     final availableStock = unit['availableStock'] as num? ?? offerData['availableQuantity'] as num? ?? 0;
     final isDisabled = availableStock <= 0;
-    final buttonText = isDisabled ? 'نفذت الكمية' : 'أضف للسلة';
+    final limits = resolveQuantityLimits(
+      availableStock: availableStock.toInt(),
+      productMin: (offerData['minOrder'] as num?)?.toInt(),
+      productMax: (offerData['maxOrder'] as num?)?.toInt(),
+    );
+    final quantityBlocked = !limits.hasValidQuantity;
+    final buttonText =
+        isDisabled ? 'نفذت الكمية' : (quantityBlocked ? 'غير متاح' : 'أضف للسلة');
 
     // ⭐️ تجميع بيانات العنصر لإرسالها لـ Provider ⭐️
     final itemData = {
@@ -46,7 +54,7 @@ class TraderOfferCard extends StatelessWidget {
       'price': price,
       'unit': unitName,
       'unitIndex': unitIndex,
-      'quantity': 1, // الكمية المراد إضافتها (1 عند الضغط على الزر)
+      'quantity': limits.effectiveMin,
       'image': _imageUrl, // ✅ استخدام رابط الصورة المستخلص
     };
 
@@ -83,8 +91,9 @@ class TraderOfferCard extends StatelessWidget {
           const SizedBox(height: 5),
           ElevatedButton.icon(
             // 🎯 التصحيح: تم تبديل الاستدعاء لاستخدام الوسائط المسماة
-            onPressed: isDisabled ? null : () async {
-              await cartProvider.addItemToCart(
+            onPressed: (isDisabled || quantityBlocked) ? null : () async {
+              try {
+                await cartProvider.addItemToCart(
                 offerId: itemData['offerId'] as String,
                 productId: itemData['productId'] as String,
                 sellerId: itemData['sellerId'] as String,
@@ -94,6 +103,10 @@ class TraderOfferCard extends StatelessWidget {
                 unit: itemData['unit'] as String,
                 unitIndex: itemData['unitIndex'] as int,
                 quantityToAdd: itemData['quantity'] as int,
+                minOrderQuantity: limits.effectiveMin,
+                availableStock: availableStock.toInt(),
+                maxOrderQuantity:
+                    (offerData['maxOrder'] as num?)?.toInt(),
                 imageUrl: itemData['image'] as String,
                 // 🟢 [التصحيح النهائي]: تمرير 'buyer' للدور
                 userRole: 'buyer', 
@@ -101,6 +114,11 @@ class TraderOfferCard extends StatelessWidget {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('✅ تم إضافة المنتج إلى السلة'), duration: Duration(seconds: 1)),
               );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                );
+              }
             },
             icon: Icon(Icons.shopping_cart_sharp, size: 12, color: isDisabled ? Colors.grey : Colors.white),
             label: Text(

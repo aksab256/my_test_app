@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
+import 'package:my_test_app/utils/quantity_limits.dart';
 import 'package:my_test_app/services/analytics_service.dart';
 import 'package:my_test_app/widgets/buyer_product_header.dart';
 import 'package:my_test_app/screens/consumer/consumer_widgets.dart';
@@ -195,7 +196,7 @@ class _ProductCard extends StatelessWidget {
             padding: const EdgeInsets.all(8.0),
             child: quantity == 0
                 ? InkWell(
-                    onTap: () => _addToCart(cart, firstUnit, pName, imgs.isNotEmpty ? imgs[0] : ''),
+                    onTap: () => _addToCart(context, cart, firstUnit, pName, imgs.isNotEmpty ? imgs[0] : ''),
                     child: Container(
                       height: 35,
                       width: double.infinity,
@@ -229,7 +230,7 @@ class _ProductCard extends StatelessWidget {
     );
   }
 
-  void _addToCart(CartProvider cart, dynamic unit, String name, String img) {
+  void _addToCart(BuildContext context, CartProvider cart, dynamic unit, String name, String img) {
     // 📊 سلوكي: نية إضافة للسلة (B2C) — cart محلية فورية، والفشل هنا لا يُسجَّل كحدث.
     AnalyticsService.logEvent(
       eventName: AnalyticsEvents.addToCart,
@@ -244,7 +245,23 @@ class _ProductCard extends StatelessWidget {
         screen: 'consumer_list',
       ),
     );
-    cart.addItemToCart(
+    final int? unitStock = (unit['availableStock'] as num?)?.toInt();
+    final limits = resolveQuantityLimits(
+      availableStock: unitStock,
+      productMin: (offer['minOrder'] as num?)?.toInt(),
+      productMax: (offer['maxOrder'] as num?)?.toInt(),
+    );
+    if (!limits.hasValidQuantity) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(quantityErrorMessage(
+                QuantityInvalidReason.minAboveStock, limits,
+                availableStock: unitStock))),
+      );
+      return;
+    }
+    try {
+      cart.addItemToCart(
       offerId: offer['offerId'],
       productId: offer['productId'],
       sellerId: offer['ownerId'],
@@ -254,8 +271,17 @@ class _ProductCard extends StatelessWidget {
       unit: unit['unitName'],
       unitIndex: 0,
       imageUrl: img,
+      quantityToAdd: limits.effectiveMin,
+      minOrderQuantity: limits.effectiveMin,
+      availableStock: unitStock,
+      maxOrderQuantity: (offer['maxOrder'] as num?)?.toInt(),
       userRole: 'consumer',
-    );
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('$e'.replaceFirst('Exception: ', ''))));
+    }
+
   }
 }
 

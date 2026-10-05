@@ -6,6 +6,8 @@ import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 // استيراد الـ Controller الجديد
 import 'package:my_test_app/controllers/checkout_controller.dart';
+import 'package:my_test_app/providers/cart_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:my_test_app/services/analytics_service.dart';
 
 // استيراد الأجزاء الأخرى
@@ -199,6 +201,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     setState(() {
       _isLoading = true;
     });
+
+    // آخر client-side gate: إعادة التحقق من المخزون والحدود لكل صنف
+    // (لا نعتمد على snapshot الـSharedPreferences) + حد التاجر الإجمالي.
+    final gateErrors =
+        await Provider.of<CartProvider>(context, listen: false)
+            .validateCheckoutQuantities(
+                _groupedSellerOrders, _isConsumer ? 'consumer' : 'buyer');
+    if (gateErrors.isNotEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(gateErrors.first), backgroundColor: kErrorColor),
+        );
+        setState(() {
+          _isLoading = false;
+        });
+      }
+      return;
+    }
 
     // 🟢🟢 Modification: تمرير _groupedSellerOrders بدلاً من _checkoutOrders 🟢🟢
     final success = await CheckoutController.placeOrder(

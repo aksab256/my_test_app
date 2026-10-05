@@ -248,7 +248,8 @@ class _CartScreenState extends State<CartScreen> {
     final List<Widget> itemWidgets = sellerData.items.asMap().entries.map((entry) {
         final item = entry.value;
         // يجب أن يأتي الخطأ الفعلي من CartProvider بناءً على التحقق من المخزون/الحد الأقصى
-        final String? itemError = sellerData.hasProductErrors ? "يوجد خطأ في الكمية المطلوبة/المخزون." : null;
+        final String? itemError = Provider.of<CartProvider>(context, listen: false)
+            .quantityErrorFor(item.offerId, item.unitIndex);
 
         return CartItemCard(
             item: item,
