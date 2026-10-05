@@ -6,7 +6,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:my_test_app/utils/offer_data_model.dart';
 import 'package:my_test_app/providers/product_offers_provider.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
-import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/services/analytics_service.dart';
 import 'package:sizer/sizer.dart';
 
@@ -32,17 +31,10 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
-      
-      List<String> userAreas = [];
-      if (buyerProvider.userAddress != null && buyerProvider.userAddress!.isNotEmpty) {
-        userAreas.add(buyerProvider.userAddress!);
-      }
-
-      Provider.of<ProductOffersProvider>(context, listen: false)
-          .fetchOffers(widget.productId, userAreas);
-    });
+    // لا إعادة جلب هنا: الـ ProductOffersProvider الأب (من ProductListGrid)
+    // جلب العروض already بالمناطق المكتشفة عبر GPS + السياق الصريح.
+    // ممنوع استخدام BuyerDataProvider.userAddress (عنوان شارع حر) لمطابقة
+    // مناطق التوصيل — مفرداته لا تطابق أسماء مناطق GeoJSON.
   }
 
   void _addToCart(OfferModel offer, int qty) async {
@@ -112,7 +104,7 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
     final offersProvider = context.watch<ProductOffersProvider>();
     final isLoadingOffers = offersProvider.isLoading;
     final rawOffers = offersProvider.availableOffers;
-    
+
     // 🎯 ترتيب العروض: العروض التي تحتوي على خصم وسعر خاص تصعد للمقدمة
     final List<OfferModel> availableOffers = List.from(rawOffers)
       ..sort((a, b) {
@@ -148,12 +140,12 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                 child: Stack(
                   children: [
                     InkWell(
-                      onTap: hasOffers 
+                      onTap: hasOffers
                           ? () => widget.onTap?.call(widget.productId, offersProvider.selectedOffer?.offerId)
                           : null,
                       child: Image.network(displayImageUrl, fit: BoxFit.contain, width: double.infinity),
                     ),
-                    
+
                     // 🎯 شريط خصم بروفيشنال جانبي مميز أعلى الكارت
                     if (hasSpecialPrice)
                       Positioned(
@@ -209,8 +201,8 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: (isLoadingOffers || !hasOffers) 
-                      ? null 
+                  onPressed: (isLoadingOffers || !hasOffers)
+                      ? null
                       : () {
                           // 📊 تسجيل الحدث في الخلفية فوراً بدون أية انتظار لسرعة الفرونت إند
                           AnalyticsService.logEvent(
@@ -318,7 +310,7 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
                                       ),
                                     ),
                                   ),
-                                  
+
                                   if (hasOfferPrice) ...[
                                     Row(
                                       children: [

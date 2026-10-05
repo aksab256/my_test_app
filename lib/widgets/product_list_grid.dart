@@ -5,8 +5,14 @@ import 'package:provider/provider.dart';
 import 'package:my_test_app/widgets/buyer_product_card.dart';
 import 'package:my_test_app/providers/product_offers_provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
+import 'package:my_test_app/services/buyer_area_resolver.dart';
+import 'package:my_test_app/utils/offer_geo_filter.dart';
 
-class ProductListGrid extends StatelessWidget {
+/// شبكة منتجات سياق Product Offer Context:
+/// منتج واحد -> أسعار Sellers متعددين لهذا المنتج، مع geo-filter.
+/// المناطق المستخدمة مكتشفة من GPS المشتري (BuyerAreaResolver) — وليست
+/// عنوان الشارع الحر (userAddress) الذي لا يطابق مفردات مناطق التوصيل.
+class ProductListGrid extends StatefulWidget {
   final String subCategoryId;
   final String pageTitle;
   final String? manufacturerId;
@@ -21,17 +27,48 @@ class ProductListGrid extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    if (subCategoryId.isEmpty) return const SizedBox.shrink();
+  State<ProductListGrid> createState() => _ProductListGridState();
+}
 
-    // 🎯 استخدم select عشان نراقب فقط العنوان، مش كل بيانات المشتري
-    final userAddress = context.select<BuyerDataProvider, String?>((p) => p.userAddress);
-    final List<String> userAreas = userAddress != null ? [userAddress] : [];
+class _ProductListGridState extends State<ProductListGrid> {
+  List<String>? _buyerAreas;
+  bool _areasLoading = true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_buyerAreas == null && _areasLoading) {
+      _resolveBuyerAreas();
+    }
+  }
+
+  Future<void> _resolveBuyerAreas() async {
+    final buyer = Provider.of<BuyerDataProvider>(context, listen: false);
+    final areas = await BuyerAreaResolver.resolveBuyerAreas(
+      lat: buyer.effectiveLat,
+      lng: buyer.effectiveLng,
+    );
+    if (mounted) {
+      setState(() {
+        _buyerAreas = areas;
+        _areasLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.subCategoryId.isEmpty) return const SizedBox.shrink();
+
+    if (_areasLoading) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF43A047)));
+    }
+    final List<String> userAreas = _buyerAreas ?? const [];
 
     return StreamBuilder<QuerySnapshot>(
       // 🎯 تحسين: منع إعادة إنشاء الـ Stream في كل Build
       stream: FirebaseFirestore.instance.collection('products')
-          .where('subId', isEqualTo: subCategoryId)
+          .where('subId', isEqualTo: widget.subCategoryId)
           .where('status', isEqualTo: 'active')
           .orderBy('order', descending: false)
           .snapshots(),
@@ -41,25 +78,25 @@ class ProductListGrid extends StatelessWidget {
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Center(child: Text('لا توجد منتجات في $pageTitle'));
+          return Center(child: Text('لا توجد منتجات في ${widget.pageTitle}'));
         }
 
         // 🎯 تصفية الـ Manufacturer محلياً لو أمكن لتقليل ضغط الـ Query
         var docs = snapshot.data!.docs;
-        if (manufacturerId != null) {
-          docs = docs.where((d) => d['manufacturerId'] == manufacturerId).toList();
+        if (widget.manufacturerId != null) {
+          docs = docs.where((d) => d['manufacturerId'] == widget.manufacturerId).toList();
         }
 
         return GridView.builder(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 110),
           itemCount: docs.length,
           // 🎯 إضافة cacheExtent بيخلي السكرول ناعم جداً وبيمنع الـ ANR
-          cacheExtent: 1000, 
+          cacheExtent: 1000,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: 0.54, 
+            childAspectRatio: 0.54,
           ),
           itemBuilder: (context, index) {
             final doc = docs[index];
@@ -71,13 +108,14 @@ class ProductListGrid extends StatelessWidget {
               create: (_) => ProductOffersProvider(
                 productId: doc.id,
                 userDetectedAreas: userAreas,
+                geoContext: OfferListContext.productOffers,
               ),
               child: BuyerProductCard(
                 productId: doc.id,
                 productData: data,
                 onTap: (pid, oid) {
                   Navigator.of(context).pushNamed('/productDetails', arguments: {'productId': pid, 'offerId': oid});
-                  onProductTap?.call(pid, oid);
+                  widget.onProductTap?.call(pid, oid);
                 },
               ),
             );
@@ -87,5 +125,3 @@ class ProductListGrid extends StatelessWidget {
     );
   }
 }
-
-

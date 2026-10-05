@@ -7,6 +7,8 @@ import 'package:my_test_app/theme/app_theme.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/utils/offer_data_model.dart';
+import 'package:my_test_app/utils/offer_geo_filter.dart';
+import 'package:my_test_app/services/buyer_area_resolver.dart';
 import 'package:my_test_app/services/analytics_service.dart';
 
 final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -14,7 +16,7 @@ final FirebaseFirestore _db = FirebaseFirestore.instance;
 class ProductDetailsScreen extends StatefulWidget {
   static const routeName = '/productDetails';
   final String? productId;
-  final String? offerId; 
+  final String? offerId;
 
   const ProductDetailsScreen({super.key, this.productId, this.offerId});
 
@@ -24,7 +26,7 @@ class ProductDetailsScreen extends StatefulWidget {
 
 class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   Map<String, dynamic>? _productData;
-  List<OfferModel> _filteredOffers = []; 
+  List<OfferModel> _filteredOffers = [];
   bool _isLoading = true;
   String? _currentProductId;
   bool _viewLogged = false;
@@ -48,9 +50,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   Future<void> _initializeData() async {
     try {
       if (_currentProductId == null || _currentProductId!.isEmpty) return;
-      
+
+      // سياق Product Offer Context: عروض Sellers لمنتج واحد مع geo-filter.
+      // المناطق من GPS المشتري — ممنوع userAddress (عنوان شارع حر).
       final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
-      final String? userArea = buyerProvider.userAddress;
+      final List<String> buyerAreas = await BuyerAreaResolver.resolveBuyerAreas(
+        lat: buyerProvider.effectiveLat,
+        lng: buyerProvider.effectiveLng,
+      );
 
       final results = await Future.wait([
         _db.collection('products').doc(_currentProductId).get(),
@@ -89,9 +96,16 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
       setState(() {
         _filteredOffers = allOffers.where((offer) {
-          bool isGlobal = offer.deliveryAreas == null || offer.deliveryAreas!.isEmpty;
-          bool isMatch = userArea != null && (offer.deliveryAreas?.contains(userArea) ?? false);
-          return isGlobal || isMatch;
+          return isOfferVisibleForBuyer(
+            offerData: {
+              'deliveryZones': [
+                ...?offer.deliveryZones,
+                ...?offer.deliveryAreas,
+              ].toSet().toList(),
+            },
+            buyerAreas: buyerAreas,
+            context: OfferListContext.productOffers,
+          );
         }).toList();
       });
 
@@ -144,7 +158,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('✅ تمت الإضافة للسلة', style: TextStyle(fontFamily: 'Cairo')), 
+          content: Text('✅ تمت الإضافة للسلة', style: TextStyle(fontFamily: 'Cairo')),
           backgroundColor: Colors.green,
           behavior: SnackBarBehavior.floating,
         )
@@ -173,15 +187,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(_productData?['name'] ?? '', 
+                  Text(_productData?['name'] ?? '',
                     style: GoogleFonts.cairo(fontSize: 18.sp, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  Text(_productData?['description'] ?? '', 
+                  Text(_productData?['description'] ?? '',
                     style: GoogleFonts.cairo(color: Colors.grey, fontSize: 11.sp),
                   ),
                   const Divider(height: 40),
-                  Text('العروض المتاحة في منطقتك', 
+                  Text('العروض المتاحة في منطقتك',
                     style: GoogleFonts.cairo(fontSize: 14.sp, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
@@ -215,7 +229,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         title: Text(offer.sellerName, style: GoogleFonts.cairo(fontWeight: FontWeight.bold)),
-        subtitle: Text('${offer.price} ج.م / ${offer.unitName}', 
+        subtitle: Text('${offer.price} ج.م / ${offer.unitName}',
           style: GoogleFonts.cairo(color: AppTheme.primaryGreen, fontWeight: FontWeight.w600, fontSize: 13.sp)),
         trailing: ElevatedButton(
           onPressed: offer.disabled ? null : () => _addToCart(offer),
@@ -237,7 +251,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       child: PageView.builder(
         itemCount: images.length,
         itemBuilder: (context, index) => Image.network(
-          images[index], 
+          images[index],
           fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image),
         ),
