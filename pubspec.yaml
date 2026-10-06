@@ -32,7 +32,7 @@ dependencies:
   # Printing & PDF
   pdf: ^3.11.3
   printing: ^5.11.1
-  open_filex: ^4.3.2
+
 
   # Export to Excel
   excel: ^4.0.6
