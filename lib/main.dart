@@ -234,7 +234,7 @@ class MyApp extends StatelessWidget {
   /// `app_config/version_control.min_version`: any installed build with a
   /// lower number is forced to update, so this constant must move with
   /// every release or the new build would force-update itself.
-  static const int currentBuildNumber = 28;
+  static const int currentBuildNumber = 31;
 
   // ✅ دالة التحديث الإجباري
   void _checkUpdate(BuildContext context) async {

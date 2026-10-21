@@ -24,8 +24,8 @@ void main() {
     expect(MyApp.currentBuildNumber, _pubspecBuildNumber());
   });
 
-  test('current release is build 28', () {
-    expect(MyApp.currentBuildNumber, 28);
-    expect(_pubspecBuildNumber(), 28);
+  test('current release is build 31', () {
+    expect(MyApp.currentBuildNumber, 31);
+    expect(_pubspecBuildNumber(), 31);
   });
 }

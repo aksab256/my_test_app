@@ -96,3 +96,20 @@ bool isOfferVisibleForBuyer({
   if (zones.isEmpty) return true;
   return zones.any(buyerAreas.contains);
 }
+
+/// فلترة قائمة مستندات عروض خام حسب السياق، مع الحفاظ على الترتيب الأصلي.
+/// مناطق المشتري تُحل مرة واحدة خارجها وتُمرَّر جاهزة — لا منطق جغرافي
+/// إضافي هنا، القرار بالكامل في [isOfferVisibleForBuyer].
+List<Map<String, dynamic>> filterOfferDocs(
+  List<Map<String, dynamic>> docs,
+  List<String> buyerAreas,
+  OfferListContext context,
+) {
+  return docs
+      .where((doc) => isOfferVisibleForBuyer(
+            offerData: doc,
+            buyerAreas: buyerAreas,
+            context: context,
+          ))
+      .toList();
+}

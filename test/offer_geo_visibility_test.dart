@@ -227,4 +227,40 @@ void main() {
       );
     });
   });
+
+  group('Test 7 — TraderOffersScreen: عروض المتجر عبر البوابة المشتركة', () {
+    Map<String, dynamic> doc(String id, List<String>? zones,
+        {bool useAreasField = false}) {
+      if (zones == null) return {'offerDocId': id};
+      if (useAreasField) return {'offerDocId': id, 'deliveryAreas': zones};
+      return {'offerDocId': id, 'deliveryZones': zones};
+    }
+
+    List<String> ids(List<Map<String, dynamic>> docs) =>
+        docs.map((d) => d['offerDocId'] as String).toList();
+
+    test('المطابق + Global يظهران وغير المطابق يُخفى مع الحفاظ على الترتيب', () {
+      final docs = [
+        doc('a', ['سموحة']),
+        doc('b', ['المنتزه']),
+        doc('c', []),
+        doc('d', null),
+        doc('e', ['سموحة'], useAreasField: true),
+      ];
+      final visible = filterOfferDocs(
+          docs, const ['سموحة'], OfferListContext.productOffers);
+      expect(ids(visible), equals(['a', 'c', 'd', 'e']));
+    });
+
+    test('مشترٍ بلا مناطق (المحلة/بلا GPS) يرى الـGlobal فقط داخل المتجر', () {
+      final docs = [
+        doc('a', ['سموحة']),
+        doc('b', []),
+        doc('c', null),
+      ];
+      final visible =
+          filterOfferDocs(docs, const [], OfferListContext.productOffers);
+      expect(ids(visible), equals(['b', 'c']));
+    });
+  });
 }

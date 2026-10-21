@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:my_test_app/providers/buyer_data_provider.dart';
+import 'package:my_test_app/services/buyer_area_resolver.dart';
+import 'package:my_test_app/utils/offer_geo_filter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_test_app/theme/app_theme.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
@@ -173,6 +176,10 @@ class _OffersDataFetcherState extends State<OffersDataFetcher> {
   Future<List<Map<String, dynamic>>> _loadOffersWithProductData() async {
     final db = FirebaseFirestore.instance;
 
+    // 🎯 حل مناطق المشتري مرة واحدة قبل الجلب (جلسة GPS أو الموقع المسجل).
+    // بلا موقع معروف تُرجع قائمة فارغة فيرى المشتري العروض الـGlobal فقط.
+    final buyerAreas = await _resolveBuyerAreasOnce();
+
     // 1. جلب كولكشن العروض الخاصة بالتاجر دفعة واحدة
     final offersSnapshot = await db.collection("productOffers")
               .where("sellerId", isEqualTo: widget.sellerId)
@@ -219,7 +226,21 @@ class _OffersDataFetcherState extends State<OffersDataFetcher> {
     }).toList();
 
     // انتظار جميع الطلبات معاً لتقليل زمن الاستجابة لأقل حد ممكن
-    return await Future.wait(futures);
+    final loaded = await Future.wait(futures);
+
+    // 🎯 بوابة أهلية موحدة: نفس قواعد مسار عروض المنتجات (Global يظهر،
+    // المقيد خارج نطاق المشتري يُخفى) — دون منطق جغرافي جديد هنا.
+    return filterOfferDocs(loaded, buyerAreas, OfferListContext.productOffers);
+  }
+
+  /// حل مناطق المشتري من الموقع الفعّال لمرة واحدة لكل فتح للشاشة.
+  Future<List<String>> _resolveBuyerAreasOnce() async {
+    if (!mounted) return const [];
+    final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
+    return BuyerAreaResolver.resolveBuyerAreas(
+      lat: buyerProvider.effectiveLat,
+      lng: buyerProvider.effectiveLng,
+    );
   }
 
   @override
