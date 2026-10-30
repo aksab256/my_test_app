@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
@@ -66,6 +67,8 @@ import 'package:my_test_app/screens/seller/add_offer_screen.dart';
 import 'package:my_test_app/screens/seller/create_gift_promo_screen.dart';
 import 'package:my_test_app/screens/delivery_area_screen.dart';
 import 'package:my_test_app/services/bubble_service.dart';
+import 'package:my_test_app/services/analytics_service.dart';
+import 'package:my_test_app/services/analytics_route_observer.dart';
 import 'package:my_test_app/screens/search/search_screen.dart';
 import 'package:my_test_app/screens/special_requests/abaatly_had_pro_screen.dart';
 import 'package:my_test_app/screens/customer_tracking_screen.dart';
@@ -226,7 +229,7 @@ void main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   /// Build number of this release. Must match the `+N` suffix of `version`
@@ -235,6 +238,43 @@ class MyApp extends StatelessWidget {
   /// lower number is forced to update, so this constant must move with
   /// every release or the new build would force-update itself.
   static const int currentBuildNumber = 31;
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+/// App-lifecycle + analytics bootstrap (Phase 1): one analytics session per
+/// process, app_open_first/app_open on start, app_foreground on resume.
+/// Telemetry is fire-and-forget and never blocks startup. No GPS, no PII.
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  DateTime? _pausedAt;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Keep in sync with pubspec.yaml version (1.1.1+31).
+    AnalyticsService.configure(appVersion: '1.1.1+31');
+    unawaited(AnalyticsService.logAppOpen());
+  }
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _pausedAt = DateTime.now();
+    } else if (state == AppLifecycleState.resumed) {
+      final pausedAt = _pausedAt;
+      _pausedAt = null;
+      final secondsInBackground = pausedAt == null
+          ? -1
+          : DateTime.now().difference(pausedAt).inSeconds;
+      unawaited(AnalyticsService.logEvent(
+        eventName: AnalyticsEvents.appForeground,
+        eventData: {'secondsInBackground': secondsInBackground},
+      ));
+    }
+  }
 
   // ✅ دالة التحديث الإجباري
   void _checkUpdate(BuildContext context) async {
@@ -242,7 +282,7 @@ class MyApp extends StatelessWidget {
       DocumentSnapshot config = await FirebaseFirestore.instance.collection('app_config').doc('version_control').get();
       if (config.exists) {
         int latestVersion = config['min_version'];
-        int currentVersion = currentBuildNumber; // Single source of truth above.
+        int currentVersion = MyApp.currentBuildNumber; // Single source of truth above.
         if (currentVersion < latestVersion) {
           _showUpdateDialog(context, config['update_url']);
         }
@@ -284,6 +324,7 @@ class MyApp extends StatelessWidget {
       builder: (context, orientation, deviceType) {
         return MaterialApp(
           navigatorKey: navigatorKey,
+          navigatorObservers: [AnalyticsRouteObserver()],
           title: 'أكسب',
           debugShowCheckedModeBanner: false,
           locale: const Locale('ar', 'EG'),

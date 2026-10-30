@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_test_app/services/user_session.dart';
+import 'package:my_test_app/services/analytics_service.dart';
 
 class AuthService {
   // 💡 تم تحديث الرابط الميت هنا ليكون متوافقاً مع رابط الـ Firebase Cloud Function الجديد المرفوع بنجاح
@@ -53,6 +54,11 @@ class AuthService {
       final String? userFullName = userData['fullname'] ?? userData['fullName'];
       final String? merchantName = userData['merchantName'];
       final String phoneToShow = userData['phone'] ?? email.split('@')[0];
+      // Phase 1 telemetry (fire-and-forget).
+      AnalyticsService.logEvent(
+        eventName: AnalyticsEvents.login,
+        eventData: AnalyticsEventBuilder.login(method: 'password', role: userRole),
+      );
       
       // ✅ استخراج الموقع الجغرافي بشكل دقيق للتوافق مع الرادار
       final dynamic userLocation = userData['location'];
@@ -118,6 +124,11 @@ class AuthService {
       final String? userFullName = userData['fullname'] ?? userData['fullName'];
       final String? merchantName = userData['merchantName'];
       final String phoneToShow = userData['phone'] ?? phone;
+      // Phase 1 telemetry (fire-and-forget).
+      AnalyticsService.logEvent(
+        eventName: AnalyticsEvents.login,
+        eventData: AnalyticsEventBuilder.login(method: 'mint', role: userRole),
+      );
 
       final dynamic userLocation = userData['location'];
 
@@ -268,6 +279,8 @@ class AuthService {
     try {
       await _auth.signOut();
       final prefs = await SharedPreferences.getInstance();
+      // Phase 1 telemetry (fire-and-forget, before local wipe).
+      AnalyticsService.logEvent(eventName: AnalyticsEvents.logout);
       await prefs.clear(); // مسح كامل للذاكرة لضمان الأمان
       UserSession.clear();
     } catch (e) {

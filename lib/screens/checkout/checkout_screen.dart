@@ -221,6 +221,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
 
     // 🟢🟢 Modification: تمرير _groupedSellerOrders بدلاً من _checkoutOrders 🟢🟢
+    // Phase 1 telemetry: idempotency key for this checkout attempt.
+    final String checkoutAttemptId = 'co-${DateTime.now().millisecondsSinceEpoch}';
     final success = await CheckoutController.placeOrder(
         context: context,
         // _checkoutOrders كانت قائمة مسطحة، الآن نمرر الهيكل المجمع
@@ -234,6 +236,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
 
     if (mounted) {
+        // Phase 1 telemetry: checkout failure (fire-and-forget, never blocks UI).
+        if (!success) {
+          AnalyticsService.logEvent(
+            eventName: AnalyticsEvents.orderFailed,
+            eventData: AnalyticsEventBuilder.orderFailed(
+              stage: 'checkout_failed',
+              role: _isConsumer ? 'consumer' : 'buyer',
+            ),
+            clientEventId: checkoutAttemptId,
+          );
+        }
         if (success) {
             final prefs = await SharedPreferences.getInstance();
             await prefs.remove('checkoutOrders'); // إفراغ سلة الدفع بعد النجاح

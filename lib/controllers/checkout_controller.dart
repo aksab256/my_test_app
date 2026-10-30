@@ -7,6 +7,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:facebook_app_events/facebook_app_events.dart';
+import 'package:my_test_app/services/analytics_service.dart';
 
 // تعريف الألوان والثوابت البصرية للمنصة
 const Color kPrimaryColor = Color(0xFF4CAF50);
@@ -308,6 +309,17 @@ class CheckoutController {
                     debugPrint('Facebook Event Error: $fbError');
                 }
 
+                // Phase 1 telemetry (fire-and-forget, never blocks checkout).
+                AnalyticsService.logEvent(
+                    eventName: AnalyticsEvents.orderPlaced,
+                    eventData: AnalyticsEventBuilder.orderPlaced(
+                        orderIds: successfulOrderIds,
+                        itemsCount: processedCheckoutOrders.fold<int>(
+                            0,
+                            (sum, o) => sum + (o['items'] as List).fold<int>(0, (s, i) => s + (((i as Map)['quantity'] as num?)?.toInt() ?? 0))),
+                        totalAmount: actualOrderTotal,
+                        role: isConsumer ? 'consumer' : 'buyer'),
+                    clientEventId: 'ord-${successfulOrderIds.first}');
                 buyerProvider.clearSessionLocation();
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ تم تأكيد العهدة وإرسال الطلب!'), backgroundColor: kPrimaryColor));
                 return true;

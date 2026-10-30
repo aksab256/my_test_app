@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart'; // 👈 لفتح رابط الواتساب
 import 'package:my_test_app/services/akedly_auth_service.dart';
+import 'package:my_test_app/utils/phone_format.dart';
 import 'package:my_test_app/services/user_session.dart';
 import 'package:my_test_app/helpers/auth_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -121,8 +122,17 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     }
   }
 
-  String _formatPhoneNumber(String phone) {
+  /// Canonical 20-form for /send (see lib/utils/phone_format.dart):
+  /// local 01…, 20…, +20…, 0020… all collapse to the same 20-form, so one
+  /// number can never miss its account or bind a different transaction.
+  String _formatPhoneNumber(String phone) => formatPhoneToAkedly20(phone);
+
+  // Superseded inline implementation (kept for history; do not use).
+  // ignore: unused_element
+  String _legacyFormatPhoneNumber(String phone) {
     String cleaned = phone.trim().replaceAll(RegExp(r'\s+'), '');
+    if (cleaned.startsWith('+')) cleaned = cleaned.substring(1);
+    if (cleaned.startsWith('00')) cleaned = cleaned.substring(2);
     if (cleaned.startsWith('0')) {
       cleaned = '20${cleaned.substring(1)}';
     } else if (!cleaned.startsWith('20') && !cleaned.startsWith('+')) {
