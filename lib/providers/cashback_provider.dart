@@ -12,11 +12,14 @@ class CashbackProvider with ChangeNotifier {
   // إضافة متغيرات داخلية لتخزين البيانات
   double _availableBalance = 0.0;
   List<Map<String, dynamic>> _offersList = [];
+  List<Map<String, dynamic>> _earnHistory = [];
   bool _isLoading = false;
 
   // Getters للوصول للبيانات من الشاشة
   double get availableBalance => _availableBalance;
   List<Map<String, dynamic>> get offersList => _offersList;
+  // سجل المستحقات: قراءة عرضية من الدفتر (المنح قرار خادمي فقط)
+  List<Map<String, dynamic>> get earnHistory => _earnHistory;
   bool get isLoading => _isLoading;
 
   // Test seam: defaults preserve the production wiring exactly.
@@ -38,8 +41,72 @@ class CashbackProvider with ChangeNotifier {
       }
       notifyListeners(); // إشعار الواجهة بتحديث الرصيد
       return _availableBalance;
-    } catch (e) { 
-      return 0.0; 
+    } catch (e) {
+      return 0.0;
+    }
+  }
+
+  /// سجل المستحقات: قيود المنح الخاصة بالمشتري من دفتر العمليات.
+  /// عرض فقط — لا ينشئ أي استحقاق ولا يعدّل أي رصيد.
+  Future<List<Map<String, dynamic>>> fetchEarnHistory() async {
+    final userId = _buyerData.currentUserId;
+    if (userId == null) {
+      _earnHistory = [];
+      return [];
+    }
+    try {
+      // No orderBy: a where+orderBy composite needs a deployed Firestore
+      // index. Newest-first is applied client-side instead (history is small).
+      final snap = await _db
+          .collection('transactionsLedger')
+          .where('entityId', isEqualTo: 'USER#$userId')
+          .limit(200)
+          .get();
+      final all = snap.docs.map((d) {
+        final data = d.data();
+        DateTime? at;
+        final rawTs = data['timestamp'];
+        if (rawTs is Timestamp) at = rawTs.toDate();
+        return {
+          'amount': double.tryParse((data['amount'] ?? '0').toString()) ?? 0.0,
+          'type': data['type'] ?? '',
+          'ruleId': data['ruleId'] ?? '',
+          'orderId': data['orderId'] ?? '',
+          'fundingSource': data['fundingSource'] ?? 'platform',
+          'at': at,
+        };
+      }).toList();
+      all.sort((a, b) {
+        final da = a['at'] as DateTime?;
+        final db = b['at'] as DateTime?;
+        if (da == null && db == null) return 0;
+        if (da == null) return 1;
+        if (db == null) return -1;
+        return db.compareTo(da);
+      });
+      _earnHistory = all.take(50).toList();
+      notifyListeners();
+      return _earnHistory;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Human scope label for a rule doc (display only).
+  static String _scopeLabel(Map<String, dynamic> data) {
+    switch (data['appliesTo']) {
+      case 'seller':
+        return data['sellerName'] ?? 'تاجر محدد';
+      case 'sellers':
+        return 'مجموعة تجار';
+      case 'category':
+        return data['mainCategoryName'] ?? 'قسم محدد';
+      case 'subcategory':
+        return data['subCategoryName'] ?? 'قسم فرعي محدد';
+      case 'item':
+        return data['scopeItemName'] ?? 'صنف محدد';
+      default:
+        return 'كل التجار';
     }
   }
 
@@ -105,6 +172,12 @@ class CashbackProvider with ChangeNotifier {
           'daysRemaining': endDate.difference(now).inDays,
           'currentProgress': progressAmount,
           'sellerName': data['sellerName'] ?? 'كل التجار',
+          'fundingSource': data['fundingSource'] ?? 'unknown',
+          'fundLabel': data['fundingSource'] == 'seller'
+              ? "تمويل التاجر (${data['sellerName'] ?? ''})"
+              : (data['fundingSource'] == 'platform' ? 'تمويل المنصة' : 'الممول غير محدد'),
+          'scope': data['appliesTo'] ?? 'all',
+          'scopeLabel': _scopeLabel(data),
         });
       }
       

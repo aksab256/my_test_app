@@ -409,4 +409,96 @@ void main() {
       expect(provider.offersList, hasLength(1));
     });
   });
+
+  group('fetchEarnHistory', () {
+    Future<void> seedLedger() async {
+      final now = DateTime.now();
+      await fake.collection('transactionsLedger').add({
+        'entityId': 'USER#u1',
+        'amount': 50.0,
+        'type': 'CASHBACK_EARNED',
+        'ruleId': 'r1',
+        'orderId': 'o1',
+        'fundingSource': 'platform',
+        'timestamp': Timestamp.fromDate(now.subtract(const Duration(days: 1))),
+      });
+      await fake.collection('transactionsLedger').add({
+        'entityId': 'USER#u1',
+        'amount': 200.0,
+        'type': 'CASHBACK_EARNED_CUMULATIVE',
+        'ruleId': 'r2',
+        'orderId': '',
+        'fundingSource': 'seller',
+        'timestamp': Timestamp.fromDate(now),
+      });
+      await fake.collection('transactionsLedger').add({
+        'entityId': 'USER#other',
+        'amount': 999.0,
+        'type': 'CASHBACK_EARNED',
+        'timestamp': Timestamp.fromDate(now),
+      });
+    }
+
+    test('returns only the buyer entries newest-first with parsed fields',
+        () async {
+      await seedLedger();
+      final provider = await providerFor('u1');
+
+      final history = await provider.fetchEarnHistory();
+
+      expect(history, hasLength(2));
+      expect(history.first['amount'], 200.0);
+      expect(history.first['type'], 'CASHBACK_EARNED_CUMULATIVE');
+      expect(history.first['fundingSource'], 'seller');
+      expect(history.last['amount'], 50.0);
+      expect(history.last['orderId'], 'o1');
+      expect(provider.earnHistory, hasLength(2));
+    });
+
+    test('null user id returns empty without touching Firestore', () async {
+      final provider = await providerFor(null);
+
+      expect(await provider.fetchEarnHistory(), isEmpty);
+      expect(provider.earnHistory, isEmpty);
+    });
+
+    test('firestore error returns empty but keeps stale history', () async {
+      await seedLedger();
+      final provider = await providerFor('u1', useFlaky: true);
+      expect(await provider.fetchEarnHistory(), hasLength(2));
+
+      flaky.fail = true;
+
+      expect(await provider.fetchEarnHistory(), isEmpty);
+      expect(provider.earnHistory, hasLength(2));
+    });
+  });
+
+  group('offer display labels', () {
+    test('platform rule defaults with scope label', () async {
+      await fake.collection('cashbackRules').add(cashbackRule(
+        description: 'general',
+      ));
+      final provider = await providerFor('u1');
+      final offers = await provider.fetchAvailableOffers();
+
+      expect(offers.single['fundingSource'], 'unknown');
+      expect(offers.single['fundLabel'], 'الممول غير محدد');
+      expect(offers.single['scope'], 'all');
+      expect(offers.single['scopeLabel'], 'كل التجار');
+    });
+
+    test('seller rule carries funder and scope labels', () async {
+      final doc = cashbackRule(description: 'seller deal');
+      doc['appliesTo'] = 'seller';
+      doc['sellerName'] = 'الهنا';
+      doc['fundingSource'] = 'seller';
+      await fake.collection('cashbackRules').add(doc);
+      final provider = await providerFor('u1');
+      final offers = await provider.fetchAvailableOffers();
+
+      expect(offers.single['fundLabel'], 'تمويل التاجر (الهنا)');
+      expect(offers.single['scopeLabel'], 'الهنا');
+    });
+  });
 }

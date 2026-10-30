@@ -31,6 +31,7 @@ class _WalletScreenState extends State<WalletScreen> {
       final cashbackProvider = Provider.of<CashbackProvider>(context, listen: false);
       cashbackProvider.fetchCashbackBalance();
       cashbackProvider.fetchAvailableOffers();
+      cashbackProvider.fetchEarnHistory();
     });
   }
 
@@ -133,6 +134,7 @@ class _WalletScreenState extends State<WalletScreen> {
                 onRefresh: () async {
                   await cashbackProvider.fetchCashbackBalance();
                   await cashbackProvider.fetchAvailableOffers();
+                  await cashbackProvider.fetchEarnHistory();
                 },
                 child: _buildCashbackGoalsList(cashbackProvider),
               ),
@@ -192,10 +194,46 @@ class _WalletScreenState extends State<WalletScreen> {
       );
     }
 
+    final history = provider.earnHistory;
     return ListView.builder(
       padding: EdgeInsets.fromLTRB(15.sp, 15.sp, 15.sp, 30.sp),
-      itemCount: goals.length,
-      itemBuilder: (context, index) => _buildGoalCard(goals[index]),
+      itemCount: goals.length + (history.isEmpty ? 0 : history.length + 1),
+      itemBuilder: (context, index) {
+        if (index < goals.length) return _buildGoalCard(goals[index]);
+        final hIndex = index - goals.length;
+        if (hIndex == 0) {
+          return Padding(
+            padding: EdgeInsets.only(top: 10.sp, bottom: 6.sp),
+            child: Text('سجل المستحقات',
+                style: GoogleFonts.cairo(fontSize: 17.sp, fontWeight: FontWeight.bold, color: AppTheme.primaryGreen)),
+          );
+        }
+        return _buildHistoryTile(history[hIndex - 1]);
+      },
+    );
+  }
+
+  Widget _buildHistoryTile(Map<String, dynamic> entry) {
+    final double amount = (entry['amount'] ?? 0.0).toDouble();
+    final String type = entry['type'] ?? '';
+    final bool isCumulative = type == 'CASHBACK_EARNED_CUMULATIVE';
+    return Card(
+      margin: EdgeInsets.only(bottom: 10.sp),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: AppTheme.primaryGreen.withValues(alpha: 0.12),
+          child: Text('+${amount.toStringAsFixed(0)}',
+              style: GoogleFonts.cairo(fontSize: 11.sp, fontWeight: FontWeight.bold, color: AppTheme.primaryGreen)),
+        ),
+        title: Text(isCumulative ? 'مكافأة تراكمية' : (amount < 0 ? 'صرف كاش باك' : 'كاش باك فوري'),
+            style: GoogleFonts.cairo(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+        subtitle: Text(
+          "${entry['fundingSource'] == 'seller' ? 'تمويل التاجر' : 'تمويل المنصة'}"
+          "${entry['orderId'] != '' ? ' • طلب ${entry['orderId']}' : ''}",
+          style: GoogleFonts.cairo(fontSize: 13.sp, color: Colors.blueGrey),
+        ),
+      ),
     );
   }
 
@@ -258,6 +296,13 @@ class _WalletScreenState extends State<WalletScreen> {
                 ],
               ),
             ],
+            Row(
+              children: [
+                Icon(Icons.account_balance_wallet_outlined, size: 16.sp, color: AppTheme.primaryGreen),
+                Text(" ${goal['fundLabel'] ?? 'الممول غير محدد'} • ${goal['scopeLabel'] ?? 'كل التجار'}",
+                  style: GoogleFonts.cairo(fontSize: 14.sp, fontWeight: FontWeight.w600, color: Colors.black87)),
+              ],
+            ),
             const Divider(),
             Row(
               children: [
