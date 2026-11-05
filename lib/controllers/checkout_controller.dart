@@ -6,6 +6,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart'; 
 import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
+import 'package:my_test_app/services/buyer_area_resolver.dart';
+import 'package:my_test_app/utils/offer_geo_filter.dart';
 import 'package:facebook_app_events/facebook_app_events.dart';
 import 'package:my_test_app/services/analytics_service.dart';
 
@@ -148,6 +150,28 @@ class CheckoutController {
             for (var order in processedCheckoutOrders) order['sellerId'] as String: order
         };
         
+        if (!isConsumer) {
+            List<String> orderBuyerAreas = const [];
+            try {
+              orderBuyerAreas = await BuyerAreaResolver.resolveBuyerAreas(lat: buyerProvider.effectiveLat, lng: buyerProvider.effectiveLng);
+            } catch (_) { orderBuyerAreas = const []; }
+            for (final sellerId in groupedItems.keys) {
+              final sellerOrder = groupedItems[sellerId]!;
+              final items = (sellerOrder['items'] as List?)?.whereType<Map<String, dynamic>>().toList() ?? [];
+              for (final item in items) {
+                if (item['isGift'] == true) continue;
+                List<String> freshZones = const [];
+                try {
+                  final offerSnap = await db.collection('productOffers').doc((item['offerId'] ?? '').toString()).get();
+                  if (offerSnap.exists) freshZones = readOfferZones(offerSnap.data() ?? {});
+                } catch (_) {}
+                if (!isOfferVisibleForBuyer(offerData: {'deliveryZones': freshZones}, buyerAreas: orderBuyerAreas, context: OfferListContext.productOffers)) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${item['name'] ?? 'صنف'} غير قابل للتوصيل لمنطقتك.'), backgroundColor: kErrorColor));
+                  return false;
+                }
+              }
+            }
+        }
         double actualOrderTotal = 0.0;
         for(var order in processedCheckoutOrders) {
             for(var item in (order['items'] as List)) {

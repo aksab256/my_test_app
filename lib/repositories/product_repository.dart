@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:my_test_app/models/product_model.dart' hide CategoryModel;
 import 'package:my_test_app/models/category_model.dart';
 import 'package:my_test_app/models/user_role.dart';
+import 'package:my_test_app/utils/offer_geo_filter.dart';
 
 class ProductRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -48,6 +49,7 @@ class ProductRepository {
     String? mainCategoryId,
     String? subCategoryId,
     required ProductSortOption sortOption,
+    List<String>? buyerAreas,
   }) async {
     // 1. العمل دائماً على كولكشن العروض للتاجر
     final collectionName = 'productOffers';
@@ -90,8 +92,11 @@ class ProductRepository {
     final snapshot = await query.get();
 
     List<ProductModel> results = [];
+    final bool enforceBuyerGeo = userRole == UserRole.buyer && buyerAreas != null;
+    final List<String> buyerZoneFilter = buyerAreas ?? const [];
 
     for (var doc in snapshot.docs) {
+      if (enforceBuyerGeo && !isOfferVisibleForBuyer(offerData: doc.data(), buyerAreas: buyerZoneFilter, context: OfferListContext.productOffers)) continue;
       final data = doc.data();
       
       // جلب السعر من مصفوفة الوحدات (Units) كما في بياناتك

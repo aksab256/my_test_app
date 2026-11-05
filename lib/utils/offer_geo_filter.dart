@@ -26,6 +26,80 @@ class GeoPoint {
   const GeoPoint({required this.lat, required this.lng});
 }
 
+// Bounding box for one area polygon: fast pre-filter before ray casting.
+// seller-to-buyer only: never changes the decision, only speeds up zone unpack.
+class GeoBBox {
+  final double minLat;
+  final double maxLat;
+  final double minLng;
+  final double maxLng;
+  const GeoBBox({required this.minLat, required this.maxLat, required this.minLng, required this.maxLng});
+  bool contains(GeoPoint point) {
+    return point.lat >= minLat && point.lat <= maxLat && point.lng >= minLng && point.lng <= maxLng;
+  }
+}
+
+// Builds one bounding box per area from a ready polygons map.
+Map<String, GeoBBox> buildAreaBBoxes(Map<String, List<GeoPoint>> areaPolygons) {
+  final Map<String, GeoBBox> result = {};
+  areaPolygons.forEach((areaName, polygon) {
+    if (polygon.isEmpty) return;
+    double minLat = polygon.first.lat;
+    double maxLat = polygon.first.lat;
+    double minLng = polygon.first.lng;
+    double maxLng = polygon.first.lng;
+    for (final p in polygon.skip(1)) {
+      if (p.lat < minLat) minLat = p.lat;
+      if (p.lat > maxLat) maxLat = p.lat;
+      if (p.lng < minLng) minLng = p.lng;
+      if (p.lng > maxLng) maxLng = p.lng;
+    }
+    result[areaName] = GeoBBox(minLat: minLat, maxLat: maxLat, minLng: minLng, maxLng: maxLng);
+  });
+  return result;
+}
+
+// Same decision as resolveAreasForPoint, but skips ray casting for polygons
+// whose bounding box cannot contain the point. Pass a prebuilt bboxes map
+// (from buildAreaBBoxes) to unpack zone files fast on every screen.
+List<String> resolveAreasForPointFast(
+  GeoPoint point,
+  Map<String, List<GeoPoint>> areaPolygons, [
+  Map<String, GeoBBox>? bboxes,
+]) {
+  final Map<String, GeoBBox> boxes = bboxes ?? buildAreaBBoxes(areaPolygons);
+  final List<String> matched = [];
+  areaPolygons.forEach((areaName, polygon) {
+    if (polygon.length < 3) return;
+    final box = boxes[areaName];
+    if (box != null && !box.contains(point)) return;
+    if (isPointInPolygon(point, polygon)) matched.add(areaName);
+  });
+  return matched;
+}
+
+// Single-offer deliverability for the seller-to-buyer path.
+// Buyer sees the product, but only this seller price when true.
+bool isOfferDocDeliverable({
+  required Map<String, dynamic> offerData,
+  required List<String> buyerAreas,
+}) {
+  return isOfferVisibleForBuyer(
+    offerData: offerData,
+    buyerAreas: buyerAreas,
+    context: OfferListContext.productOffers,
+  );
+}
+
+// True when at least one offer of the product is deliverable to the buyer.
+// Used to keep the product visible while hiding non-covering seller prices.
+bool hasDeliverableOffer({
+  required Iterable<Map<String, dynamic>> offers,
+  required List<String> buyerAreas,
+}) {
+  return offers.any((o) => isOfferDocDeliverable(offerData: o, buyerAreas: buyerAreas));
+}
+
 /// اختبار نقطة-داخل-مضلع (ray casting). نفس الخوارزمية المستخدمة في
 /// TradersScreen و RepTradersLiteScreen و rep_products_screen.
 bool isPointInPolygon(GeoPoint point, List<GeoPoint> polygon) {

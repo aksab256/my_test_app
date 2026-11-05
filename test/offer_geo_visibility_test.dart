@@ -263,4 +263,34 @@ void main() {
       expect(ids(visible), equals(['b', 'c']));
     });
   });
+
+  group('Test 8 — بوابة seller-to-buyer السريعة: نفس القرار', () {
+    test('resolveAreasForPointFast يطابق resolveAreasForPoint', () {
+      const square = [
+        GeoPoint(lat: 0, lng: 0),
+        GeoPoint(lat: 0, lng: 10),
+        GeoPoint(lat: 10, lng: 10),
+        GeoPoint(lat: 10, lng: 0),
+      ];
+      final areas = {'AreaX': square};
+      final boxes = buildAreaBBoxes(areas);
+      expect(resolveAreasForPointFast(const GeoPoint(lat: 5, lng: 5), areas, boxes),
+          equals(['AreaX']));
+      expect(resolveAreasForPointFast(const GeoPoint(lat: 50, lng: 50), areas, boxes),
+          isEmpty);
+    });
+
+    test('isOfferDocDeliverable: خارج المربع لا يرى السعر', () {
+      expect(isOfferDocDeliverable(offerData: offer(['سموحة']), buyerAreas: const ['المنتزه']), isFalse);
+      expect(isOfferDocDeliverable(offerData: offer(['سموحة']), buyerAreas: const ['سموحة']), isTrue);
+      expect(isOfferDocDeliverable(offerData: offer([]), buyerAreas: const []), isTrue);
+    });
+
+    test('hasDeliverableOffer: المنتج يظهر وسعر غير المغطي يخفى', () {
+      final offers = [offer(['سموحة']), offer(['المنتزه'])];
+      expect(hasDeliverableOffer(offers: offers, buyerAreas: const ['سموحة']), isTrue);
+      expect(hasDeliverableOffer(offers: [offer(['المنتزه'])], buyerAreas: const ['سموحة']), isFalse);
+      expect(hasDeliverableOffer(offers: [offer([])], buyerAreas: const []), isTrue);
+    });
+  });
 }

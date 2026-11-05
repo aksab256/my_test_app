@@ -88,9 +88,10 @@ Map<String, List<GeoPoint>> parseGeoJsonAreas(Map<String, dynamic> geoJson) {
 /// يحمّل polygons كل المحافظات المدعومة حاليًا (نفس خريطة الثوابت) مع cache.
 class BuyerAreaResolver {
   static Map<String, List<GeoPoint>>? _cache;
+  static Map<String, GeoBBox>? _bboxCache;
 
   /// للاختبار/إعادة التحميل فقط.
-  static void clearCache() => _cache = null;
+  static void clearCache() { _cache = null; _bboxCache = null; }
 
   static Future<Map<String, List<GeoPoint>>> loadAreaPolygons() async {
     if (_cache != null) return _cache!;
@@ -105,6 +106,7 @@ class BuyerAreaResolver {
       }
     }
     _cache = all;
+    _bboxCache = buildAreaBBoxes(all);
     return all;
   }
 
@@ -116,6 +118,6 @@ class BuyerAreaResolver {
   }) async {
     if (lat == null || lng == null) return const [];
     final polygons = await loadAreaPolygons();
-    return resolveAreasForPoint(GeoPoint(lat: lat, lng: lng), polygons);
+    return resolveAreasForPointFast(GeoPoint(lat: lat, lng: lng), polygons, _bboxCache);
   }
 }

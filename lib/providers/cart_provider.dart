@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
 import 'package:my_test_app/services/marketplace_data_service.dart';
 import 'package:my_test_app/utils/quantity_limits.dart';
+import 'package:my_test_app/utils/offer_geo_filter.dart';
 
 // =========================================================================
 // 💡 هياكل البيانات المساعدة (Models)
@@ -258,6 +259,7 @@ class CartProvider with ChangeNotifier {
     int? productMaxQty;
     int? actualAvailableStock;
     double currentPrice = 0.0;
+    List<String> offerZones = const [];
 
     try {
       // إذا كان مستهلك، ابحث مباشرة في marketOffer أولاً (أسرع)
@@ -290,6 +292,7 @@ class CartProvider with ChangeNotifier {
       if (offerDoc.exists) {
         final data = offerDoc.data()!;
         productMinQty = (data['minOrder'] as num?)?.toInt() ?? 1;
+        offerZones = readOfferZones(data);
         productMaxQty = (data['maxOrder'] as num?)?.toInt();
         if (unitIndex != -1 && data['units'] is List && unitIndex < (data['units'] as List).length) {
           final unitData = data['units'][unitIndex] as Map<String, dynamic>?;
@@ -303,7 +306,7 @@ class CartProvider with ChangeNotifier {
       actualAvailableStock = 0;
     }
 
-    return {'minQty': productMinQty, 'maxQty': productMaxQty, 'stock': actualAvailableStock, 'currentPrice': currentPrice};
+    return {'minQty': productMinQty, 'maxQty': productMaxQty, 'stock': actualAvailableStock, 'currentPrice': currentPrice, 'deliveryZones': offerZones};
   }
 
   Future<void> _saveCartToLocal(Map<String, SellerOrderData> currentOrders) async {
@@ -400,6 +403,7 @@ class CartProvider with ChangeNotifier {
     int minOrderQuantity = 1,
     int? availableStock,
     int? maxOrderQuantity,
+    List<String>? buyerAreas,
   }) async {
     // تحديث فوري للـ UI قبل أي عمليات Firestore 🎯
     final limits = resolveQuantityLimits(
@@ -415,6 +419,13 @@ class CartProvider with ChangeNotifier {
     if (quantityToAdd < limits.effectiveMin) throw Exception('أقل من الحد الأدنى');
     if (limits.effectiveMax != null && newTotalQuantity > limits.effectiveMax!) throw Exception('تجاوز الحد المتاح');
 
+    if (userRole == 'buyer' && buyerAreas != null) {
+      final fresh = await _getProductOfferDetails(offerId, unitIndex, userRole: userRole);
+      final zones = (fresh['deliveryZones'] as List?)?.whereType<String>().toList() ?? const [];
+      if (!isOfferVisibleForBuyer(offerData: {'deliveryZones': zones}, buyerAreas: buyerAreas, context: OfferListContext.productOffers)) {
+        throw Exception('هذا العرض غير متاح لمنطقتك');
+      }
+    }
     _cartItems.removeWhere((item) => item.isGift);
 
     if (index != -1) {
@@ -511,7 +522,7 @@ class CartProvider with ChangeNotifier {
   }
 
   Future<List<String>> validateCheckoutQuantities(
-      List<Map<String, dynamic>> groupedOrders, String userRole) async {
+      List<Map<String, dynamic>> groupedOrders, String userRole, {List<String>? buyerAreas}) async {
     final List<String> errors = [];
     for (final group in groupedOrders) {
       final sellerId = (group['sellerId'] ?? '').toString();
@@ -546,6 +557,19 @@ class CartProvider with ChangeNotifier {
       if (minTotal > 0 && sellerTotal < minTotal) {
         errors.add(
             'طلب $sellerName أقل من الحد الأدنى (${minTotal.toStringAsFixed(2)}).');
+      }
+    }
+    if (userRole == 'buyer' && buyerAreas != null) {
+      for (final group in groupedOrders) {
+        final items = (group['items'] as List?)?.whereType<Map<String, dynamic>>().toList() ?? [];
+        for (final item in items) {
+          if (item['isGift'] == true) continue;
+          final details = await _getProductOfferDetails((item['offerId'] ?? '').toString(), (item['unitIndex'] as num?)?.toInt() ?? 0, userRole: userRole);
+          final zones = (details['deliveryZones'] as List?)?.whereType<String>().toList() ?? const [];
+          if (!isOfferVisibleForBuyer(offerData: {'deliveryZones': zones}, buyerAreas: buyerAreas, context: OfferListContext.productOffers)) {
+            errors.add('${item['name'] ?? 'صنف'} غير قابل للتوصيل لمنطقتك الحالية.');
+          }
+        }
       }
     }
     return errors;

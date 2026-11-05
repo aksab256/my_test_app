@@ -119,6 +119,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   void _addToCart(OfferModel offer) async {
     try {
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
+      List<String>? gateAreas;
+      try {
+        final buyerProv = Provider.of<BuyerDataProvider>(context, listen: false);
+        gateAreas = await BuyerAreaResolver.resolveBuyerAreas(lat: buyerProv.effectiveLat, lng: buyerProv.effectiveLng);
+      } catch (_) { gateAreas = const []; }
       final String imageUrl = (_productData?['imageUrls'] as List?)?.isNotEmpty == true
           ? _productData!['imageUrls'][0] : '';
 
@@ -133,6 +138,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         unitIndex: offer.unitIndex ?? 0,
         imageUrl: imageUrl,
         userRole: 'buyer',
+        buyerAreas: gateAreas,
         quantityToAdd: offer.minQty ?? 1,
         mainId: _productData?['mainId'],
         subId: _productData?['subId'],

@@ -5,6 +5,8 @@ import 'package:my_test_app/theme/app_theme.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
 import 'package:collection/collection.dart'; // لاستخدام firstOrNull
 import 'package:my_test_app/utils/quantity_limits.dart';
+import 'package:my_test_app/providers/buyer_data_provider.dart';
+import 'package:my_test_app/services/buyer_area_resolver.dart';
 
 class TraderOfferCard extends StatelessWidget {
   final Map<String, dynamic> offerData;
@@ -93,6 +95,11 @@ class TraderOfferCard extends StatelessWidget {
             // 🎯 التصحيح: تم تبديل الاستدعاء لاستخدام الوسائط المسماة
             onPressed: (isDisabled || quantityBlocked) ? null : () async {
               try {
+                List<String>? gateAreas;
+                try {
+                  final buyerProv = Provider.of<BuyerDataProvider>(context, listen: false);
+                  gateAreas = await BuyerAreaResolver.resolveBuyerAreas(lat: buyerProv.effectiveLat, lng: buyerProv.effectiveLng);
+                } catch (_) { gateAreas = const []; }
                 await cartProvider.addItemToCart(
                 offerId: itemData['offerId'] as String,
                 productId: itemData['productId'] as String,
@@ -108,6 +115,7 @@ class TraderOfferCard extends StatelessWidget {
                 maxOrderQuantity:
                     (offerData['maxOrder'] as num?)?.toInt(),
                 imageUrl: itemData['image'] as String,
+                buyerAreas: gateAreas,
                 // 🟢 [التصحيح النهائي]: تمرير 'buyer' للدور
                 userRole: 'buyer', 
               );
