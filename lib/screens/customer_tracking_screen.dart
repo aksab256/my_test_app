@@ -468,7 +468,8 @@ class _CustomerTrackingScreenState extends State<CustomerTrackingScreen> {
                 children: [
                   const Icon(Icons.security, color: Colors.amber),
                   const SizedBox(width: 10),
-                  const Text("كود التسليم: ", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                  // F4 pickup leg: this is the START code (pickupCode), not the delivery code.
+                  const Text("كود بدء المهمة (الاستلام): ", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
                   _CreatorCodeText(
                     orderId: widget.orderId,
                     isCreator: FirebaseAuth.instance.currentUser?.uid == order['userId'],

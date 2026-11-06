@@ -147,7 +147,7 @@ class _RetailerDispatchScreenState extends State<RetailerDispatchScreen> {
 
       // ✅ التعديل الجوهري: إرسال GeoPoint صافي لعدم ضرب شاشة المندوب
       DocumentReference radarRef = await FirebaseFirestore.instance.collection('specialRequests').add({
-        'userId': user?.uid ?? 'anonymous_retailer',
+        'userId': user.uid, // F4: owner is always the authenticated uid (anonymous rejected above).
         'userName': merchantName,
         'userPhone': senderPhone,
         'customerPhone': widget.order.customerPhone,

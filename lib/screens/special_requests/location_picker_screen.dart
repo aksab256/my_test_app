@@ -291,7 +291,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       final String pickupCode = (1000 + Random().nextInt(9000)).toString();
 
       final radarRef = await FirebaseFirestore.instance.collection('specialRequests').add({
-        'userId': user?.uid ?? 'anonymous',
+        'userId': user.uid, // F4: owner is always the authenticated uid (anonymous rejected above).
 
         // ✅ الربط الصحيح مع UserSession:
         'userName': UserSession.merchantName ?? "مستخدم أكسب",
