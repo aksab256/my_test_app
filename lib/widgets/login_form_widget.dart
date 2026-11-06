@@ -240,7 +240,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
 
         _showOtpDialog(_activeTransactionReqID ?? txId, formattedPhone, ''); // F3-auth-compat: role resolves post-auth.
       } else {
-        _handleError("⚠️ فشل إرسال كود التفعيل: ${result.message}");
+        final msg = result.message ?? ''; if (msg.contains('مراجعة') || msg.contains('تفعيل') || msg.contains('الإدارة')) { _handleError('⏳ طلبك قيد المراجعة حالياً من قبل الإدارة. للتواصل واتساب الإدارة: 201131502688', isPending: true); } else { _handleError('⚠️ فشل إرسال كود التفعيل: ${result.message}'); }
       }
     } catch (e) {
       setState(() => _isLoading = false);
@@ -442,7 +442,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
                 children: [
                   Text(
                     _errorMessage!,
-                    style: TextStyle(color: Colors.red[900], fontSize: 13, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: Colors.red[900], fontSize: 15, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
                   if (_isPendingUser) ...[
@@ -450,7 +450,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
                     ElevatedButton.icon(
                       onPressed: _openWhatsApp,
                       icon: const Icon(Icons.chat, color: Colors.white),
-                      label: const Text("تواصل عبر واتساب للتفعيل", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      label: const Text("تواصل عبر واتساب للتفعيل", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xff25D366),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

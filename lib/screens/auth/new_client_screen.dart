@@ -5,11 +5,23 @@ import 'package:sizer/sizer.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:my_test_app/services/akedly_auth_service.dart';
+import 'package:my_test_app/helpers/auth_service.dart';
+import 'package:my_test_app/services/user_session.dart';
+import 'package:my_test_app/screens/buyer/buyer_home_screen.dart';
+import 'package:my_test_app/screens/consumer/consumer_home_screen.dart';
+import 'package:my_test_app/screens/seller_screen.dart';
+import 'package:my_test_app/providers/buyer_data_provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import 'package:my_test_app/screens/auth/client_selection_step.dart';
 import 'package:my_test_app/screens/auth/client_details_step.dart';
 
 class NewClientScreen extends StatefulWidget {
   const NewClientScreen({super.key});
+
+  static bool shouldAutoSignInAfterRegister({required String status}) => status == 'active';
+
+  static String registerHomeRoute(String role) { if (role == 'buyer') { return BuyerHomeScreen.routeName; } if (role == 'consumer') { return ConsumerHomeScreen.routeName; } return SellerScreen.routeName; }
 
   @override
   State<NewClientScreen> createState() => _NewClientScreenState();
@@ -79,14 +91,14 @@ class _NewClientScreenState extends State<NewClientScreen> {
           icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF2D9E68), size: 70),
           title: Text(
             'تم التسجيل بنجاح!',
-            style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68), fontFamily: 'Cairo'),
+            style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w900, color: const Color(0xFF2D9E68), fontFamily: 'Cairo'),
           ),
           content: Text(
             isSeller
                 ? "شكراً لانضمامك لأسرة أسواق أكسب. طلبك قيد المراجعة حالياً، وسنقوم بتفعيل حسابك خلال 24 ساعة كحد أقصى."
                 : "أهلاً بك في أسواق أكسب! حسابك جاهز الآن، ابدأ رحلة توفيرك وجمع نقاطك من اليوم.",
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: Colors.black87, fontFamily: 'Cairo', height: 1.4),
+            style: TextStyle(fontSize: 17.sp, fontWeight: FontWeight.w600, color: Colors.black87, fontFamily: 'Cairo', height: 1.4),
           ),
           actions: [
             Column(
@@ -149,6 +161,8 @@ class _NewClientScreenState extends State<NewClientScreen> {
     switch (status) {
       case 400:
         return '❌ رمز التحقق أو البيانات غير صحيحة.';
+      case 403:
+        return '⏳ طلبك قيد المراجعة حالياً من قبل الإدارة.';
       case 409:
         return '❌ هذا الرقم مسجل بالفعل. سجّل الدخول.';
       case 410:
@@ -215,6 +229,7 @@ class _NewClientScreenState extends State<NewClientScreen> {
         }
         return;
       }
+      if (_selectedUserType == 'seller') { final req = await _regService.registerRequest(phoneNumber: phoneValue, role: 'seller', profile: {'fullname': _controllers['fullname']!.text, 'ownerName': _controllers['ownerName']!.text, 'address': _controllers['address']!.text, 'country': _selectedCountry, 'additionalPhone': _controllers['additionalPhone']!.text, 'merchantName': _controllers['merchantName']!.text, 'businessType': _controllers['businessType']!.text, 'logoUrl': _logoUrl, 'crUrl': _crUrl, 'tcUrl': _tcUrl, if (_location != null) 'location': _location}); if (!mounted) { return; } if (!req.isSuccess) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(req.message ?? '❌ تعذّر إرسال الطلب'))); return; } await FirebaseAuth.instance.signOut(); _showSuccessDialog(); return; }
       final send = await _regService.registerSend(phoneValue, _selectedUserType);
       if (!send.isSuccess) {
         if (mounted) {
@@ -234,7 +249,7 @@ class _NewClientScreenState extends State<NewClientScreen> {
       if (otp == null || otp.isEmpty) return;
 
       // F3: step 2 - server verifies OTP then creates the passwordless identity + role doc.
-      await _regService.registerVerify(
+      final regResult = await _regService.registerVerify(
         transactionReqID: txID,
         otp: otp,
         phoneNumber: phoneValue,
@@ -255,7 +270,7 @@ class _NewClientScreenState extends State<NewClientScreen> {
 
 
       if (mounted) {
-        _showSuccessDialog();
+        if (!NewClientScreen.shouldAutoSignInAfterRegister(status: regResult.status)) { await FirebaseAuth.instance.signOut(); if (!mounted) { return; } _showSuccessDialog(); return; } final String signedRole = await AuthService().signInWithMint(customToken: regResult.customToken, phone: phoneValue); if (!mounted) { return; } await Provider.of<BuyerDataProvider>(context, listen: false).initializeData(FirebaseAuth.instance.currentUser?.uid, UserSession.ownerId, UserSession.merchantName ?? 'مستخدم اسواق اكسب'); if (!mounted) { return; } Navigator.of(context).pushNamedAndRemoveUntil(NewClientScreen.registerHomeRoute(signedRole), (route) => false);
       }
     } on RegisterException catch (e) {
       if (mounted) {
@@ -374,7 +389,7 @@ class _NewClientScreenState extends State<NewClientScreen> {
                       ? const Icon(Icons.check_rounded, color: Colors.white, size: 24)
                       : Text('$stepNum',
                           style: TextStyle(
-                              fontSize: 14.sp,
+                              fontSize: 16.sp,
                               color: isActive ? Colors.white : Colors.grey,
                               fontWeight: FontWeight.bold)),
                 ),
@@ -403,10 +418,10 @@ class _LogoHeader extends StatelessWidget {
         SizedBox(height: 1.h),
         Text('انضم إلينا الآن',
             style: TextStyle(
-                fontSize: 22.sp, fontWeight: FontWeight.w900, color: const Color(0xFF1A1A1A))),
+                fontSize: 24.sp, fontWeight: FontWeight.w900, color: const Color(0xFF1A1A1A))),
         SizedBox(height: 0.5.h),
         Text('خطوات بسيطة وتبدأ تجربتك الفريدة مع أسواق أكسب',
-            style: TextStyle(fontSize: 11.sp, color: Colors.grey.shade600)),
+            style: TextStyle(fontSize: 13.5.sp, color: Colors.grey.shade600)),
       ],
     );
   }
@@ -423,7 +438,7 @@ class _Footer extends StatelessWidget {
         child: Text.rich(
           TextSpan(
             text: 'لديك حساب بالفعل؟ ',
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 13.sp),
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 15.sp),
             children: const [
               TextSpan(
                 text: 'تسجيل الدخول',

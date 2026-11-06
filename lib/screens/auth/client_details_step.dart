@@ -171,7 +171,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
                     onSubmitted: (val) => _searchAddress(val, setModalState),
                     decoration: InputDecoration(
                       hintText: "ابحث عن مخزنك، محلك، أو منطقتك...",
-                      hintStyle: TextStyle(fontFamily: 'Cairo', fontSize: 11.sp),
+                      hintStyle: TextStyle(fontFamily: 'Cairo', fontSize: 13.sp),
                       prefixIcon: const Icon(Icons.search, color: Color(0xFF2D9E68)),
                       suffixIcon: IconButton(
                           icon: const Icon(Icons.gps_fixed, color: Colors.blue),
@@ -346,7 +346,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
             children: [
               Text('إكمال بيانات الحساب',
                   style: TextStyle(
-                      fontSize: 18.sp,
+                      fontSize: 20.sp,
                       fontWeight: FontWeight.w900,
                       color: const Color(0xFF2D9E68),
                       fontFamily: 'Cairo'),
@@ -373,7 +373,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
               TextButton(
                   onPressed: widget.onGoBack,
                   child: Text('العودة لتعديل نوع الحساب',
-                      style: TextStyle(color: Colors.grey.shade400, fontSize: 11.sp, fontFamily: 'Cairo'))),
+                      style: TextStyle(color: Colors.grey.shade400, fontSize: 13.sp, fontFamily: 'Cairo'))),
               SizedBox(height: 5.h),
             ],
           ),
@@ -523,7 +523,7 @@ class _ClientDetailsStepState extends State<ClientDetailsStep> {
         },
         child: RichText(
           text: TextSpan(
-              style: TextStyle(fontSize: 10.sp, fontFamily: 'Cairo', color: Colors.black),
+              style: TextStyle(fontSize: 12.sp, fontFamily: 'Cairo', color: Colors.black),
               children: const [
                 TextSpan(text: "أوافق على "),
                 TextSpan(

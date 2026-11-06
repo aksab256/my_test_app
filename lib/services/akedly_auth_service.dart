@@ -93,6 +93,7 @@ class AkedlyAuthService {
   /// token. Throws [RegisterException] carrying the backend status
   /// (400 bad code/profile, 403 login-tx, 404 unknown tx, 409 already
   /// registered, 410 expired/used, 429 rate-limited).
+  Future<AuthResult> registerRequest({required String phoneNumber, required String role, required Map<String, dynamic> profile}) async { try { final response = await http.post(Uri.parse('$_baseUrl/register-request'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'phoneNumber': phoneNumber, 'role': role, 'profile': profile})); if (response.statusCode == 200) { return AuthResult.success(data: phoneNumber); } return AuthResult.failure(message: '❌ تعذّر إرسال الطلب'); } catch (e) { return AuthResult.failure(message: 'خطأ تقني: $e'); } }
   Future<RegisterResult> registerVerify({
     required String transactionReqID,
     required String otp,

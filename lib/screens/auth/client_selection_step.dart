@@ -31,13 +31,13 @@ class ClientSelectionStep extends StatelessWidget {
           SizedBox(height: 3.h),
           Text(
             stepNumber == 1 ? 'أين يقع نشاطك التجاري؟' : 'ما هو دورك في المنصة؟',
-            style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w900, color: const Color(0xFF1A1A1A), fontFamily: 'Cairo'),
+            style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w900, color: const Color(0xFF1A1A1A), fontFamily: 'Cairo'),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: 1.h),
           Text(
             stepNumber == 1 ? 'اختر الدولة لبدء تخصيص تجربتك' : 'اختر نوع الحساب المناسب لطبيعة عملك',
-            style: TextStyle(fontSize: 12.sp, color: Colors.grey.shade600, fontFamily: 'Cairo'),
+            style: TextStyle(fontSize: 14.sp, color: Colors.grey.shade600, fontFamily: 'Cairo'),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: 4.h),
@@ -54,7 +54,7 @@ class ClientSelectionStep extends StatelessWidget {
               child: TextButton.icon(
                 onPressed: onGoBack,
                 icon: const Icon(Icons.arrow_forward_ios_rounded, size: 20),
-                label: Text('العودة للخطوة السابقة', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                label: Text('العودة للخطوة السابقة', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
                 style: TextButton.styleFrom(foregroundColor: Colors.grey[700]),
               ),
             ),
@@ -193,7 +193,7 @@ class _OptionCard extends StatelessWidget {
                     title,
                     style: TextStyle(
                       fontWeight: FontWeight.w900, 
-                      fontSize: 15.sp,
+                      fontSize: 17.sp,
                       fontFamily: 'Cairo',
                       color: isActive ? primary : Colors.black87, // تم تعديله من DEDEDE ليكون مقروءاً
                     ),
@@ -202,7 +202,7 @@ class _OptionCard extends StatelessWidget {
                   Text(
                     subtitle,
                     style: TextStyle(
-                      fontSize: 11.sp, 
+                      fontSize: 13.sp, 
                       fontFamily: 'Cairo',
                       color: Colors.grey.shade700,
                       height: 1.3,
