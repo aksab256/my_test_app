@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:sizer/sizer.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:my_test_app/utils/seller_link_code_state.dart';
 
 // 🎯 الألوان والثوابت المعتمدة
 const Color primaryColor = Color(0xff28a745);
@@ -328,6 +329,16 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
           backgroundColor: primaryColor,
           foregroundColor: Colors.white,
           centerTitle: true,
+          actions: [
+            IconButton(
+              tooltip: "تحديث البيانات",
+              icon: const Icon(Icons.refresh_rounded),
+              // Re-reads sellers/{currentSellerId} so a code issued from
+              // Rabia after this screen was opened becomes visible without
+              // restarting the app. Reads own document only.
+              onPressed: _refreshData,
+            ),
+          ],
         ),
         body: _isLoading
             ? const Center(child: CircularProgressIndicator(color: primaryColor))
@@ -504,11 +515,18 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
   }
 
   Widget _buildIntegrationCodeCard() {
-    String rawCode = sellerDataCache['temp_link_code'] ?? sellerDataCache['integrationCode'] ?? '';
-    bool hasCode = rawCode.isNotEmpty;
+    final SellerLinkCodeView linkView = classifySellerLinkCode(sellerDataCache);
+    final String rawCode = linkView.code;
+    final bool hasCode = linkView.state == SellerLinkCodeState.available;
+    final bool isLinkExpired = linkView.state == SellerLinkCodeState.expired;
+    final bool isLinkConsumed = linkView.state == SellerLinkCodeState.linkedConsumed;
     String displayCode = hasCode 
         ? (_isCodeObscured ? '*' * rawCode.length : rawCode)
-        : 'غير متوفر';
+        : isLinkExpired
+            ? 'انتهت صلاحية الكود — اطلب كوداً جديداً من رابية ثم حدّث الصفحة'
+            : isLinkConsumed
+                ? 'تم الربط بنجاح — لا حاجة لكود جديد'
+                : 'غير متوفر';
 
     return Container(
       padding: EdgeInsets.all(4.w),
@@ -532,7 +550,7 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
           ),
           SizedBox(height: 1.h),
           Text(
-            "استخدم هذا الكود المرسل لإقران حسابك بنظام ERP الخارجي لمزامنة البيانات والطلبات.",
+            "اضغط إرسال الكود من رابية، ثم حدّث هذه الصفحة لعرض الكود. الكود صالح لمدة 10 دقائق فقط.",
             style: TextStyle(fontSize: 10.sp, color: Colors.grey[600], fontFamily: 'Cairo', height: 1.4),
           ),
           SizedBox(height: 2.h),
