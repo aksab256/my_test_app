@@ -137,7 +137,7 @@ class _FooterWidget extends StatelessWidget {
               child: Text.rich(
                 TextSpan(
                   text: 'أوافق على ',
-                  style: TextStyle(color: Colors.grey.shade700, fontSize: 10.sp),
+                  style: TextStyle(color: Colors.grey.shade700, fontSize: 12.sp),
                   children: [
                     TextSpan(
                       text: 'شروط الاستخدام والخصوصية لشركة أسواق أكسب',
@@ -159,7 +159,7 @@ class _FooterWidget extends StatelessWidget {
         Text.rich(
           TextSpan(
             text: 'ليس لديك حساب؟ ',
-            style: TextStyle(color: Colors.grey.shade700, fontSize: 12.sp),
+            style: TextStyle(color: Colors.grey.shade700, fontSize: 14.sp),
             children: [
               TextSpan(
                 text: 'إنشاء حساب جديد',

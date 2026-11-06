@@ -51,6 +51,47 @@ void main() {
     expect(LoginFormWidget.isReviewNumber('', ''), isFalse);
   });
 
+  test('review numbers map to seller/buyer/consumer roles', () {
+    expect(
+      LoginFormWidget.reviewRoleFor('01278287168', '201278287168'),
+      'seller',
+    );
+    expect(
+      LoginFormWidget.reviewRoleFor('01551445210', '201551445210'),
+      'buyer',
+    );
+    expect(
+      LoginFormWidget.reviewRoleFor('01021070461', '201021070461'),
+      'consumer',
+    );
+    // Either dial variant alone resolves the same role.
+    expect(LoginFormWidget.reviewRoleFor('01021070461', ''), 'consumer');
+    expect(LoginFormWidget.reviewRoleFor('', '201278287168'), 'seller');
+  });
+
+  test('normal numbers have no review role', () {
+    expect(
+      LoginFormWidget.reviewRoleFor('01000000000', '201000000000'),
+      isNull,
+    );
+    expect(LoginFormWidget.reviewRoleFor('', ''), isNull);
+  });
+
+  test('both dial variants derive the same review identity', () {
+    expect(
+      LoginFormWidget.reviewEmailFor('201278287168'),
+      LoginFormWidget.reviewEmailFor('01278287168'),
+    );
+    expect(
+      LoginFormWidget.reviewEmailFor('201278287168'),
+      '01278287168@aksab.com',
+    );
+    expect(
+      LoginFormWidget.reviewPasswordFor('201551445210'),
+      'Rabia_01551445210',
+    );
+  });
+
   test('review step id and code are reserved for the local path', () {
     expect(LoginFormWidget.reviewStepId, isNotEmpty);
     expect(LoginFormWidget.reviewCode, hasLength(6));

@@ -35,6 +35,46 @@ class LoginFormWidget extends StatefulWidget {
       reviewPhones.contains(cleanInputPhone) ||
       reviewPhones.contains(formattedPhone);
 
+  /// Fixed-code test accounts (bypass OTP only — everything else is a real
+  /// account: real Auth user + real role doc, real role navigation).
+  /// Keys are canonical 0-form phones; each accepts both the 0-form and the
+  /// 20-form variant listed in [reviewPhones].
+  static const Map<String, String> reviewRoles = <String, String>{
+    '01278287168': 'seller',
+    '01551445210': 'buyer',
+    '01021070461': 'consumer',
+  };
+
+  /// Canonical 0-form for a review input (`012…`, `2012…`, `+20…`, `0020…`,
+  /// spaces) so both dial variants derive the same identity. Pure.
+  static String canonicalReviewPhone(String input) {
+    var cleaned = input.trim().replaceAll(RegExp(r'\s+'), '');
+    if (cleaned.startsWith('+')) cleaned = cleaned.substring(1);
+    var digits = cleaned.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('00')) digits = digits.substring(2);
+    if (digits.startsWith('20')) return '0${digits.substring(2)}';
+    if (digits.startsWith('0')) return digits;
+    if (digits.isEmpty) return '';
+    return '0$digits';
+  }
+
+  /// Derived legacy identity for a review number. Pure.
+  static String reviewEmailFor(String input) =>
+      '${canonicalReviewPhone(input)}@aksab.com';
+  static String reviewPasswordFor(String input) =>
+      'Rabia_${canonicalReviewPhone(input)}';
+
+  /// Expected role for a review number, or null for normal numbers.
+  /// Only answers when the input matches [reviewPhones] exactly, so real
+  /// registrations are never affected. Pure.
+  static String? reviewRoleFor(String cleanInputPhone, String formattedPhone) {
+    if (!isReviewNumber(cleanInputPhone, formattedPhone)) return null;
+    final candidate = reviewPhones.contains(cleanInputPhone)
+        ? canonicalReviewPhone(cleanInputPhone)
+        : canonicalReviewPhone(formattedPhone);
+    return reviewRoles[candidate];
+  }
+
   /// Maps backend mint statuses to user-facing messages (no blanket
   /// "wrong code" for every failure). Pure + unit-tested.
   static String mintErrorMessage(int statusCode) {
@@ -315,7 +355,7 @@ class _LoginFormWidgetState extends State<LoginFormWidget> {
     try {
       final String cleanPhone = _phone.trim().startsWith('0')
           ? _phone.trim()
-          : '0${_phone.trim()}';
+          : LoginFormWidget.canonicalReviewPhone(_phone);
       final String smartEmail = '$cleanPhone@aksab.com';
       final String generatedPass = 'Rabia_$cleanPhone';
       final String finalRole =
