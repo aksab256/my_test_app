@@ -1,4 +1,6 @@
 // lib/screens/seller/seller_settings_screen.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -10,6 +12,7 @@ import 'dart:math';
 import 'package:sizer/sizer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:my_test_app/utils/seller_link_code_state.dart';
+import 'package:my_test_app/utils/rabia_webhook_setup.dart';
 
 // 🎯 الألوان والثوابت المعتمدة
 const Color primaryColor = Color(0xff28a745);
@@ -33,6 +36,15 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
   bool _isUploading = false;
   bool _isCodeObscured = true; // التحكم في إخفاء/إظهار كود Rabia ERP
   bool _isDashboardCodeObscured = true; // التحكم في إخفاء/إظهار كود اللوحة
+
+  // 🔔 حالة Webhook طلبات Rabia — إضافة مستقلة بجوار كود الربط، لا تمس مسار RABIA-xxx.
+  bool _webhookStatusLoaded = false;
+  bool _webhookChecking = false;
+  bool _webhookCreating = false;
+  bool _webhookActive = false;
+  String? _webhookId;
+  String? _webhookSecretOnce; // يُعرض مرة واحدة فقط ثم يُمسح من الذاكرة ولا يُعاد عرضه.
+  String? _webhookError;
 
   Map<String, dynamic> sellerDataCache = {};
   List<Map<String, dynamic>> subUsersList = [];
@@ -62,6 +74,7 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
   Future<void> _refreshData() async {
     setState(() => _isLoading = true);
     await _loadSellerData();
+    await _loadRabiaWebhookStatus();
     await _loadSubUsersFromCollection();
     setState(() => _isLoading = false);
   }
@@ -355,6 +368,10 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
 
                     // 🔗 كارت عرض كود ربط النظام الخارجي / Rabia ERP (مستقل)
                     _buildIntegrationCodeCard(),
+                    SizedBox(height: 2.5.h),
+
+                    // 🔔 كارت Webhook طلبات Rabia (إضافة مستقلة — لا تمس كود الربط RABIA-xxx).
+                    _buildRabiaWebhookCard(),
                     SizedBox(height: 3.h),
 
                     _buildSectionTitle("بيانات العمل"),
@@ -604,6 +621,374 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// ترويسة المصادقة لمنافذ Webhooks الحالية (POST/GET/DELETE) في بوابة
+  /// التكاملات — يُعاد استخدامها كما هي دون أي تعديل على الـBackend.
+  Future<Map<String, String>?> _webhookAuthHeaders() async {
+    try {
+      final token = await _auth.currentUser?.getIdToken();
+      if (token == null || token.isEmpty) return null;
+      return <String, String>{
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// يحدّث حالة Webhook طلبات Rabia من GET /webhooks (لا يكشف السر أبدًا).
+  /// فشل التحديث اللاحق لا يمحو حالة نشطة مثبتة سابقًا.
+  Future<void> _loadRabiaWebhookStatus() async {
+    if (!mounted) return;
+    setState(() {
+      _webhookChecking = true;
+      if (!_webhookStatusLoaded) _webhookError = null;
+    });
+    try {
+      final headers = await _webhookAuthHeaders();
+      if (headers == null) throw Exception('auth');
+      final res = await http
+          .get(Uri.parse('$kIntegrationsApiBase/webhooks'), headers: headers)
+          .timeout(const Duration(seconds: 20));
+      if (!mounted) return;
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        final list = (body is Map && body['data'] is List)
+            ? (body['data'] as List)
+            : const <dynamic>[];
+        final match = findRabiaOrdersWebhook(list);
+        setState(() {
+          _webhookActive = match != null;
+          _webhookId = match?['webhookId']?.toString();
+          _webhookStatusLoaded = true;
+          _webhookError = null;
+        });
+      } else if (res.statusCode == 401) {
+        throw Exception('session');
+      } else {
+        throw Exception('http_${res.statusCode}');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      if (!_webhookStatusLoaded) {
+        setState(() {
+          _webhookError = 'تعذر التحقق من حالة الـWebhook — تحقق من الاتصال ثم أعد المحاولة.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _webhookChecking = false);
+    }
+  }
+
+  /// ينشئ Webhook طلبات Rabia عبر POST /webhooks الحالي، مع حارس منع
+  /// التكرار (يتحقق أولًا من عدم وجود إعداد مطابق). السر المعروض لمرة
+  /// واحدة لا يُسجَّل في أي سجل — يُحفظ في حالة الشاشة فقط.
+  Future<void> _createRabiaWebhook() async {
+    if (_webhookCreating) return;
+    setState(() {
+      _webhookCreating = true;
+      _webhookError = null;
+    });
+    try {
+      if (!_webhookStatusLoaded) {
+        await _loadRabiaWebhookStatus();
+        if (!mounted) return;
+      }
+      if (_webhookActive) return; // حارس التكرار: الإعداد موجود فعلًا.
+      final headers = await _webhookAuthHeaders();
+      if (headers == null) throw Exception('auth');
+      final res = await http
+          .post(
+            Uri.parse('$kIntegrationsApiBase/webhooks'),
+            headers: headers,
+            body: jsonEncode(<String, dynamic>{
+              'url': kRabiaOrdersReceiverUrl,
+              'events': kRabiaOrdersEvents,
+            }),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (!mounted) return;
+      if (res.statusCode == 201) {
+        final body = jsonDecode(res.body);
+        final data = (body is Map && body['data'] is Map)
+            ? Map<String, dynamic>.from(body['data'] as Map)
+            : <String, dynamic>{};
+        final secret = data['secret']?.toString() ?? '';
+        if (secret.isEmpty) throw Exception('empty_secret');
+        setState(() {
+          _webhookSecretOnce = secret;
+          _webhookId = data['webhookId']?.toString();
+          _webhookActive = true;
+          _webhookStatusLoaded = true;
+        });
+      } else {
+        throw Exception('http_${res.statusCode}');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _webhookError = 'فشل إنشاء الـWebhook — أعد المحاولة.';
+      });
+    } finally {
+      if (mounted) setState(() => _webhookCreating = false);
+    }
+  }
+
+  /// يحذف الـWebhook الحالي (لإعادة الإنشاء عند ضياع المفتاح). كود الربط
+  /// RABIA-xxx لا يتأثر إطلاقًا.
+  Future<void> _deleteRabiaWebhook() async {
+    final id = _webhookId;
+    if (id == null || id.isEmpty || _webhookCreating) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('⚠️ حذف Webhook طلبات Rabia', textAlign: TextAlign.right, style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        content: const Text(
+          'سيتوقف نقل الطلبات الفوري إلى Rabia حتى تنشئ Webhook جديدًا. كود الربط RABIA-xxx لن يتأثر.',
+          textAlign: TextAlign.right,
+          style: TextStyle(fontFamily: 'Cairo'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('تأكيد الحذف', style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    setState(() {
+      _webhookCreating = true;
+      _webhookError = null;
+    });
+    try {
+      final headers = await _webhookAuthHeaders();
+      if (headers == null) throw Exception('auth');
+      final res = await http
+          .delete(Uri.parse('$kIntegrationsApiBase/webhooks/$id'), headers: headers)
+          .timeout(const Duration(seconds: 20));
+      if (!mounted) return;
+      if (res.statusCode == 200) {
+        setState(() {
+          _webhookActive = false;
+          _webhookId = null;
+          _webhookSecretOnce = null;
+          _webhookStatusLoaded = true;
+        });
+        _showFloatingAlert('🗑️ تم حذف الـWebhook — يمكنك إنشاء واحد جديد عند الحاجة.');
+      } else {
+        throw Exception('http_${res.statusCode}');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _webhookError = 'فشل حذف الـWebhook — أعد المحاولة.';
+      });
+    } finally {
+      if (mounted) setState(() => _webhookCreating = false);
+    }
+  }
+
+  Widget _buildRabiaWebhookCard() {
+    Widget body;
+    if (_webhookSecretOnce != null) {
+      final secret = _webhookSecretOnce!;
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.5.h),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xffe9ecef)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: SelectableText(
+                    secret,
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blueGrey[800],
+                      fontFamily: 'Cairo',
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'نسخ المفتاح',
+                  icon: const Icon(Icons.copy_rounded, color: Colors.blueGrey),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: secret));
+                    _showFloatingAlert('📋 تم نسخ مفتاح الـWebhook إلى الحافظة');
+                  },
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: 1.h),
+          Text(
+            '⚠️ انسخ هذا المفتاح الآن والصقه في صفحة تكامل Aksab داخل Rabia — لن يظهر مرة أخرى بعد الإخفاء.',
+            style: TextStyle(fontSize: 10.sp, color: Colors.red[700], fontFamily: 'Cairo', height: 1.4),
+          ),
+          SizedBox(height: 1.h),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () => setState(() => _webhookSecretOnce = null),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: primaryColor, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: EdgeInsets.symmetric(vertical: 1.2.h),
+              ),
+              child: const Text(
+                'إخفاء المفتاح',
+                style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+              ),
+            ),
+          ),
+        ],
+      );
+    } else if (_webhookCreating || (_webhookChecking && !_webhookStatusLoaded)) {
+      body = Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(color: primaryColor, strokeWidth: 2.5),
+          ),
+          SizedBox(width: 3.w),
+          Text(
+            _webhookCreating ? 'جارٍ التنفيذ...' : 'جارٍ التحقق من حالة الـWebhook...',
+            style: TextStyle(fontSize: 11.sp, color: Colors.grey[600], fontFamily: 'Cairo'),
+          ),
+        ],
+      );
+    } else if (_webhookActive) {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.check_circle, color: primaryColor),
+              SizedBox(width: 2.w),
+              Text(
+                'الـWebhook نشط — يستقبل Rabia حدثي order.created وorder.status_updated لحظيًا.',
+                style: TextStyle(fontSize: 10.sp, color: Colors.grey[700], fontFamily: 'Cairo', height: 1.4),
+              ),
+            ],
+          ),
+          if (_webhookError != null) ...[
+            SizedBox(height: 1.h),
+            Text(
+              _webhookError!,
+              style: TextStyle(fontSize: 10.sp, color: Colors.red[700], fontFamily: 'Cairo'),
+            ),
+          ],
+          SizedBox(height: 1.5.h),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: _webhookCreating ? null : _deleteRabiaWebhook,
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Colors.redAccent, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: EdgeInsets.symmetric(vertical: 1.2.h),
+              ),
+              child: const Text(
+                'حذف الـWebhook (لإعادة الإنشاء عند ضياع المفتاح)',
+                style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+              ),
+            ),
+          ),
+        ],
+      );
+    } else if (_webhookError != null) {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _webhookError!,
+            style: TextStyle(fontSize: 10.sp, color: Colors.red[700], fontFamily: 'Cairo', height: 1.4),
+          ),
+          SizedBox(height: 1.5.h),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: _webhookChecking ? null : _loadRabiaWebhookStatus,
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: primaryColor, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: EdgeInsets.symmetric(vertical: 1.2.h),
+              ),
+              child: const Text(
+                'إعادة المحاولة',
+                style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+              ),
+            ),
+          ),
+        ],
+      );
+    } else {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'أنشئ Webhook لنقل طلباتك وحالاتها إلى Rabia لحظيًا — يُعرض مفتاح whsec_ مرة واحدة فقط لتلصقه في Rabia.',
+            style: TextStyle(fontSize: 10.sp, color: Colors.grey[600], fontFamily: 'Cairo', height: 1.4),
+          ),
+          SizedBox(height: 1.5.h),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: _webhookCreating ? null : _createRabiaWebhook,
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: primaryColor, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: EdgeInsets.symmetric(vertical: 1.2.h),
+              ),
+              child: const Text(
+                'إنشاء Webhook طلبات Rabia',
+                style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      padding: EdgeInsets.all(4.w),
+      decoration: BoxDecoration(
+        color: const Color(0xfff8f9fa),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.grey.withOpacity(0.3), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.webhook, color: Colors.blueGrey, size: 20.sp),
+              SizedBox(width: 2.w),
+              Text(
+                'Webhook طلبات Rabia',
+                style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo', color: Colors.black87),
+              ),
+            ],
+          ),
+          SizedBox(height: 1.h),
+          body,
         ],
       ),
     );
