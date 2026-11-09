@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sizer/sizer.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:my_test_app/screens/seller/manage_gift_promos_screen.dart';
+import 'package:my_test_app/utils/gift_value.dart';
 
 class CreateGiftPromoScreen extends StatefulWidget {
   final String currentSellerId;
@@ -25,12 +26,21 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
   String _triggerType = 'min_order';
   String? _selectedTriggerOfferId;
   String? _selectedGiftOfferId;
+  int _selectedTriggerUnitIndex = 0;
+  int _selectedGiftUnitIndex = 0;
   List<Map<String, dynamic>> _availableOffers = [];
   bool _isLoading = false;
+
+  void _refreshQuote() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void initState() {
     super.initState();
+    _triggerQtyBaseController.addListener(_refreshQuote);
+    _giftQtyPerBaseController.addListener(_refreshQuote);
+    _minOrderValueController.addListener(_refreshQuote);
     _fetchSellerOffers();
   }
 
@@ -67,6 +77,14 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
           'availableStock': unit0['availableStock'] ?? 0,
           'offerPrice': unit0['price'] ?? 0,
           'unitName': unit0['unitName'] ?? 'الوحدة الرئيسية',
+          'units': units.map((u) {
+            final Map um = u as Map;
+            return {
+              'unitName': um['unitName'] ?? 'وحدة',
+              'price': um['price'] ?? 0,
+              'availableStock': um['availableStock'] ?? 0,
+            };
+          }).toList(),
         };
       }).toList();
 
@@ -93,7 +111,15 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
     try {
       final selectedGiftOffer = _availableOffers.firstWhere((o) => o['id'] == _selectedGiftOfferId);
       final int totalPromoQuantity = int.parse(_promoQuantityController.text);
-      final double giftPriceSnapshot = (selectedGiftOffer['offerPrice'] as num).toDouble();
+      final List giftUnitsMeta = selectedGiftOffer['units'] as List? ?? [];
+      final int giftUnitIdx = giftUnitsMeta.isEmpty ? 0 : _selectedGiftUnitIndex.clamp(0, giftUnitsMeta.length - 1);
+      final String giftUnitName = giftUnitsMeta.isEmpty
+          ? (selectedGiftOffer['unitName']?.toString() ?? 'وحدة')
+          : (((giftUnitsMeta[giftUnitIdx] as Map)['unitName'])?.toString() ?? 'وحدة');
+      final GiftValueQuote valueQuote = _currentQuote();
+      final double giftPriceSnapshot = ((giftUnitsMeta.isEmpty
+              ? selectedGiftOffer['offerPrice']
+              : (giftUnitsMeta[giftUnitIdx] as Map)['price']) as num?)?.toDouble() ?? 0.0;
 
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final giftRef = FirebaseFirestore.instance.collection('productOffers').doc(_selectedGiftOfferId);
@@ -102,7 +128,8 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
         if (!giftDoc.exists) throw "وثيقة الهدية غير موجودة";
         final data = giftDoc.data()!;
         List units = List.from(data['units'] ?? []);
-        Map unit0 = Map.from(units[0]);
+        final int giftUnitIdxTxn = units.isEmpty ? 0 : giftUnitIdx.clamp(0, units.length - 1);
+        Map unit0 = Map.from(units[giftUnitIdxTxn]);
         int currentAvailableStock = (unit0['availableStock'] ?? 0).toInt();
 
         if (currentAvailableStock < totalPromoQuantity) {
@@ -112,8 +139,11 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
         unit0['availableStock'] = currentAvailableStock - totalPromoQuantity;
         unit0['reservedForPromos'] = (unit0['reservedForPromos'] ?? 0) + totalPromoQuantity;
         unit0['updatedAt'] = DateTime.now().toIso8601String();
-        units[0] = unit0;
+        units[giftUnitIdxTxn] = unit0;
 
+        final double? triggerUnitPriceForDoc = _triggerType == 'specific_item'
+            ? _selectedUnitPrice(_selectedTriggerOfferId, _selectedTriggerUnitIndex)
+            : null;
         final promoRef = FirebaseFirestore.instance.collection('giftPromos').doc();
         Map<String, dynamic> triggerCondition = {};
         if (_triggerType == 'min_order') {
@@ -123,11 +153,17 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
           };
         } else {
           final triggerOffer = _availableOffers.firstWhere((o) => o['id'] == _selectedTriggerOfferId);
+          final List triggerUnitsMeta = triggerOffer['units'] as List? ?? [];
+          final int triggerUnitIdx = triggerUnitsMeta.isEmpty ? 0 : _selectedTriggerUnitIndex.clamp(0, triggerUnitsMeta.length - 1);
+          final double? triggerUnitPrice = triggerUnitsMeta.isEmpty ? null : (((triggerUnitsMeta[triggerUnitIdx] as Map)['price']) as num?)?.toDouble();
+          final String triggerUnitName = triggerUnitsMeta.isEmpty ? (triggerOffer['unitName']?.toString() ?? 'وحدة') : (((triggerUnitsMeta[triggerUnitIdx] as Map)['unitName'])?.toString() ?? 'وحدة');
           triggerCondition = {
             'type': 'specific_item',
             'offerId': _selectedTriggerOfferId,
             'productName': triggerOffer['productName'],
-            'unitName': triggerOffer['unitName'],
+            'unitName': triggerUnitName,
+            'unitIndex': triggerUnitIdx,
+            'triggerUnitPrice': triggerUnitPrice,
             'triggerQuantityBase': int.parse(_triggerQtyBaseController.text)
           };
         }
@@ -137,9 +173,16 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
           'promoName': _promoNameController.text,
           'giftOfferId': _selectedGiftOfferId,
           'giftProductName': selectedGiftOffer['productName'],
-          'giftUnitName': selectedGiftOffer['unitName'],
+          'giftUnitName': giftUnitName,
+          'giftUnitIndex': giftUnitIdx,
           'giftQuantityPerBase': int.parse(_giftQtyPerBaseController.text),
           'giftOfferPriceSnapshot': giftPriceSnapshot,
+          'giftUnitPrice': giftPriceSnapshot,
+          'triggerUnitPrice': triggerUnitPriceForDoc,
+          'requiredPurchaseValue': valueQuote.available ? valueQuote.requiredPurchaseValue : null,
+          'giftValue': valueQuote.available ? valueQuote.giftValue : null,
+          'giftValuePercentage': valueQuote.available ? valueQuote.percentage : null,
+          'valueStatus': valueQuote.available ? 'ok' : 'value_unavailable',
           'giftProductId': selectedGiftOffer['productId'],
           'giftProductImage': selectedGiftOffer['imageUrl'],
           'trigger': triggerCondition,
@@ -160,6 +203,8 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
       _promoQuantityController.clear();
       _selectedGiftOfferId = null;
       _selectedTriggerOfferId = null;
+      _selectedGiftUnitIndex = 0;
+      _selectedTriggerUnitIndex = 0;
       _fetchSellerOffers();
     } catch (e) {
       _showSnackBar(e.toString(), isError: true);
@@ -232,13 +277,15 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
                         _buildTextField(_minOrderValueController, "مبلغ الفاتورة الأدنى (ج.م)", Icons.payments, isNumber: true),
                       
                       if (_triggerType == 'specific_item') ...[
-                        _buildOfferPicker("اختر المنتج المطلوب شراؤه", (id) => setState(() => _selectedTriggerOfferId = id)),
+                        _buildOfferPicker("اختر المنتج المطلوب شراؤه", (id) => setState(() { _selectedTriggerOfferId = id; _selectedTriggerUnitIndex = 0; })),
+                        _buildUnitDropdown("وحدة الشرط المطلوبة", _unitsOf(_selectedTriggerOfferId), _selectedTriggerUnitIndex, (v) => setState(() => _selectedTriggerUnitIndex = v)),
                         _buildTextField(_triggerQtyBaseController, "الكمية المطلوبة من هذا المنتج", Icons.shopping_cart_checkout, isNumber: true),
                       ],
 
                       const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider(thickness: 1.2)),
                       _sectionLabel("🎁 تفاصيل الهدية"),
-                      _buildOfferPicker("اختر المنتج الذي سيُقدم كهدية", (id) => setState(() => _selectedGiftOfferId = id)),
+                      _buildOfferPicker("اختر المنتج الذي سيُقدم كهدية", (id) => setState(() { _selectedGiftOfferId = id; _selectedGiftUnitIndex = 0; })),
+                      _buildUnitDropdown("وحدة الهدية", _unitsOf(_selectedGiftOfferId), _selectedGiftUnitIndex, (v) => setState(() => _selectedGiftUnitIndex = v)),
                       
                       Row(
                         children: [
@@ -249,6 +296,8 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
                       ),
                       
                       SizedBox(height: 4.h),
+                      _buildValueSummary(),
+                      SizedBox(height: 2.h),
                       _buildSubmitButton(),
                       SizedBox(height: 1.h),
                     ],
@@ -332,6 +381,113 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
       onChanged: onChanged,
     ),
   );
+
+  List<Map<String, dynamic>> _unitsOf(String? offerId) {
+    if (offerId == null) return [];
+    try {
+      final offer = _availableOffers.firstWhere((o) => o['id'] == offerId);
+      final List raw = offer['units'] as List? ?? [];
+      return raw.map((u) {
+        final Map um = u as Map;
+        return {
+          'unitName': (um['unitName'])?.toString() ?? 'وحدة',
+          'availableStock': um['availableStock'] ?? 0,
+        };
+      }).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Widget _buildUnitDropdown(String label, List<Map<String, dynamic>> units, int value, Function(int) onChanged) => Padding(
+    padding: EdgeInsets.only(bottom: 2.h),
+    child: DropdownButtonFormField<int>(
+      isExpanded: true,
+      hint: Text(label, style: _cairoStyle.copyWith(fontSize: 13.sp, fontWeight: FontWeight.normal)),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: _cairoStyle.copyWith(fontSize: 12.sp),
+        prefixIcon: Icon(Icons.straighten_outlined, color: Colors.teal, size: 18.sp),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+        filled: true,
+        fillColor: Colors.grey[50],
+      ),
+      value: units.isEmpty ? null : value.clamp(0, units.length - 1),
+      items: units.asMap().entries.map((e) => DropdownMenuItem(
+        value: e.key,
+        child: Text("${e.value['unitName']} (المتاح: ${e.value['availableStock']})", style: _cairoStyle.copyWith(fontSize: 13.sp)),
+      )).toList(),
+      onChanged: (v) { if (v != null) onChanged(v); },
+      validator: (v) => units.isEmpty ? "اختر المنتج أولًا" : null,
+    ),
+  );
+
+  double? _selectedUnitPrice(String? offerId, int unitIndex) {
+    if (offerId == null) return null;
+    try {
+      final offer = _availableOffers.firstWhere((o) => o['id'] == offerId);
+      final List raw = offer['units'] as List? ?? [];
+      if (raw.isEmpty) {
+        return (offer['offerPrice'] as num?)?.toDouble();
+      }
+      final int idx = unitIndex.clamp(0, raw.length - 1);
+      return ((raw[idx] as Map)['price'] as num?)?.toDouble();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// الحاسبة الحية: قيمة المشتريات المطلوبة مقابل قيمة الهدية والنسبة.
+  /// تُحسب من أسعار الوحدات المختارة فعليًا — لا أرقام مخترعة.
+  GiftValueQuote _currentQuote() {
+    final giftPrice = _selectedUnitPrice(_selectedGiftOfferId, _selectedGiftUnitIndex);
+    final giftQty = int.tryParse(_giftQtyPerBaseController.text) ?? 0;
+    if (_triggerType == 'min_order') {
+      final threshold = double.tryParse(_minOrderValueController.text);
+      if (threshold == null || giftPrice == null || giftQty <= 0) {
+        return const GiftValueQuote.unavailable();
+      }
+      final gv = giftPrice * giftQty;
+      if (threshold <= 0) {
+        return gv <= 0
+            ? const GiftValueQuote.available(requiredPurchaseValue: 0, giftValue: 0, percentage: 0)
+            : const GiftValueQuote.unavailable();
+      }
+      return GiftValueQuote.available(
+        requiredPurchaseValue: threshold,
+        giftValue: gv,
+        percentage: gv / threshold * 100,
+      );
+    }
+    final triggerPrice = _selectedUnitPrice(_selectedTriggerOfferId, _selectedTriggerUnitIndex);
+    final triggerQty = int.tryParse(_triggerQtyBaseController.text) ?? 0;
+    return quoteSingleGiftValue(
+      triggerUnitPrice: triggerPrice,
+      triggerQty: triggerQty,
+      giftUnitPrice: giftPrice,
+      giftQty: giftQty,
+    );
+  }
+
+  Widget _buildValueSummary() {
+    final q = _currentQuote();
+    final String text = q.available
+        ? "قيمة المشتريات المطلوبة: ${q.requiredPurchaseValue!.toStringAsFixed(2)} ج\nقيمة الهدية التقديرية: ${q.giftValue!.toStringAsFixed(2)} ج\nنسبة الهدية: ${q.percentage!.toStringAsFixed(2)} %"
+        : "قيمة الهدية: غير متاحة — أكمل اختيار المنتج والوحدة والكميات والأسعار";
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(12.sp),
+      decoration: BoxDecoration(
+        color: q.available ? const Color(0xffe8f5e9) : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: q.available ? Colors.green : Colors.grey.shade400),
+      ),
+      child: Text(
+        text,
+        style: _cairoStyle.copyWith(fontSize: 12.sp, fontWeight: FontWeight.bold, color: Colors.black87),
+      ),
+    );
+  }
 
   Widget _buildOfferPicker(String label, Function(String?) onSelected) => Padding(
     padding: EdgeInsets.only(bottom: 2.h),

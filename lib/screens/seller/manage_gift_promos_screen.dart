@@ -184,7 +184,10 @@ class _ManageGiftPromosScreenState extends State<ManageGiftPromosScreen> {
 
   Future<void> _deletePromo(String docId, Map<String, dynamic> data) async {
     try {
-      final int remainingToRestore = (data['maxQuantity'] - data['usedQuantity']).toInt();
+      final int maxQ = (data['maxQuantity'] as num? ?? 0).toInt();
+      final int usedQ = (data['usedQuantity'] as num? ?? 0).toInt();
+      final int remainingToRestore = (maxQ - usedQ).clamp(0, maxQ);
+      final int giftUnitIdx = (data['giftUnitIndex'] as num? ?? 0).toInt();
       
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final giftRef = FirebaseFirestore.instance.collection('productOffers').doc(data['giftOfferId']);
@@ -192,11 +195,12 @@ class _ManageGiftPromosScreenState extends State<ManageGiftPromosScreen> {
 
         if (giftDoc.exists) {
           List units = List.from(giftDoc.data()!['units'] ?? []);
-          Map unit0 = Map.from(units[0]);
+          final int unitIdx = units.isEmpty ? 0 : giftUnitIdx.clamp(0, units.length - 1);
+          Map unit0 = Map.from(units[unitIdx]);
           
-          unit0['availableStock'] = (unit0['availableStock'] ?? 0) + remainingToRestore;
-          unit0['reservedForPromos'] = (unit0['reservedForPromos'] ?? 0) - data['maxQuantity'];
-          units[0] = unit0;
+          unit0['availableStock'] = (((unit0['availableStock'] as num?) ?? 0) + remainingToRestore);
+          unit0['reservedForPromos'] = (((unit0['reservedForPromos'] as num?) ?? 0) - remainingToRestore).clamp(0, 1 << 30);
+          units[unitIdx] = unit0;
           
           transaction.update(giftRef, {'units': units});
         }
@@ -208,10 +212,53 @@ class _ManageGiftPromosScreenState extends State<ManageGiftPromosScreen> {
     }
   }
 
+  /// الإيقاف يحرر الكمية غير المستخدمة إلى المتاح (قرار التصميم المعتمد)،
+  /// وإعادة التفعيل تعيد حجزها فقط إذا توفر مخزون كافٍ — وإلا تُرفض برسالة.
   Future<void> _toggleStatus(String id, bool isNowActive) async {
-    await FirebaseFirestore.instance.collection('giftPromos').doc(id).update({
-      'status': isNowActive ? 'active' : 'disabled'
-    });
+    try {
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final promoRef = FirebaseFirestore.instance.collection('giftPromos').doc(id);
+        final promoDoc = await transaction.get(promoRef);
+        if (!promoDoc.exists) throw "الحملة غير موجودة";
+        final pdata = promoDoc.data()!;
+        final int maxQ = (pdata['maxQuantity'] as num? ?? 0).toInt();
+        final int usedQ = (pdata['usedQuantity'] as num? ?? 0).toInt();
+        final int tRemaining = (maxQ - usedQ).clamp(0, maxQ);
+        final int tGiftUnitIdx = (pdata['giftUnitIndex'] as num? ?? 0).toInt();
+        Future<void> adjustStock(int delta) async {
+          if (tRemaining <= 0) return;
+          final giftRef = FirebaseFirestore.instance.collection('productOffers').doc(pdata['giftOfferId']);
+          final giftDoc = await transaction.get(giftRef);
+          if (!giftDoc.exists) throw "وثيقة الهدية غير موجودة";
+          List tunits = List.from(giftDoc.data()!['units'] ?? []);
+          final int uIdx = tunits.isEmpty ? 0 : tGiftUnitIdx.clamp(0, tunits.length - 1);
+          Map u = Map.from(tunits[uIdx]);
+          final int avail = (((u['availableStock'] as num?) ?? 0)).toInt();
+          if (delta < 0 && avail < tRemaining) {
+            throw "تعذر التفعيل: المتاح حالياً $avail والمطلوب حجزه $tRemaining";
+          }
+          u['availableStock'] = avail + delta * tRemaining;
+          u['reservedForPromos'] = ((((u['reservedForPromos'] as num?) ?? 0) - delta * tRemaining).clamp(0, 1 << 30));
+          tunits[uIdx] = u;
+          transaction.update(giftRef, {'units': tunits});
+        }
+        if (!isNowActive) {
+          await adjustStock(1);
+          transaction.update(promoRef, {'status': 'disabled'});
+        } else {
+          await adjustStock(-1);
+          transaction.update(promoRef, {'status': 'active'});
+        }
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(isNowActive ? "تم تفعيل العرض" : "تم إيقاف العرض وتحرير المخزون المتبقي")));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
+      }
+    }
   }
 
   Widget _buildEmptyState() {
