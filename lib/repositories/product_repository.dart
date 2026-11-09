@@ -6,11 +6,13 @@ import 'package:my_test_app/models/user_role.dart';
 import 'package:my_test_app/utils/offer_geo_filter.dart';
 
 class ProductRepository {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore;
+  ProductRepository({FirebaseFirestore? firestore})
+      : _firestore = firestore ?? FirebaseFirestore.instance;
 
   // --- جلب التصنيفات الرئيسية ---
   Future<List<CategoryModel>> fetchMainCategories() async {
-    final snapshot = await _firestore.collection('mainCategory').orderBy('order').get();
+    final snapshot = await _firestore.collection('mainCategory').where('status', isEqualTo: 'active').orderBy('order').get();
     return snapshot.docs.map((doc) {
       final data = doc.data();
       return CategoryModel(
@@ -25,7 +27,7 @@ class ProductRepository {
 
   // --- جلب التصنيفات الفرعية ---
   Future<List<CategoryModel>> fetchSubCategories(String? mainCatId) async {
-    Query<Map<String, dynamic>> query = _firestore.collection('subCategory');
+    Query<Map<String, dynamic>> query = _firestore.collection('subCategory').where('status', isEqualTo: 'active');
     if (mainCatId != null && mainCatId.isNotEmpty) {
       query = query.where('mainId', isEqualTo: mainCatId);
     }

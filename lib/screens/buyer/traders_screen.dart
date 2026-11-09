@@ -3,6 +3,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import 'package:my_test_app/providers/buyer_data_provider.dart';
+import 'package:my_test_app/services/buyer_area_resolver.dart';
+import 'package:my_test_app/utils/offer_geo_filter.dart' as geof;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -176,11 +180,46 @@ class _TradersScreenState extends State<TradersScreen> {
     return null;
   }
 
+  // مناطق المشتري بنفس مصدر صفحة المنتجات: GPS الجلسة أولاً ثم العنوان الثابت،
+  // مع fallback للموقع المحفوظ محلياً عند غياب الـ Provider.
+  Future<List<String>> _resolveBuyerAreas() async {
+    try {
+      final buyer = Provider.of<BuyerDataProvider>(context, listen: false);
+      final areas = await BuyerAreaResolver.resolveBuyerAreas(
+        lat: buyer.effectiveLat,
+        lng: buyer.effectiveLng,
+      );
+      if (areas.isNotEmpty) return areas;
+    } catch (_) {}
+    if (_userCoordinates == null) return const [];
+    final polygons = <String, List<geof.GeoPoint>>{};
+    _areaCoordinatesMap.forEach((name, coords) =>
+        polygons[name] = coords.map((c) => geof.GeoPoint(lat: c.lat, lng: c.lng)).toList());
+    return geof.resolveAreasForPoint(
+      geof.GeoPoint(lat: _userCoordinates!.lat, lng: _userCoordinates!.lng),
+      polygons,
+    );
+  }
+
   Future<void> _loadTraders() async {
     try {
       final snapshot = await _db.collection("sellers")
           .where("status", isEqualTo: "active").get();
       
+      // التجار الذين لديهم عرض ظاهر للمشتري (نفس قرار صفحة المنتجات).
+      // البطاقة تظهر فقط عند وجود عرض نشط واحد على الأقل ظاهر
+      // جغرافيًا للمشتري الحالي — لا يكفي نشاط حساب التاجر أو نطاقه.
+      final Set<String> sellersWithVisibleOffers = {};
+      bool offersCheckOk = false;
+      try {
+        final offersSnap = await _db.collection('productOffers').where('status', isEqualTo: 'active').get();
+        sellersWithVisibleOffers.addAll(geof.visibleOfferSellerIds(
+          offerDocs: offersSnap.docs.map((d) => d.data()),
+          buyerAreas: await _resolveBuyerAreas(),
+        ));
+        offersCheckOk = true;
+      } catch (e) { debugPrint("Offers visibility error: $e"); }
+
       List<DocumentSnapshot> sellersServingArea = [];
       bool isBuyerLocationKnown = (_userCoordinates != null);
 
@@ -188,6 +227,16 @@ class _TradersScreenState extends State<TradersScreen> {
         final data = doc.data();
         final List? deliveryAreas = data['deliveryAreas'] as List?;
 
+        // التاجر الذي تظهر عروضه في المنتجات يظهر هنا أيضاً أياً كان شرط المنطقة
+        // بلا عرض نشط ظاهر لهذا المشتري تُخفى البطاقة — إلا عند تعذر
+        // فحص العروض نفسه، فيُحافَظ على السلوك القديم بدل شاشة فارغة.
+        if (offersCheckOk && !sellersWithVisibleOffers.contains(doc.id)) {
+          continue;
+        }
+        if (sellersWithVisibleOffers.contains(doc.id)) {
+          sellersServingArea.add(doc);
+          continue;
+        }
         if (!isBuyerLocationKnown) {
           if (deliveryAreas == null || deliveryAreas.isEmpty) {
             sellersServingArea.add(doc);

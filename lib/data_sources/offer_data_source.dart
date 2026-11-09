@@ -4,7 +4,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:my_test_app/models/offer_model.dart';
 
 class OfferDataSource {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore;
+
+  OfferDataSource({FirebaseFirestore? firestore})
+      : _firestore = firestore ?? FirebaseFirestore.instance;
 
   // 💡 دالة جديدة لجلب بيانات المنتج لاستخراج الصورة واسم المنتج
   Future<Map<String, dynamic>?> _fetchProductDetails(String productId) async {

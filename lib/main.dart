@@ -237,7 +237,7 @@ class MyApp extends StatefulWidget {
   /// `app_config/version_control.min_version`: any installed build with a
   /// lower number is forced to update, so this constant must move with
   /// every release or the new build would force-update itself.
-  static const int currentBuildNumber = 31;
+  static const int currentBuildNumber = 33;
   @override
   State<MyApp> createState() => _MyAppState();
 }
@@ -250,8 +250,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Keep in sync with pubspec.yaml version (1.1.1+31).
-    AnalyticsService.configure(appVersion: '1.1.1+31');
+    // Keep in sync with pubspec.yaml version (1.1.2+33).
+    AnalyticsService.configure(appVersion: '1.1.2+33');
     unawaited(AnalyticsService.logAppOpen());
   }
   @override

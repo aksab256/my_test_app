@@ -230,7 +230,9 @@ class _OffersDataFetcherState extends State<OffersDataFetcher> {
 
     // 🎯 بوابة أهلية موحدة: نفس قواعد مسار عروض المنتجات (Global يظهر،
     // المقيد خارج نطاق المشتري يُخفى) — دون منطق جغرافي جديد هنا.
-    return filterOfferDocs(loaded, buyerAreas, OfferListContext.productOffers);
+    // شرط النشاط: أي عرض حالته ليست `active` مستبعد (المخفي لا يظهر).
+    final activeOnly = loaded.where(isOfferActive).toList();
+    return filterOfferDocs(activeOnly, buyerAreas, OfferListContext.productOffers);
   }
 
   /// حل مناطق المشتري من الموقع الفعّال لمرة واحدة لكل فتح للشاشة.

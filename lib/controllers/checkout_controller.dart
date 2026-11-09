@@ -161,10 +161,19 @@ class CheckoutController {
               for (final item in items) {
                 if (item['isGift'] == true) continue;
                 List<String> freshZones = const [];
+                String? freshStatus;
                 try {
                   final offerSnap = await db.collection('productOffers').doc((item['offerId'] ?? '').toString()).get();
-                  if (offerSnap.exists) freshZones = readOfferZones(offerSnap.data() ?? {});
+                  if (offerSnap.exists) {
+                    final Map<String, dynamic> freshData = offerSnap.data() ?? {};
+                    freshZones = readOfferZones(freshData);
+                    freshStatus = freshData['status']?.toString();
+                  }
                 } catch (_) {}
+                if (offerBlockedReason({'status': freshStatus}) != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${item['name'] ?? 'صنف'} لم يعد متاحًا (تم إيقاف العرض).')));
+                  return false;
+                }
                 if (!isOfferVisibleForBuyer(offerData: {'deliveryZones': freshZones}, buyerAreas: orderBuyerAreas, context: OfferListContext.productOffers)) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${item['name'] ?? 'صنف'} غير قابل للتوصيل لمنطقتك.'), backgroundColor: kErrorColor));
                   return false;

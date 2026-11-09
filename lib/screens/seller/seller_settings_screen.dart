@@ -13,6 +13,7 @@ import 'package:sizer/sizer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:my_test_app/utils/seller_link_code_state.dart';
 import 'package:my_test_app/utils/rabia_webhook_setup.dart';
+import 'package:my_test_app/utils/whatsapp_consent_state.dart';
 
 // 🎯 الألوان والثوابت المعتمدة
 const Color primaryColor = Color(0xff28a745);
@@ -45,6 +46,12 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
   String? _webhookId;
   String? _webhookSecretOnce; // يُعرض مرة واحدة فقط ثم يُمسح من الذاكرة ولا يُعاد عرضه.
   String? _webhookError;
+
+  // 🔔 إشعارات الطلبات عبر واتساب — مسودة محلية + حقيقة الخادم.
+  // لا تُعرض كـ«مفعّلة» إلا بعد حفظ موثوق في sellers/{id} (isWhatsappActive).
+  final _whatsappNumberController = TextEditingController();
+  bool _whatsappOptInDraft = false;
+  bool _whatsappSaving = false;
 
   Map<String, dynamic> sellerDataCache = {};
   List<Map<String, dynamic>> subUsersList = [];
@@ -87,6 +94,8 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
         _merchantNameController.text = sellerDataCache['merchantName'] ?? '';
         _minOrderTotalController.text = (sellerDataCache['minOrderTotal'] ?? 0.0).toString();
         _deliveryFeeController.text = (sellerDataCache['deliveryFee'] ?? 0.0).toString();
+        _whatsappNumberController.text = (sellerDataCache['whatsappNumber'] is String) ? sellerDataCache['whatsappNumber'] as String : '';
+        _whatsappOptInDraft = sellerDataCache['whatsappOptIn'] == true;
         
         // جلب قيمة مدة التوصيل بأمان
         if (sellerDataCache.containsKey('deliveryDuration')) {
@@ -161,6 +170,32 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
       _showFloatingAlert("❌ فشل التحديث: تأكد من الاتصال بالإنترنت", isError: true);
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _saveWhatsappPrefs() async {
+    final String? normalized = normalizeWhatsappNumber(_whatsappNumberController.text);
+    if (_whatsappOptInDraft && normalized == null) {
+      _showFloatingAlert('⚠️ أدخل رقم واتساب صحيحًا مع كود الدولة أولًا', isError: true);
+      return;
+    }
+    if (_whatsappSaving) return;
+    setState(() => _whatsappSaving = true);
+    try {
+      final Map<String, Object?> updates = <String, Object?>{
+        'whatsappNumber': normalized ?? _whatsappNumberController.text.trim(),
+        'whatsappOptIn': _whatsappOptInDraft,
+      };
+      if (_whatsappOptInDraft) {
+        updates['whatsappOptInAt'] = FieldValue.serverTimestamp();
+      }
+      await _firestore.collection('sellers').doc(widget.currentSellerId).update(updates);
+      await _loadSellerData();
+      _showFloatingAlert(_whatsappOptInDraft ? '✅ تم تفعيل إشعارات الطلبات عبر واتساب' : '✅ تم إيقاف إشعارات الطلبات عبر واتساب');
+    } catch (e) {
+      _showFloatingAlert('❌ فشل حفظ تفضيلات واتساب', isError: true);
+    } finally {
+      if (mounted) setState(() => _whatsappSaving = false);
     }
   }
 
@@ -372,6 +407,8 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
 
                     // 🔔 كارت Webhook طلبات Rabia (إضافة مستقلة — لا تمس كود الربط RABIA-xxx).
                     _buildRabiaWebhookCard(),
+                    SizedBox(height: 2.5.h),
+                    _buildWhatsappNotificationsCard(),
                     SizedBox(height: 3.h),
 
                     _buildSectionTitle("بيانات العمل"),
@@ -989,6 +1026,137 @@ class _SellerSettingsScreenState extends State<SellerSettingsScreen> {
           ),
           SizedBox(height: 1.h),
           body,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWhatsappNotificationsCard() {
+    final bool serverActive = isWhatsappActive(sellerDataCache);
+    final Object? consentAt = sellerDataCache['whatsappOptInAt'];
+    String consentLabel = 'لم يتم التفعيل بعد';
+    if (consentAt != null) {
+      try {
+        DateTime? dt;
+        if (consentAt is Timestamp) {
+          dt = consentAt.toDate();
+        }
+        if (dt != null) {
+          final DateTime local = dt.toLocal();
+          consentLabel = 'تاريخ الموافقة: ${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
+        }
+      } catch (_) {}
+    }
+    final bool hasUnsavedChanges = (_whatsappOptInDraft != (sellerDataCache['whatsappOptIn'] == true)) ||
+        (_whatsappNumberController.text.trim() != ((sellerDataCache['whatsappNumber'] is String) ? (sellerDataCache['whatsappNumber'] as String) : ''));
+    return Container(
+      padding: EdgeInsets.all(4.w),
+      decoration: BoxDecoration(
+        color: const Color(0xfff0fdf4),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: primaryColor, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.notifications_active_outlined, color: primaryColor, size: 20.sp),
+              SizedBox(width: 2.w),
+              Text(
+                'إشعارات الطلبات عبر واتساب',
+                style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo', color: Colors.black87),
+              ),
+            ],
+          ),
+          SizedBox(height: 1.h),
+          Text(
+            'فعّل استقبال إشعارات الطلبات الجديدة من أكسب عبر واتساب، حتى يصلك تنبيه فور وصول طلب جديد إلى متجرك.',
+            style: TextStyle(fontSize: 10.sp, color: Colors.grey[700], fontFamily: 'Cairo', height: 1.4),
+          ),
+          SizedBox(height: 1.5.h),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 3.w, vertical: 1.h),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: primaryColor.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: serverActive ? primaryColor : Colors.grey,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                SizedBox(width: 2.w),
+                Expanded(
+                  child: Text(
+                    serverActive ? 'الحالة: مفعّلة' : 'الحالة: غير مفعّلة',
+                    style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo', color: serverActive ? primaryColor : Colors.grey[700]),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (serverActive) ...[
+            SizedBox(height: 1.h),
+            Text(consentLabel, style: TextStyle(fontSize: 10.sp, color: Colors.grey[600], fontFamily: 'Cairo')),
+          ],
+          SizedBox(height: 1.5.h),
+          _buildModernField('رقم واتساب مع كود الدولة (مثال: +2010...)', _whatsappNumberController, Icons.phone_android),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  'استقبال إشعارات الطلبات الجديدة',
+                  style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+                ),
+              ),
+              Switch(
+                value: _whatsappOptInDraft,
+                activeThumbColor: primaryColor,
+                onChanged: (bool v) => setState(() => _whatsappOptInDraft = v),
+              ),
+            ],
+          ),
+          Text(
+            'أوافق على استقبال إشعارات الطلبات الجديدة المتعلقة بمتجري من أكسب عبر واتساب على الرقم المسجل. يمكنني إيقاف هذه الإشعارات في أي وقت.',
+            style: TextStyle(fontSize: 10.sp, color: Colors.grey[700], fontFamily: 'Cairo', height: 1.4),
+          ),
+          SizedBox(height: 1.h),
+          Text(
+            'الرسائل مقتصرة على إشعارات الطلبات، وليست رسائل تسويقية.',
+            style: TextStyle(fontSize: 10.sp, color: Colors.grey[600], fontFamily: 'Cairo', height: 1.4),
+          ),
+          if (hasUnsavedChanges) ...[
+            SizedBox(height: 1.h),
+            Text(
+              'لديك تغييرات غير محفوظة — اضغط حفظ لاعتمادها.',
+              style: TextStyle(fontSize: 10.sp, color: Colors.orange[800], fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+            ),
+          ],
+          SizedBox(height: 1.5.h),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _whatsappSaving ? null : _saveWhatsappPrefs,
+              icon: const Icon(Icons.save_outlined, color: primaryColor),
+              label: Text(
+                _whatsappSaving ? 'جارٍ الحفظ...' : 'حفظ تفضيلات واتساب',
+                style: const TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: primaryColor, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: EdgeInsets.symmetric(vertical: 1.2.h),
+              ),
+            ),
+          ),
         ],
       ),
     );

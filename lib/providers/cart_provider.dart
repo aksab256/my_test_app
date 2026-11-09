@@ -260,6 +260,7 @@ class CartProvider with ChangeNotifier {
     int? actualAvailableStock;
     double currentPrice = 0.0;
     List<String> offerZones = const [];
+    String? offerStatus;
 
     try {
       // إذا كان مستهلك، ابحث مباشرة في marketOffer أولاً (أسرع)
@@ -293,6 +294,7 @@ class CartProvider with ChangeNotifier {
         final data = offerDoc.data()!;
         productMinQty = (data['minOrder'] as num?)?.toInt() ?? 1;
         offerZones = readOfferZones(data);
+        offerStatus = data['status']?.toString();
         productMaxQty = (data['maxOrder'] as num?)?.toInt();
         if (unitIndex != -1 && data['units'] is List && unitIndex < (data['units'] as List).length) {
           final unitData = data['units'][unitIndex] as Map<String, dynamic>?;
@@ -306,7 +308,7 @@ class CartProvider with ChangeNotifier {
       actualAvailableStock = 0;
     }
 
-    return {'minQty': productMinQty, 'maxQty': productMaxQty, 'stock': actualAvailableStock, 'currentPrice': currentPrice, 'deliveryZones': offerZones};
+    return {'minQty': productMinQty, 'maxQty': productMaxQty, 'stock': actualAvailableStock, 'currentPrice': currentPrice, 'deliveryZones': offerZones, 'status': offerStatus};
   }
 
   Future<void> _saveCartToLocal(Map<String, SellerOrderData> currentOrders) async {
@@ -421,6 +423,10 @@ class CartProvider with ChangeNotifier {
 
     if (userRole == 'buyer' && buyerAreas != null) {
       final fresh = await _getProductOfferDetails(offerId, unitIndex, userRole: userRole);
+      final String? blocked = offerBlockedReason({'status': fresh['status']});
+      if (blocked != null) {
+        throw Exception(blocked);
+      }
       final zones = (fresh['deliveryZones'] as List?)?.whereType<String>().toList() ?? const [];
       if (!isOfferVisibleForBuyer(offerData: {'deliveryZones': zones}, buyerAreas: buyerAreas, context: OfferListContext.productOffers)) {
         throw Exception('هذا العرض غير متاح لمنطقتك');

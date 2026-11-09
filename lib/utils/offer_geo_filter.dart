@@ -171,6 +171,46 @@ bool isOfferVisibleForBuyer({
   return zones.any(buyerAreas.contains);
 }
 
+/// هل العرض نشط للمشتري؟ الغائب/الفارغ يُعامل كنشط (توافق رجعي مع
+/// العروض القديمة التي لا تحمل الحقل)؛ أي قيمة غير `active` تعني مخفيًا.
+/// لا تُستخدم في سياق البائع — البائع يرى كل عروضه ويديرها.
+bool isOfferActive(Map<String, dynamic> offerData) {
+  final dynamic raw = offerData['status'];
+  if (raw == null) return true;
+  final String s = raw.toString().trim().toLowerCase();
+  return s.isEmpty || s == 'active';
+}
+
+/// سبب رفض طلب هذا العرض، أو null عندما يجوز طلبه. تُستخدم عند
+/// الإضافة للسلة وعند إتمام الدفع لرفض العرض الذي أصبح غير نشط.
+String? offerBlockedReason(Map<String, dynamic> offerData) {
+  return isOfferActive(offerData) ? null : 'هذا العرض لم يعد متاحًا';
+}
+
+/// معرفات التجار الذين لديهم عرض واحد ظاهر على الأقل للمشتري
+/// (نفس قرار الظهور في صفحة المنتجات — سياق productOffers — مع
+/// شرط النشاط). تُستخدم في شاشة التجار حتى يظهر التاجر فقط عندما
+/// يكون لديه عرض نشط ظاهر جغرافيًا للمشتري الحالي.
+Set<String> visibleOfferSellerIds({
+  required Iterable<Map<String, dynamic>> offerDocs,
+  required List<String> buyerAreas,
+}) {
+  final ids = <String>{};
+  for (final data in offerDocs) {
+    final sellerId = data['sellerId']?.toString();
+    if (sellerId == null || sellerId.isEmpty || ids.contains(sellerId)) continue;
+    if (!isOfferActive(data)) continue;
+    if (isOfferVisibleForBuyer(
+      offerData: data,
+      buyerAreas: buyerAreas,
+      context: OfferListContext.productOffers,
+    )) {
+      ids.add(sellerId);
+    }
+  }
+  return ids;
+}
+
 /// فلترة قائمة مستندات عروض خام حسب السياق، مع الحفاظ على الترتيب الأصلي.
 /// مناطق المشتري تُحل مرة واحدة خارجها وتُمرَّر جاهزة — لا منطق جغرافي
 /// إضافي هنا، القرار بالكامل في [isOfferVisibleForBuyer].
