@@ -204,14 +204,55 @@ class CartProvider with ChangeNotifier {
     }
   }
 
+  static List<Map<String, dynamic>> _promoTriggerLines(Map<String, dynamic> promo) {
+    final raw = promo['triggers'];
+    if (raw is List && raw.isNotEmpty) {
+      final lines = raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      if (lines.isNotEmpty) return lines;
+    }
+    final trigger = promo['trigger'] as Map<String, dynamic>?;
+    if (trigger == null) return [];
+    return [trigger];
+  }
+
+  int _matchMultiTrigger(Map<String, dynamic> promo, List<Map<String, dynamic>> lines, SellerOrderData sellerData) {
+    final giftPerBase = promo['giftQuantityPerBase'] as int? ?? 1;
+    if (giftPerBase <= 0) return 0;
+    int times = 1 << 30;
+    for (final line in lines) {
+      if (line['type'] != 'specific_item') return 0;
+      final offerId = line['offerId'] as String?;
+      final unitName = line['unitName'] as String?;
+      final base = (line['triggerQuantityBase'] as num? ?? 0).toInt();
+      if (offerId == null || unitName == null || base <= 0) return 0;
+      int purchased = 0;
+      for (final item in sellerData.items) {
+        if (!item.isGift && item.offerId == offerId && item.unit == unitName) {
+          purchased += item.quantity;
+        }
+      }
+      final t = purchased ~/ base;
+      if (t <= 0) return 0;
+      if (t < times) times = t;
+    }
+    if (times == 1 << 30) return 0;
+    final maxAllowedGifts = promo['maxQuantity'] as int? ?? 9999;
+    return min(times * giftPerBase, maxAllowedGifts);
+  }
+
   List<CartItem> _calculateGifts(SellerOrderData sellerData, List<Map<String, dynamic>> promos) {
     final giftedItems = <CartItem>[];
     for (var promo in promos) {
-      final trigger = promo['trigger'] as Map<String, dynamic>?;
-      if (trigger == null) continue;
+      final List<Map<String, dynamic>> lines = _promoTriggerLines(promo);
+      if (lines.isEmpty) continue;
+      final trigger = lines.first;
+      // lines is guaranteed non-empty; see _promoTriggerLines.
 
       int giftedQuantity = 0;
-      if (trigger['type'] == "min_order") {
+      if (lines.length > 1) {
+        giftedQuantity = _matchMultiTrigger(promo, lines, sellerData);
+      } else if (trigger['type'] == "min_order") {
+
         final requiredValue = (trigger['value'] as num? ?? 0.0).toDouble();
         if (sellerData.total >= requiredValue) {
           giftedQuantity = promo['giftQuantityPerBase'] as int? ?? 1;

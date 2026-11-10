@@ -115,12 +115,22 @@ class GiftsTab extends StatelessWidget {
         subtitle: Text(
           gift['trigger']?['type'] == 'min_order'
               ? "عند طلب بـ ${gift['trigger']['value']} ج أو أكثر"
-              : "هدية عند شراء منتجات محددة",
+              : _conditionText(gift),
           style: GoogleFonts.cairo(fontSize: 13.sp, color: Colors.grey[600]),
         ),
         trailing: Icon(Icons.arrow_forward_ios, size: 14.sp, color: Colors.grey),
       ),
     );
+  }
+
+  String _conditionText(Map<String, dynamic> gift) {
+    final raw = gift['triggers'];
+    if (raw is List && raw.length > 1) {
+      final parts = raw.whereType<Map>().map((e) =>
+          "${e['triggerQuantityBase'] ?? '?'} ${e['unitName'] ?? ''} من ${e['productName'] ?? 'منتج'}".trim());
+      return "هدية عند شراء: ${parts.join(' + ')}";
+    }
+    return "هدية عند شراء منتجات محددة";
   }
 
   Widget _buildNoGiftsView() {

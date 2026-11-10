@@ -25,6 +25,13 @@ class GiftPromoModel {
   // يتم تخزينه كخريطة Map في Firestore (e.g., {type: 'min_order', value: 100.0})
   final Map<String, dynamic> trigger;
 
+  // Phase 2 (AND): optional multi-product conditions. When non-empty, the
+  // backend evaluates every line (offerId + unitName) and all must match.
+  // Legacy readers use [trigger] (first line); both are written for new promos.
+  final List<Map<String, dynamic>> triggers;
+  // 'all' is the only supported mode; any other value is refused by backend.
+  final String? matchMode;
+
   final DateTime expiryDate;
   final int maxQuantity; // الحد الأقصى الكلي للهدايا المتاحة (الرصيد المحجوز)
   final int usedQuantity;
@@ -48,6 +55,8 @@ class GiftPromoModel {
     this.giftValuePercentage,
     this.valueStatus,
     required this.trigger,
+    this.triggers = const [],
+    this.matchMode,
     required this.expiryDate,
     required this.maxQuantity,
     required this.usedQuantity,
@@ -90,6 +99,12 @@ class GiftPromoModel {
       trigger: (data['trigger'] is Map<String, dynamic>)
           ? data['trigger'] as Map<String, dynamic>
           : {},
+      triggers: (data['triggers'] as List?)
+              ?.whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList() ??
+          [],
+      matchMode: data['matchMode'] as String?,
 
       // 🆕 استخدام الدالة المساعدة لقراءة التاريخ بشكل آمن
       expiryDate: _parseDate(data['expiryDate']),
@@ -123,7 +138,9 @@ class GiftPromoModel {
       if (giftValue != null) 'giftValue': giftValue,
       if (giftValuePercentage != null) 'giftValuePercentage': giftValuePercentage,
       if (valueStatus != null) 'valueStatus': valueStatus,
-      'trigger': trigger, // يتم تمرير الخريطة كما هي
+      'trigger': trigger,
+      if (triggers.isNotEmpty) 'triggers': triggers,
+      if (matchMode != null) 'matchMode': matchMode,
       'maxQuantity': maxQuantity,
       'usedQuantity': usedQuantity,
       'status': status,

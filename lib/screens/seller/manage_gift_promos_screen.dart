@@ -66,6 +66,13 @@ class _ManageGiftPromosScreenState extends State<ManageGiftPromosScreen> {
       triggerDesc = "طلب بقيمة ${trigger['value']} ج.م";
     } else {
       triggerDesc = "شراء ${trigger['triggerQuantityBase']} من ${trigger['productName'] ?? 'منتج محدد'}";
+      final List multi = (data['triggers'] is List) ? List.from(data['triggers']) : [];
+      if (multi.length > 1) {
+        triggerDesc = multi.map((e) {
+          final m = (e as Map?) ?? {};
+          return "شراء ${m['triggerQuantityBase'] ?? '?'} ${m['unitName'] ?? ''} من ${m['productName'] ?? 'منتج'}";
+        }).join(' + ');
+      }
     }
 
     return Card(

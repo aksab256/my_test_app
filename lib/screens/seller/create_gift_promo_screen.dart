@@ -6,6 +6,17 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:my_test_app/screens/seller/manage_gift_promos_screen.dart';
 import 'package:my_test_app/utils/gift_value.dart';
 
+/// Phase 2 (AND): one extra required-purchase line selected by the seller.
+/// The base line keeps using the screen's single-line fields; extras are
+/// appended (max 4 extras = 5 lines total, matching the agreed design cap).
+class _ExtraTriggerLine {
+  String? offerId;
+  int unitIndex = 0;
+  final TextEditingController qty;
+
+  _ExtraTriggerLine() : qty = TextEditingController();
+}
+
 class CreateGiftPromoScreen extends StatefulWidget {
   final String currentSellerId;
   const CreateGiftPromoScreen({super.key, required this.currentSellerId});
@@ -22,6 +33,7 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
   final _giftQtyPerBaseController = TextEditingController(text: "1");
   final _promoQuantityController = TextEditingController();
   final _expiryDateController = TextEditingController();
+  final List<_ExtraTriggerLine> _extraLines = [];
 
   String _triggerType = 'min_order';
   String? _selectedTriggerOfferId;
@@ -30,6 +42,80 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
   int _selectedGiftUnitIndex = 0;
   List<Map<String, dynamic>> _availableOffers = [];
   bool _isLoading = false;
+
+  void _addExtraLine() {
+    if (_extraLines.length >= 4) {
+      _showSnackBar("الحد الأقصى 5 منتجات في العرض الواحد", isError: true);
+      return;
+    }
+    final line = _ExtraTriggerLine();
+    line.qty.addListener(_refreshQuote);
+    setState(() => _extraLines.add(line));
+  }
+
+  void _removeExtraLine(int index) {
+    final removed = _extraLines.removeAt(index);
+    removed.qty.dispose();
+    _refreshQuote();
+  }
+
+  bool get _isMultiLine =>
+      _triggerType == 'specific_item' && _extraLines.isNotEmpty;
+
+  bool _validateExtraLines() {
+    if (_extraLines.isEmpty) return true;
+    if (_triggerType != 'specific_item') return true;
+    if (_extraLines.length > 4) {
+      _showSnackBar("الحد الأقصى 5 منتجات في العرض الواحد", isError: true);
+      return false;
+    }
+    if (_selectedTriggerOfferId == null) {
+      _showSnackBar("اختر المنتج الأساسي أولًا", isError: true);
+      return false;
+    }
+    final seen = <String>{};
+    seen.add('$_selectedTriggerOfferId||$_selectedTriggerUnitIndex');
+    for (var i = 0; i < _extraLines.length; i++) {
+      final line = _extraLines[i];
+      final qty = int.tryParse(line.qty.text) ?? 0;
+      if (line.offerId == null || qty <= 0) {
+        _showSnackBar("أكمل المنتج الإضافي رقم ${i + 1}: المنتج والكمية", isError: true);
+        return false;
+      }
+      if (!seen.add('${line.offerId}||${line.unitIndex}')) {
+        _showSnackBar("المنتج الإضافي رقم ${i + 1} مكرر — اختر منتجًا أو وحدة مختلفة", isError: true);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Map<String, dynamic> _lineMap(String? offerId, int unitIndex, int qtyBase) {
+    final offer = _availableOffers.firstWhere((o) => o['id'] == offerId);
+    final List unitsMeta = offer['units'] as List? ?? [];
+    final int idx = unitsMeta.isEmpty ? 0 : unitIndex.clamp(0, unitsMeta.length - 1);
+    final double? unitPrice = unitsMeta.isEmpty ? ((offer['offerPrice']) as num?)?.toDouble() : (((unitsMeta[idx] as Map)['price']) as num?)?.toDouble();
+    final String unitName = unitsMeta.isEmpty ? ((offer['unitName'])?.toString() ?? 'وحدة') : ((((unitsMeta[idx] as Map)['unitName'])?.toString()) ?? 'وحدة');
+    return {
+      'type': 'specific_item',
+      'offerId': offerId,
+      'productName': offer['productName'],
+      'unitName': unitName,
+      'unitIndex': idx,
+      'triggerUnitPrice': unitPrice,
+      'triggerQuantityBase': qtyBase,
+    };
+  }
+
+  List<Map<String, dynamic>> _triggerLinesForDoc() {
+    final lines = <Map<String, dynamic>>[
+      _lineMap(_selectedTriggerOfferId, _selectedTriggerUnitIndex, int.parse(_triggerQtyBaseController.text)),
+    ];
+    for (final line in _extraLines) {
+      lines.add(_lineMap(line.offerId, line.unitIndex, int.parse(line.qty.text)));
+    }
+    return lines;
+  }
 
   void _refreshQuote() {
     if (mounted) setState(() {});
@@ -52,6 +138,9 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
     _giftQtyPerBaseController.dispose();
     _promoQuantityController.dispose();
     _expiryDateController.dispose();
+    for (final line in _extraLines) {
+      line.qty.dispose();
+    }
     super.dispose();
   }
 
@@ -107,6 +196,15 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
       _showSnackBar("الرجاء استكمال البيانات واختيار الهدية", isError: true);
       return;
     }
+    if (!_validateExtraLines()) {
+      return;
+    }
+    /* Phase 2: the duplicated legacy guard below is intentionally disabled —
+       _validateExtraLines() above is the single validation point.
+      _showSnackBar("الرجاء استكمال البيانات واختيار الهدية", isError: true);
+      return;
+    }
+    */
     setState(() => _isLoading = true);
     try {
       final selectedGiftOffer = _availableOffers.firstWhere((o) => o['id'] == _selectedGiftOfferId);
@@ -186,6 +284,8 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
           'giftProductId': selectedGiftOffer['productId'],
           'giftProductImage': selectedGiftOffer['imageUrl'],
           'trigger': triggerCondition,
+          if (_isMultiLine) 'triggers': _triggerLinesForDoc(),
+          if (_isMultiLine) 'matchMode': 'all',
           'expiryDate': DateTime.parse(_expiryDateController.text).toIso8601String(),
           'maxQuantity': totalPromoQuantity,
           'usedQuantity': 0,
@@ -203,6 +303,10 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
       _promoQuantityController.clear();
       _selectedGiftOfferId = null;
       _selectedTriggerOfferId = null;
+      for (final line in _extraLines) {
+        line.qty.dispose();
+      }
+      _extraLines.clear();
       _selectedGiftUnitIndex = 0;
       _selectedTriggerUnitIndex = 0;
       _fetchSellerOffers();
@@ -283,6 +387,58 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
                       ],
 
                       const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider(thickness: 1.2)),
+                      if (_triggerType == 'specific_item') ...[
+                        if (_extraLines.isEmpty)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: OutlinedButton.icon(
+                              onPressed: _addExtraLine,
+                              icon: Icon(Icons.add_circle_outline, size: 18.sp),
+                              label: Text("اشتراط منتج آخر معه (AND)", style: _cairoStyle.copyWith(fontSize: 13.sp)),
+                            ),
+                          ),
+                        for (var i = 0; i < _extraLines.length; i++)
+                          Container(
+                            margin: EdgeInsets.only(bottom: 2.h),
+                            padding: EdgeInsets.all(10.sp),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(15),
+                              border: Border.all(color: Colors.green.shade200),
+                              color: Colors.green.shade50,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text("منتج إضافي ${i + 2} (يجب شراؤه أيضًا)",
+                                        style: _cairoStyle.copyWith(fontSize: 13.sp, color: Colors.green[900])),
+                                    IconButton(
+                                      icon: Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20.sp),
+                                      onPressed: () => _removeExtraLine(i),
+                                    ),
+                                  ],
+                                ),
+                                _buildOfferPicker("اختر المنتج الإضافي", (id) => setState(() {
+                                      _extraLines[i].offerId = id;
+                                      _extraLines[i].unitIndex = 0;
+                                    })),
+                                _buildUnitDropdown("وحدة المنتج الإضافي", _unitsOf(_extraLines[i].offerId), _extraLines[i].unitIndex, (v) => setState(() => _extraLines[i].unitIndex = v)),
+                                _buildTextField(_extraLines[i].qty, "الكمية المطلوبة من المنتج الإضافي", Icons.shopping_cart_checkout, isNumber: true),
+                              ],
+                            ),
+                          ),
+                        if (_extraLines.isNotEmpty && _extraLines.length < 4)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: OutlinedButton.icon(
+                              onPressed: _addExtraLine,
+                              icon: Icon(Icons.add_circle_outline, size: 18.sp),
+                              label: Text("إضافة منتج آخر (AND)", style: _cairoStyle.copyWith(fontSize: 13.sp)),
+                            ),
+                          ),
+                      ],
                       _sectionLabel("🎁 تفاصيل الهدية"),
                       _buildOfferPicker("اختر المنتج الذي سيُقدم كهدية", (id) => setState(() { _selectedGiftOfferId = id; _selectedGiftUnitIndex = 0; })),
                       _buildUnitDropdown("وحدة الهدية", _unitsOf(_selectedGiftOfferId), _selectedGiftUnitIndex, (v) => setState(() => _selectedGiftUnitIndex = v)),
@@ -461,6 +617,20 @@ class _CreateGiftPromoScreenState extends State<CreateGiftPromoScreen> {
     }
     final triggerPrice = _selectedUnitPrice(_selectedTriggerOfferId, _selectedTriggerUnitIndex);
     final triggerQty = int.tryParse(_triggerQtyBaseController.text) ?? 0;
+    if (_extraLines.isNotEmpty) {
+      return quoteAndGiftValue(
+        triggerLines: [
+          (unitPrice: triggerPrice, qty: triggerQty),
+          for (final line in _extraLines)
+            (
+              unitPrice: _selectedUnitPrice(line.offerId, line.unitIndex),
+              qty: int.tryParse(line.qty.text) ?? 0
+            ),
+        ],
+        giftUnitPrice: giftPrice,
+        giftQty: giftQty,
+      );
+    }
     return quoteSingleGiftValue(
       triggerUnitPrice: triggerPrice,
       triggerQty: triggerQty,

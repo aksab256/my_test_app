@@ -72,6 +72,57 @@ void main() {
       expect(model.trigger, isEmpty);
     });
 
+    test('phase 2 multi-line triggers round-trip with matchMode', () {
+      final model = GiftPromoModel.fromMap(
+        {
+          ...testMap(expiryDate: '2026-12-31T00:00:00.000'),
+          'trigger': {
+            'type': 'specific_item',
+            'offerId': 'oA',
+            'unitName': 'كرتونة',
+            'triggerQuantityBase': 5,
+          },
+          'triggers': [
+            {
+              'type': 'specific_item',
+              'offerId': 'oA',
+              'unitName': 'كرتونة',
+              'triggerQuantityBase': 5,
+            },
+            {
+              'type': 'specific_item',
+              'offerId': 'oB',
+              'unitName': 'كرتونة',
+              'triggerQuantityBase': 3,
+            },
+          ],
+          'matchMode': 'all',
+        },
+        'doc-multi',
+      );
+
+      expect(model.triggers.length, 2);
+      expect(model.triggers[1]['offerId'], 'oB');
+      expect(model.matchMode, 'all');
+      final json = model.toJson();
+      expect((json['triggers'] as List).length, 2);
+      expect(json['matchMode'], 'all');
+      expect((json['trigger'] as Map)['offerId'], 'oA');
+    });
+
+    test('legacy promos default to empty triggers and null matchMode', () {
+      final model = GiftPromoModel.fromMap(
+        testMap(expiryDate: '2026-12-31T00:00:00.000'),
+        'doc-legacy',
+      );
+
+      expect(model.triggers, isEmpty);
+      expect(model.matchMode, isNull);
+      final json = model.toJson();
+      expect(json.containsKey('triggers'), isFalse);
+      expect(json.containsKey('matchMode'), isFalse);
+    });
+
     test('missing fields yield safe defaults', () {
       final model = GiftPromoModel.fromMap({}, 'doc-5');
 

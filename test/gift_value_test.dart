@@ -77,6 +77,42 @@ void main() {
       expect(q.percentage, closeTo(0.967, 0.001));
     });
 
+    test('zero quantity on any line is unavailable', () {
+      final q = quoteAndGiftValue(
+        triggerLines: [(unitPrice: 500.0, qty: 5), (unitPrice: 200.0, qty: 0)],
+        giftUnitPrice: 30,
+        giftQty: 1,
+      );
+      expect(q.available, isFalse);
+    });
+
+    test('missing gift price is unavailable, never zero', () {
+      final q = quoteAndGiftValue(
+        triggerLines: [(unitPrice: 500.0, qty: 5)],
+        giftUnitPrice: null,
+        giftQty: 1,
+      );
+      expect(q.available, isFalse);
+      expect(q.giftValue, isNull);
+    });
+
+    test('line order does not change the quote', () {
+      final a = quoteAndGiftValue(
+        triggerLines: [(unitPrice: 500.0, qty: 5), (unitPrice: 200.0, qty: 3)],
+        giftUnitPrice: 30,
+        giftQty: 2,
+      );
+      final b = quoteAndGiftValue(
+        triggerLines: [(unitPrice: 200.0, qty: 3), (unitPrice: 500.0, qty: 5)],
+        giftUnitPrice: 30,
+        giftQty: 2,
+      );
+      expect(a.available, isTrue);
+      expect(a.requiredPurchaseValue, b.requiredPurchaseValue);
+      expect(a.giftValue, b.giftValue);
+      expect(a.percentage, b.percentage);
+    });
+
     test('one missing line price poisons the whole quote', () {
       final q = quoteAndGiftValue(
         triggerLines: [(unitPrice: 500.0, qty: 5), (unitPrice: null, qty: 3)],
