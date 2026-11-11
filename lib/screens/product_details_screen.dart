@@ -7,6 +7,7 @@ import 'package:my_test_app/theme/app_theme.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/utils/offer_data_model.dart';
+import 'package:my_test_app/utils/price_display.dart';
 import 'package:my_test_app/utils/offer_geo_filter.dart';
 import 'package:my_test_app/utils/seller_geo.dart';
 import 'package:my_test_app/services/analytics_service.dart';
@@ -230,6 +231,29 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
+  Widget _buildOfferPrice(OfferModel offer) {
+    final discount = discountPriceOrNull(offer.offerPrice);
+    if (discount == null) {
+      return Text('${offer.price} ج.م / ${offer.unitName}',
+        style: GoogleFonts.cairo(color: AppTheme.primaryGreen, fontWeight: FontWeight.w600, fontSize: 13.sp));
+    }
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 6,
+      children: [
+        Text('${offer.price} ج.م',
+          style: GoogleFonts.cairo(color: Colors.grey, fontSize: 12.sp,
+            decoration: TextDecoration.lineThrough)),
+        Text('$discount ج.م',
+          style: GoogleFonts.cairo(color: Colors.red.shade700,
+            fontWeight: FontWeight.bold, fontSize: 15.sp)),
+        Text('/ ${offer.unitName}',
+          style: GoogleFonts.cairo(color: AppTheme.primaryGreen,
+            fontWeight: FontWeight.w600, fontSize: 12.sp)),
+      ],
+    );
+  }
+
   Widget _buildOfferItem(OfferModel offer) {
     return Card(
       elevation: 2,
@@ -238,8 +262,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         title: Text(offer.sellerName, style: GoogleFonts.cairo(fontWeight: FontWeight.bold)),
-        subtitle: Text('${offer.price} ج.م / ${offer.unitName}',
-          style: GoogleFonts.cairo(color: AppTheme.primaryGreen, fontWeight: FontWeight.w600, fontSize: 13.sp)),
+        subtitle: _buildOfferPrice(offer),
+
         trailing: ElevatedButton(
           onPressed: offer.disabled ? null : () => _addToCart(offer),
           style: ElevatedButton.styleFrom(

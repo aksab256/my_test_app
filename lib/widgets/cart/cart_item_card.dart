@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:my_test_app/providers/cart_provider.dart';
+import 'package:my_test_app/utils/price_display.dart';
 import 'package:provider/provider.dart';
 
 // 🎨 تعريف الألوان بناءً على CSS
@@ -143,12 +144,7 @@ class CartItemCard extends StatelessWidget {
           ),
           const Divider(height: 15),
 
-          _buildDetailRow(
-            icon: Icons.money,
-            label: 'السعر:',
-            value: item.isGift ? 'مجاني' : '${item.price.toStringAsFixed(2)} جنيه',
-            color: textColor,
-          ),
+          _buildPriceRow(textColor),
 
           const SizedBox(height: 10),
           // 💡 الإجمالي (Total) - تم تغيير لون الخط
@@ -198,6 +194,56 @@ class CartItemCard extends StatelessWidget {
     );
   }
 
+  // السعر: هدية = "مجاني"، خصم = أساسي مشطوب + سعر الخصم، غير ذلك = السعر.
+  Widget _buildPriceRow(Color textColor) {
+    if (item.isGift) {
+      return _buildDetailRow(
+        icon: Icons.money,
+        label: 'السعر:',
+        value: 'مجاني',
+        color: textColor,
+      );
+    }
+    if (hasCartDiscount(price: item.price, originalPrice: item.originalPrice)) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4.0),
+        child: Row(
+          children: [
+            const Icon(Icons.money, color: kPrimaryColor, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              'السعر: ',
+              style: TextStyle(color: textColor, fontSize: 15),
+            ),
+            Text(
+              '${item.originalPrice!.toStringAsFixed(2)} جنيه',
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 14,
+                decoration: TextDecoration.lineThrough,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '${item.price.toStringAsFixed(2)} جنيه',
+              style: const TextStyle(
+                color: Color(0xFFC62828),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return _buildDetailRow(
+      icon: Icons.money,
+      label: 'السعر:',
+      value: '${item.price.toStringAsFixed(2)} جنيه',
+      color: textColor,
+    );
+  }
+
   Widget _buildDetailRow({required IconData icon, required String label, required String value, required Color color}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -220,7 +266,7 @@ class CartItemCard extends StatelessWidget {
 
   Widget _buildControls(BuildContext context) {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
-    
+
     // 🛑 الدور الثابت لهذه البطاقة هو 'consumer'
     const String userRole = 'consumer';
 
@@ -285,4 +331,3 @@ class CartItemCard extends StatelessWidget {
     );
   }
 }
-
