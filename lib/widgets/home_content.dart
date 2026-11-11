@@ -2,6 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
+import 'package:provider/provider.dart';
+import 'package:my_test_app/providers/buyer_data_provider.dart';
+import 'package:my_test_app/services/gift_eligibility_service.dart';
+import 'package:my_test_app/widgets/gift_promo_card.dart';
 import 'package:my_test_app/screens/buyer/trader_offers_screen.dart'; 
 
 final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -19,6 +23,8 @@ class _HomeContentState extends State<HomeContent> {
   List<Map<String, dynamic>> _recentProducts = [];
 
   bool _isLoading = true;
+  List<EnrichedGift> _earnGifts = [];
+  String _earnLocKey = '';
   int _currentBannerIndex = 0;
   late PageController _bannerController;
   Timer? _bannerTimer;
@@ -35,6 +41,44 @@ class _HomeContentState extends State<HomeContent> {
     _bannerTimer?.cancel();
     _bannerController.dispose();
     super.dispose();
+  }
+
+   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    try {
+      final buyer = Provider.of<BuyerDataProvider>(context);
+      final key = GiftEligibilityService.cacheKeyFor(
+        buyer.effectiveLat,
+        buyer.effectiveLng,
+        const [],
+      );
+      if (_earnLocKey != key) {
+        _earnLocKey = key;
+        _loadEarnGifts();
+      }
+    } catch (_) {
+      if (_earnLocKey.isEmpty) {
+        _earnLocKey = 'unknown';
+        _loadEarnGifts();
+      }
+    }
+  }
+
+  // قسم «اكسب هدايا»: خفيف وغير حاجب — أفضل عرضين مؤهلين فقط.
+  Future<void> _loadEarnGifts() async {
+    try {
+      final buyer = Provider.of<BuyerDataProvider>(context, listen: false);
+      final gifts = await GiftEligibilityService.fetchTopEligible(
+        db: _db,
+        lat: buyer.effectiveLat,
+        lng: buyer.effectiveLng,
+        needed: 2,
+      );
+      if (mounted) setState(() => _earnGifts = gifts);
+    } catch (_) {
+      if (mounted) setState(() => _earnGifts = []);
+    }
   }
 
   // --- جلب البيانات (تظل كما هي لضمان استقرار الباك إند) ---
@@ -149,6 +193,9 @@ class _HomeContentState extends State<HomeContent> {
             itemBuilder: (context, index) => _buildCategoryCard(_categories[index]),
           ),
 
+          // 3.5 قسم «اكسب هدايا» — يظهر فقط عند وجود عروض مؤهلة.
+          _buildEarnGiftsSection(),
+
           // 4. المنتجات المضافة حديثاً
           if (_recentProducts.isNotEmpty) ...[
              const Padding(
@@ -161,6 +208,73 @@ class _HomeContentState extends State<HomeContent> {
           const SizedBox(height: 30),
         ],
       ),
+    );
+  }
+
+  Widget _buildEarnGiftsSection() {
+    // البوابة: بلا عروض مؤهلة = لا قسم ولا مساحة فارغة.
+    if (_earnGifts.isEmpty) return const SizedBox.shrink();
+    final visible = _earnGifts.take(2).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(right: 15, top: 20),
+          child: Row(
+            children: [
+              Icon(Icons.card_giftcard, color: Color(0xFFE65100)),
+              SizedBox(width: 6),
+              Text('اكسب هدايا',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'Tajawal')),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth > 600) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final g in visible)
+                      Expanded(child: GiftPromoCard(gift: g)),
+                  ],
+                ),
+              );
+            }
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Column(
+                children: [
+                  for (final g in visible) GiftPromoCard(gift: g),
+                ],
+              ),
+            );
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.pushNamed(
+                context,
+                '/wallet',
+                arguments: const {'tab': 1},
+              ),
+              icon: const Icon(Icons.redeem_outlined),
+              label: const Text('عرض المزيد',
+                  style: TextStyle(
+                      fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

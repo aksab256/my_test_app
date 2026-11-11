@@ -1,156 +1,180 @@
-import 'dart:convert';
-import 'package:flutter/material.dart';
+// lib/screens/buyer/gifts_tab.dart
+//
+// تبويب «هدايا المنطقة»: أهلية موحدة عبر GiftEligibilityService
+// (BuyerAreaResolver + effectiveLat/effectiveLng + صلاحية + متبقٍ +
+// تغطية التاجر + صلاحية عروض المحفز والهدية).
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:sizer/sizer.dart';
 import 'package:provider/provider.dart';
-// ✅ التأكد من المسار الصحيح للـ Provider
-import '../../providers/buyer_data_provider.dart';
+import 'package:sizer/sizer.dart';
+import 'package:my_test_app/providers/buyer_data_provider.dart';
+import 'package:my_test_app/services/gift_eligibility_service.dart';
+import 'package:my_test_app/widgets/gift_promo_card.dart';
 
 class GiftsTab extends StatelessWidget {
   const GiftsTab({super.key});
 
-  // دالة فحص المضلع الجغرافي
-  bool _checkIfInZone(double lat, double lng, List<dynamic> polygonPoints) {
-    bool isInside = false;
-    var j = polygonPoints.length - 1;
-    for (var i = 0; i < polygonPoints.length; i++) {
-      if (((polygonPoints[i]['lng'] > lng) != (polygonPoints[j]['lng'] > lng)) &&
-          (lat < (polygonPoints[j]['lat'] - polygonPoints[i]['lat']) * (lng - polygonPoints[i]['lng']) / (polygonPoints[j]['lng'] - polygonPoints[i]['lng']) + polygonPoints[i]['lat'])) {
-        isInside = !isInside;
-      }
-      j = i;
+  @override
+  Widget build(BuildContext context) {
+    return const _GiftsTabBody();
+  }
+}
+
+class _GiftsTabBody extends StatefulWidget {
+  const _GiftsTabBody();
+
+  @override
+  State<_GiftsTabBody> createState() => _GiftsTabBodyState();
+}
+
+class _GiftsTabBodyState extends State<_GiftsTabBody> {
+  bool _loading = true;
+  bool _loadingMore = false;
+  String? _error;
+  List<EnrichedGift> _gifts = [];
+  int _queryLimit = 40;
+  bool _hasMore = false;
+  String _locKey = '';
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final buyer = Provider.of<BuyerDataProvider>(context);
+    final key = GiftEligibilityService.cacheKeyFor(
+      buyer.effectiveLat,
+      buyer.effectiveLng,
+      const [],
+    );
+    // إعادة التحميل عند تغير الموقع الفعلي فقط.
+    if (_locKey.isEmpty) {
+      _locKey = key;
+      _load();
+    } else if (_locKey != key) {
+      _locKey = key;
+      GiftEligibilityService.clearCache();
+      _load();
     }
-    return isInside;
   }
 
-  Future<List<Map<String, dynamic>>> _fetchGiftsWithLocationFilter(BuildContext context) async {
-    final buyerProv = Provider.of<BuyerDataProvider>(context, listen: false);
-    
-    // ✅ التصحيح الحقيقي بناءً على ملف BuyerDataProvider الأصلي:
-    final userLat = buyerProv.userLat ?? 0.0;
-    final userLng = buyerProv.userLng ?? 0.0;
-
-    final giftsSnap = await FirebaseFirestore.instance
-        .collection('giftPromos')
-        .where('status', isEqualTo: 'active')
-        .get();
-
-    List<Map<String, dynamic>> finalGifts = [];
-    Set<String> uniqueSellerIds = giftsSnap.docs.map((d) => d['sellerId'] as String).toSet();
-    Map<String, List<dynamic>> sellerZones = {};
-
-    for (var sId in uniqueSellerIds) {
-      final sDoc = await FirebaseFirestore.instance.collection('sellers').doc(sId).get();
-      if (sDoc.exists && sDoc.data()?['deliveryAreas'] != null) {
-        try {
-          sellerZones[sId] = jsonDecode(sDoc.data()!['deliveryAreas']);
-        } catch (e) {
-          debugPrint("JSON Decode Error for seller $sId: $e");
-        }
-      }
+  Future<void> _load({bool more = false}) async {
+    if (more) {
+      setState(() => _loadingMore = true);
+    } else {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
     }
-
-    for (var doc in giftsSnap.docs) {
-      final data = doc.data();
-      final sId = data['sellerId'];
-
-      if (sellerZones.containsKey(sId)) {
-        bool isServiced = false;
-        for (var zone in sellerZones[sId]!) {
-          if (_checkIfInZone(userLat, userLng, zone['coords'])) {
-            isServiced = true;
-            break;
-          }
-        }
-        if (isServiced) {
-          finalGifts.add(data);
-        }
-      }
+    try {
+      final buyer = Provider.of<BuyerDataProvider>(context, listen: false);
+      final gifts = await GiftEligibilityService.fetchAllEligible(
+        db: FirebaseFirestore.instance,
+        lat: buyer.effectiveLat,
+        lng: buyer.effectiveLng,
+        queryLimit: more ? _queryLimit + 40 : _queryLimit,
+        useCache: !more,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (more) _queryLimit += 40;
+        _gifts = gifts;
+        // حد تصاعدي: إن امتلأ الحد فقد يوجد المزيد.
+        _hasMore = gifts.length >= _queryLimit;
+        _loading = false;
+        _loadingMore = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'تعذر تحميل الهدايا. تحقق من الاتصال وحاول مجدداً.';
+        _loading = false;
+        _loadingMore = false;
+      });
     }
-    return finalGifts;
+  }
+
+  Future<void> _refresh() async {
+    GiftEligibilityService.clearCache();
+    await _load();
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _fetchGiftsWithLocationFilter(context),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        
-        final gifts = snapshot.data ?? [];
-        if (gifts.isEmpty) {
-          return _buildNoGiftsView();
-        }
-
-        return ListView.builder(
-          padding: EdgeInsets.symmetric(horizontal: 10.sp, vertical: 15.sp),
-          itemCount: gifts.length,
-          itemBuilder: (context, index) => _buildGiftTile(gifts[index]),
-        );
-      },
-    );
-  }
-
-  Widget _buildGiftTile(Map<String, dynamic> gift) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 12.sp),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 4))],
-      ),
-      child: ListTile(
-        contentPadding: EdgeInsets.all(12.sp),
-        leading: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: (gift['giftProductImage'] != null && gift['giftProductImage'].isNotEmpty)
-              ? Image.network(gift['giftProductImage'], width: 60.sp, height: 60.sp, fit: BoxFit.cover)
-              : Icon(Icons.redeem, size: 40.sp, color: Colors.orange),
-        ),
-        title: Text(gift['giftProductName'] ?? 'هدية مجانية',
-            style: GoogleFonts.cairo(fontSize: 16.sp, fontWeight: FontWeight.bold)),
-        subtitle: Text(
-          gift['trigger']?['type'] == 'min_order'
-              ? "عند طلب بـ ${gift['trigger']['value']} ج أو أكثر"
-              : _conditionText(gift),
-          style: GoogleFonts.cairo(fontSize: 13.sp, color: Colors.grey[600]),
-        ),
-        trailing: Icon(Icons.arrow_forward_ios, size: 14.sp, color: Colors.grey),
-      ),
-    );
-  }
-
-  String _conditionText(Map<String, dynamic> gift) {
-    final raw = gift['triggers'];
-    if (raw is List && raw.length > 1) {
-      final parts = raw.whereType<Map>().map((e) =>
-          "${e['triggerQuantityBase'] ?? '?'} ${e['unitName'] ?? ''} من ${e['productName'] ?? 'منتج'}".trim());
-      return "هدية عند شراء: ${parts.join(' + ')}";
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
     }
-    return "هدية عند شراء منتجات محددة";
-  }
-
-  Widget _buildNoGiftsView() {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(30.sp),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: EdgeInsets.all(30.sp),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.cloud_off, size: 60.sp, color: Colors.grey[400]),
+              SizedBox(height: 12.sp),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style:
+                    GoogleFonts.cairo(fontSize: 15.sp, color: Colors.grey[700]),
+              ),
+              SizedBox(height: 12.sp),
+              ElevatedButton(
+                onPressed: _refresh,
+                child: Text('إعادة المحاولة', style: GoogleFonts.cairo()),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_gifts.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            Icon(Icons.location_searching, size: 60.sp, color: Colors.grey[300]),
+            SizedBox(height: 12.h),
+            Icon(Icons.location_searching,
+                size: 60.sp, color: Colors.grey[300]),
             SizedBox(height: 15.sp),
-            Text(
-              "لا توجد هدايا متاحة لمنطقتك حالياً.",
-              textAlign: TextAlign.center,
-              style: GoogleFonts.cairo(fontSize: 15.sp, color: Colors.grey[600]),
+            Center(
+              child: Text(
+                'لا توجد هدايا متاحة لمنطقتك حالياً.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.cairo(
+                    fontSize: 15.sp, color: Colors.grey[600]),
+              ),
             ),
           ],
         ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView.builder(
+        padding: EdgeInsets.symmetric(horizontal: 10.sp, vertical: 15.sp),
+        itemCount: _gifts.length + (_hasMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index >= _gifts.length) {
+            return Padding(
+              padding: EdgeInsets.symmetric(vertical: 10.sp),
+              child: Center(
+                child: _loadingMore
+                    ? const CircularProgressIndicator()
+                    : OutlinedButton(
+                        onPressed: () => _load(more: true),
+                        child: Text('عرض المزيد',
+                            style: GoogleFonts.cairo()),
+                      ),
+              ),
+            );
+          }
+          return GiftPromoCard(gift: _gifts[index]);
+        },
       ),
     );
   }
 }
-

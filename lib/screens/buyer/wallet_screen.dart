@@ -15,7 +15,8 @@ import 'package:my_test_app/screens/buyer/my_orders_screen.dart';
 
 class WalletScreen extends StatefulWidget {
   static const String routeName = '/wallet';
-  const WalletScreen({super.key});
+  final int initialTabIndex;
+  const WalletScreen({super.key, this.initialTabIndex = 0});
 
   @override
   State<WalletScreen> createState() => _WalletScreenState();
@@ -39,6 +40,7 @@ class _WalletScreenState extends State<WalletScreen> {
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 2,
+      initialIndex: widget.initialTabIndex.clamp(0, 1),
       child: PopScope(
         canPop: false,
         onPopInvokedWithResult: (didPop, result) {

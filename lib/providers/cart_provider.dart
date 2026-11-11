@@ -113,6 +113,8 @@ class CartProvider with ChangeNotifier {
 
   final Map<String, Map<String, dynamic>> _sellerRulesCache = {};
   final Map<String, List<Map<String, dynamic>>> _giftPromosCache = {};
+  final Map<String, DateTime> _giftPromosCacheAt = {};
+  static const Duration _giftPromosCacheTtl = Duration(seconds: 90);
 
   double _totalProductsAmount = 0.0;
   double _totalDeliveryFees = 0.0;
@@ -188,7 +190,12 @@ class CartProvider with ChangeNotifier {
   }
 
   Future<List<Map<String, dynamic>>> _getGiftPromosBySellerId(String sellerId) async {
-    if (_giftPromosCache.containsKey(sellerId)) return _giftPromosCache[sellerId]!;
+    final cachedAt = _giftPromosCacheAt[sellerId];
+    if (_giftPromosCache.containsKey(sellerId) &&
+        cachedAt != null &&
+        DateTime.now().difference(cachedAt) < _giftPromosCacheTtl) {
+      return _giftPromosCache[sellerId]!;
+    }
     try {
       final querySnapshot = await _db
           .collection('giftPromos')
@@ -197,6 +204,7 @@ class CartProvider with ChangeNotifier {
           .get();
       final promos = querySnapshot.docs.map((doc) => doc.data()).toList();
       _giftPromosCache[sellerId] = promos;
+      _giftPromosCacheAt[sellerId] = DateTime.now();
       return promos;
     } catch (e) {
       print('Firestore Error fetching giftPromos: $e');
@@ -213,6 +221,39 @@ class CartProvider with ChangeNotifier {
     final trigger = promo['trigger'] as Map<String, dynamic>?;
     if (trigger == null) return [];
     return [trigger];
+  }
+
+  /// المتبقي من ميزانية العرض لمعاينة السلة.
+  /// غياب maxQuantity = سلوك legacy غير محدود (يتوافق مع عروض min_order
+  /// القديمة)؛ أما usedQuantity فيُحترم دائماً عند وجود حد.
+  static int _promoRemainingForCart(Map<String, dynamic> promo) {
+    if (!promo.containsKey('maxQuantity')) return 1 << 30;
+    final max = (promo['maxQuantity'] as num?)?.toInt() ?? 0;
+    if (max <= 0) return 0;
+    final used = (promo['usedQuantity'] as num?)?.toInt() ?? 0;
+    final remaining = max - used;
+    return remaining < 0 ? 0 : remaining;
+  }
+
+  static DateTime? _promoExpiryForCart(Map<String, dynamic> promo) {
+    final v = promo['expiryDate'];
+    if (v == null) return null;
+    if (v is DateTime) return v;
+    if (v is Timestamp) return v.toDate();
+    if (v is String && v.trim().isNotEmpty) return DateTime.tryParse(v.trim());
+    return null;
+  }
+
+  /// معاينة السلة تسقط العرض الميت (الكاش قد يحمل عرضاً مات بعد الجلب).
+  /// انتهاء غير قابل للتحليل = ميت (fail-closed)؛ غياب expiryDate = حي
+  /// متى بقيت ميزانية — نفس قاعدة خدمة الأهلية.
+  static bool _promoLiveForCart(Map<String, dynamic> promo) {
+    if ((promo['status']?.toString() ?? '') != 'active') return false;
+    if (promo.containsKey('expiryDate') && promo['expiryDate'] != null) {
+      final exp = _promoExpiryForCart(promo);
+      if (exp == null || !exp.isAfter(DateTime.now())) return false;
+    }
+    return _promoRemainingForCart(promo) > 0;
   }
 
   int _matchMultiTrigger(Map<String, dynamic> promo, List<Map<String, dynamic>> lines, SellerOrderData sellerData) {
@@ -236,13 +277,15 @@ class CartProvider with ChangeNotifier {
       if (t < times) times = t;
     }
     if (times == 1 << 30) return 0;
-    final maxAllowedGifts = promo['maxQuantity'] as int? ?? 9999;
+    final maxAllowedGifts = _promoRemainingForCart(promo);
     return min(times * giftPerBase, maxAllowedGifts);
   }
 
   List<CartItem> _calculateGifts(SellerOrderData sellerData, List<Map<String, dynamic>> promos) {
     final giftedItems = <CartItem>[];
     for (var promo in promos) {
+      // إعادة التحقق لحظة الحساب: كاش البائع قد يحمل عرضاً مات بعد الجلب.
+      if (!_promoLiveForCart(promo)) continue;
       final List<Map<String, dynamic>> lines = _promoTriggerLines(promo);
       if (lines.isEmpty) continue;
       final trigger = lines.first;
@@ -255,7 +298,7 @@ class CartProvider with ChangeNotifier {
 
         final requiredValue = (trigger['value'] as num? ?? 0.0).toDouble();
         if (sellerData.total >= requiredValue) {
-          giftedQuantity = promo['giftQuantityPerBase'] as int? ?? 1;
+          giftedQuantity = min(promo['giftQuantityPerBase'] as int? ?? 1, _promoRemainingForCart(promo));
         }
       } else if (trigger['type'] == "specific_item") {
         final triggerOfferId = trigger['offerId'] as String?;
@@ -269,7 +312,7 @@ class CartProvider with ChangeNotifier {
         if (itemMatch.offerId.isNotEmpty) {
           final timesTriggered = (itemMatch.quantity / requiredQtyBase).floor();
           final totalGiftedQty = timesTriggered * giftPerBase;
-          final maxAllowedGifts = promo['maxQuantity'] as int? ?? 9999;
+          final maxAllowedGifts = _promoRemainingForCart(promo);
           giftedQuantity = min(totalGiftedQty, maxAllowedGifts);
         }
       }

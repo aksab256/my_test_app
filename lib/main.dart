@@ -415,7 +415,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                     : UserRole.buyer),
             '/register': (context) => const NewClientScreen(),
             '/traders': (context) => const TradersScreen(),
-            '/wallet': (context) => const WalletScreen(),
+            '/wallet': (context) {
+              final args =
+                  ModalRoute.of(context)?.settings.arguments;
+              var tab = 0;
+              if (args is Map && args['tab'] is int) {
+                tab = (args['tab'] as int).clamp(0, 1);
+              }
+              return WalletScreen(initialTabIndex: tab);
+            },
             '/myDetails': (context) => const MyDetailsScreen(),
             '/about': (context) => const AboutScreen(),
             '/post-reg': (context) => const PostRegistrationMessageScreen(),

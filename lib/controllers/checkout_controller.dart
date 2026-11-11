@@ -55,6 +55,109 @@ class CheckoutController {
         return null;
     }
 
+    /// يعيد التحقق من سطور الهدايا لحظة إتمام الطلب (B2B فقط).
+    /// يُسقط السطر الميت بدليل قاطع (عرض مقروء: غير active/منتهٍ/مستنفد،
+    /// أو شروطه غير مستوفاة من الأصناف المدفوعة)، ويُبقي ما لا دليل عليه —
+    /// الخادم (createOrdersWithPromos) هو المرجع النهائي. يُرجع عدد المسقط.
+    /// يعمل in-place على قوائم الأصناف المشتركة مع processedCheckoutOrders.
+    static Future<int> _dropStaleGiftItems(
+      FirebaseFirestore db,
+      Map<String, Map<String, dynamic>> groupedItems,
+    ) async {
+        var dropped = 0;
+        final now = DateTime.now();
+        for (final entry in groupedItems.entries) {
+            final raw = entry.value['items'];
+            if (raw is! List) continue;
+            final items = raw.whereType<Map<String, dynamic>>().toList();
+            if (!items.any((i) => i['isGift'] == true)) continue;
+            List<Map<String, dynamic>> promos;
+            try {
+                final snap = await db
+                    .collection('giftPromos')
+                    .where('sellerId', isEqualTo: entry.key)
+                    .where('status', isEqualTo: 'active')
+                    .get();
+                promos = snap.docs.map((d) => d.data()).toList();
+            } catch (_) {
+                continue; // بلا دليل: الخادم يقرر.
+            }
+            if (promos.isEmpty) continue;
+            final paid = items.where((i) => i['isGift'] != true).toList();
+            final paidTotal = paid.fold<double>(
+                0.0,
+                (s, i) => s +
+                    ((i['price'] as num?)?.toDouble() ?? 0.0) *
+                        ((i['quantity'] as num?)?.toInt() ?? 0));
+            bool drop(Map<String, dynamic> item) {
+                final giftOfferId =
+                    (item['offerId'] ?? item['productId'] ?? '').toString();
+                if (giftOfferId.isEmpty) return false;
+                Map<String, dynamic>? promo;
+                for (final p in promos) {
+                    if ((p['giftOfferId']?.toString() ?? '') == giftOfferId) {
+                        promo = p;
+                        break;
+                    }
+                }
+                if (promo == null) return false; // عرض مجهول: الخادم يقرر.
+                if ((promo['status']?.toString() ?? '') != 'active') return true;
+                final expRaw = promo['expiryDate'];
+                if (expRaw != null) {
+                    DateTime? exp;
+                    if (expRaw is DateTime) {
+                        exp = expRaw;
+                    } else if (expRaw is Timestamp) {
+                        exp = expRaw.toDate();
+                    } else if (expRaw is String && expRaw.trim().isNotEmpty) {
+                        exp = DateTime.tryParse(expRaw.trim());
+                    }
+                    if (exp == null || !exp.isAfter(now)) return true;
+                }
+                if (promo.containsKey('maxQuantity')) {
+                    final max = (promo['maxQuantity'] as num?)?.toInt() ?? 0;
+                    final used = (promo['usedQuantity'] as num?)?.toInt() ?? 0;
+                    if (max <= 0 || max - used <= 0) return true;
+                }
+                final rawT = promo['triggers'];
+                final List<Map<String, dynamic>> lines = (rawT is List && rawT.isNotEmpty)
+                    ? rawT
+                        .whereType<Map>()
+                        .map((e) => Map<String, dynamic>.from(e))
+                        .toList()
+                    : (promo['trigger'] is Map
+                        ? [Map<String, dynamic>.from(promo['trigger'] as Map)]
+                        : const <Map<String, dynamic>>[]);
+                if (lines.isEmpty) return false;
+                if (lines.length == 1 && lines.first['type'] == 'min_order') {
+                    final v = (lines.first['value'] as num?)?.toDouble() ?? 0.0;
+                    return paidTotal < v;
+                }
+                for (final line in lines) {
+                    if (line['type'] != 'specific_item') return true;
+                    final oid = (line['offerId']?.toString() ?? '');
+                    final uname = (line['unitName']?.toString() ?? '');
+                    final base = (line['triggerQuantityBase'] as num?)?.toInt() ?? 0;
+                    if (oid.isEmpty || base <= 0) return true;
+                    var bought = 0;
+                    for (final p in paid) {
+                        if ((p['offerId']?.toString() ?? '') == oid &&
+                            (p['unit']?.toString() ?? '') == uname) {
+                            bought += (p['quantity'] as num?)?.toInt() ?? 0;
+                        }
+                    }
+                    if (bought < base) return true;
+                }
+                return false;
+            }
+            final before = raw.length;
+            raw.removeWhere(
+                (e) => e is Map<String, dynamic> && e['isGift'] == true && drop(e));
+            dropped += before - raw.length;
+        }
+        return dropped;
+    }
+
     static Future<double> fetchCashback(String userId, String userRole, {FirebaseFirestore? firestore}) async {
         if (userId.isEmpty) return 0.0;
         final bool isConsumer = (userRole == 'consumer');
@@ -180,6 +283,13 @@ class CheckoutController {
                 }
               }
             }
+        }
+        // إعادة التحقق من الهدايا لحظة إتمام الطلب (B2B فقط): إسقاط السطر
+        // الميت بدليل قاطع، وإبقاء ما لا دليل عليه — الخادم
+        // (createOrdersWithPromos) هو المرجع النهائي للمنح.
+        final int droppedGifts = isConsumer ? 0 : await _dropStaleGiftItems(db, groupedItems);
+        if (droppedGifts > 0 && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تحديث الهدايا حسب حالة العروض الحالية.'), backgroundColor: kPrimaryColor));
         }
         double actualOrderTotal = 0.0;
         for(var order in processedCheckoutOrders) {
