@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:my_test_app/utils/profile_update.dart';
 
 // 🟢 الألوان المعتمدة للهوية البصرية
 const Color _primaryColor = Color(0xFF2c3e50);
@@ -23,20 +24,17 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
   bool _isUpdating = false;
 
   late TextEditingController _nameController;
-  late TextEditingController _addressController;
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController();
-    _addressController = TextEditingController();
     _fetchProfile();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _addressController.dispose();
     super.dispose();
   }
 
@@ -60,7 +58,6 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
           _userData = data;
           _userData?['activeCollection'] = col;
           _nameController.text = data['fullname'] ?? data['name'] ?? '';
-          _addressController.text = data['address'] ?? '';
           _isLoading = false;
         });
       }
@@ -70,22 +67,18 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
   }
 
   Future<void> _updateProfile() async {
-    if (_nameController.text.isEmpty) return;
+    if (_nameController.text.trim().isEmpty) return;
 
     setState(() => _isUpdating = true);
     final user = FirebaseAuth.instance.currentUser;
     final col = _userData?['activeCollection'];
 
     try {
-      Map<String, dynamic> updates = {
-        'address': _addressController.text.trim(),
-      };
-
-      if (col == 'consumers') {
-        updates['fullname'] = _nameController.text.trim();
-      } else {
-        updates['name'] = _nameController.text.trim();
-      }
+      // الاسم فقط: العنوان ثابت كما تم تسجيله ولا يُكتب من هذه الشاشة أبداً.
+      final Map<String, dynamic> updates = buildProfileNameUpdate(
+        isConsumerCollection: col == 'consumers',
+        name: _nameController.text,
+      );
 
       await FirebaseFirestore.instance.collection(col!).doc(user!.uid).update(updates);
 
@@ -200,7 +193,6 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
       icon: Icons.edit_note,
       children: [
         _buildTextField('الاسم الكامل', _nameController, Icons.person_outline),
-        _buildTextField('عنوان التوصيل', _addressController, Icons.location_on_outlined),
         const SizedBox(height: 5),
         SizedBox(
           width: double.infinity,
@@ -231,6 +223,8 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
       icon: Icons.security,
       children: [
         _buildReadOnlyField('رقم الهاتف', _userData?['phone'] ?? 'غير متوفر', Icons.phone_android),
+        _buildReadOnlyField('عنوان التوصيل (ثابت كما تم تسجيله)',
+            _userData?['address'] ?? 'غير متوفر', Icons.location_on_outlined),
         _buildReadOnlyField(
             'البريد الإلكتروني', _userData?['email'] ?? 'غير متوفر', Icons.alternate_email),
         _buildReadOnlyField(
@@ -322,14 +316,16 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
             child: Icon(icon, size: 18, color: _primaryColor),
           ),
           const SizedBox(width: 15),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-              Text(value,
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.bold, color: _primaryColor)),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                Text(value,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.bold, color: _primaryColor)),
+              ],
+            ),
           ),
         ],
       ),
@@ -395,5 +391,3 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
     }
   }
 }
-
-
