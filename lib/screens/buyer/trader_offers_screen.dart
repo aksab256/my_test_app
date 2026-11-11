@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
-import 'package:my_test_app/services/buyer_area_resolver.dart';
+import 'package:my_test_app/utils/seller_geo.dart';
 import 'package:my_test_app/utils/offer_geo_filter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_test_app/theme/app_theme.dart';
@@ -178,7 +178,7 @@ class _OffersDataFetcherState extends State<OffersDataFetcher> {
 
     // 🎯 حل مناطق المشتري مرة واحدة قبل الجلب (جلسة GPS أو الموقع المسجل).
     // بلا موقع معروف تُرجع قائمة فارغة فيرى المشتري العروض الـGlobal فقط.
-    final buyerAreas = await _resolveBuyerAreasOnce();
+    final buyerPoint = _buyerPointOnce();
 
     // 1. جلب كولكشن العروض الخاصة بالتاجر دفعة واحدة
     final offersSnapshot = await db.collection("productOffers")
@@ -232,14 +232,14 @@ class _OffersDataFetcherState extends State<OffersDataFetcher> {
     // المقيد خارج نطاق المشتري يُخفى) — دون منطق جغرافي جديد هنا.
     // شرط النشاط: أي عرض حالته ليست `active` مستبعد (المخفي لا يظهر).
     final activeOnly = loaded.where(isOfferActive).toList();
-    return filterOfferDocs(activeOnly, buyerAreas, OfferListContext.productOffers);
+    return SellerGeo.filterOfferDocsByCoords(activeOnly, buyerPoint.lat, buyerPoint.lng, OfferListContext.productOffers);
   }
 
   /// حل مناطق المشتري من الموقع الفعّال لمرة واحدة لكل فتح للشاشة.
-  Future<List<String>> _resolveBuyerAreasOnce() async {
-    if (!mounted) return const [];
+  ({double? lat, double? lng}) _buyerPointOnce() {
+    if (!mounted) return (lat: null, lng: null);
     final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
-    return BuyerAreaResolver.resolveBuyerAreas(
+    return (
       lat: buyerProvider.effectiveLat,
       lng: buyerProvider.effectiveLng,
     );

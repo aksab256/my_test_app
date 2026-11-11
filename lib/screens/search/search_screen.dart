@@ -9,7 +9,7 @@ import 'package:my_test_app/models/category_model.dart';
 import 'package:my_test_app/models/product_model.dart' hide CategoryModel;
 import 'package:my_test_app/repositories/product_repository.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
-import 'package:my_test_app/services/buyer_area_resolver.dart';
+import 'package:my_test_app/utils/seller_geo.dart';
 import 'package:my_test_app/services/analytics_service.dart';
 
 // ✅ استيراد الشريط السفلي
@@ -113,12 +113,12 @@ class _SearchScreenState extends State<SearchScreen> {
 
     final repo = ProductRepository();
     final searchTerm = _searchController.text.trim();
-    List<String>? buyerAreas;
+    double? buyerLat; double? buyerLng;
     if (widget.userRole == UserRole.buyer) {
       try {
         final buyerProv = Provider.of<BuyerDataProvider>(context, listen: false);
-        buyerAreas = await BuyerAreaResolver.resolveBuyerAreas(lat: buyerProv.effectiveLat, lng: buyerProv.effectiveLng);
-      } catch (_) { buyerAreas = const []; }
+        await SellerGeo.ensureLoaded(); buyerLat = buyerProv.effectiveLat; buyerLng = buyerProv.effectiveLng;
+      } catch (_) {}
     }
     
     try {
@@ -128,7 +128,8 @@ class _SearchScreenState extends State<SearchScreen> {
         mainCategoryId: _selectedMainCategory,
         subCategoryId: _selectedSubCategory,
         sortOption: _selectedSort,
-        buyerAreas: buyerAreas,
+        buyerLat: buyerLat,
+        buyerLng: buyerLng,
       );
 
       if (mounted) {

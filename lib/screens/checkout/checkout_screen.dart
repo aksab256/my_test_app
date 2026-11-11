@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_test_app/controllers/checkout_controller.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
-import 'package:my_test_app/services/buyer_area_resolver.dart';
+import 'package:my_test_app/utils/seller_geo.dart';
 import 'package:provider/provider.dart';
 import 'package:my_test_app/services/analytics_service.dart';
 
@@ -206,17 +206,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     // آخر client-side gate: إعادة التحقق من المخزون والحدود لكل صنف
     // (لا نعتمد على snapshot الـSharedPreferences) + حد التاجر الإجمالي.
-    List<String>? gateAreas;
+    double? gateLat; double? gateLng;
     if (!_isConsumer) {
       try {
         final bp = Provider.of<BuyerDataProvider>(context, listen: false);
-        gateAreas = await BuyerAreaResolver.resolveBuyerAreas(lat: bp.effectiveLat, lng: bp.effectiveLng);
-      } catch (_) { gateAreas = const []; }
+        await SellerGeo.ensureLoaded(); gateLat = bp.effectiveLat; gateLng = bp.effectiveLng;
+      } catch (_) {}
     }
     final gateErrors =
         await Provider.of<CartProvider>(context, listen: false)
             .validateCheckoutQuantities(
-                _groupedSellerOrders, _isConsumer ? 'consumer' : 'buyer', buyerAreas: gateAreas);
+                _groupedSellerOrders, _isConsumer ? 'consumer' : 'buyer', buyerLat: gateLat, buyerLng: gateLng);
     if (gateErrors.isNotEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

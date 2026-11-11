@@ -8,7 +8,7 @@ import 'package:my_test_app/providers/cart_provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/utils/offer_data_model.dart';
 import 'package:my_test_app/utils/offer_geo_filter.dart';
-import 'package:my_test_app/services/buyer_area_resolver.dart';
+import 'package:my_test_app/utils/seller_geo.dart';
 import 'package:my_test_app/services/analytics_service.dart';
 
 final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -54,11 +54,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       // سياق Product Offer Context: عروض Sellers لمنتج واحد مع geo-filter.
       // المناطق من GPS المشتري — ممنوع userAddress (عنوان شارع حر).
       final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
-      final List<String> buyerAreas = await BuyerAreaResolver.resolveBuyerAreas(
+      final buyerPoint = SellerGeo.buyerPoint(
         lat: buyerProvider.effectiveLat,
         lng: buyerProvider.effectiveLng,
       );
 
+      await SellerGeo.ensureLoaded();
       final results = await Future.wait([
         _db.collection('products').doc(_currentProductId).get(),
         _db.collection('productOffers')
@@ -96,14 +97,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
       setState(() {
         _filteredOffers = allOffers.where((offer) {
-          return isOfferVisibleForBuyer(
+          return SellerGeo.isOfferVisibleSync(
             offerData: {
               'deliveryZones': [
                 ...?offer.deliveryZones,
                 ...?offer.deliveryAreas,
               ].toSet().toList(),
             },
-            buyerAreas: buyerAreas,
+            buyerLat: buyerPoint.lat,
+            buyerLng: buyerPoint.lng,
             context: OfferListContext.productOffers,
           );
         }).toList();
@@ -119,11 +121,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   void _addToCart(OfferModel offer) async {
     try {
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
-      List<String>? gateAreas;
+      double? gateLat; double? gateLng;
       try {
         final buyerProv = Provider.of<BuyerDataProvider>(context, listen: false);
-        gateAreas = await BuyerAreaResolver.resolveBuyerAreas(lat: buyerProv.effectiveLat, lng: buyerProv.effectiveLng);
-      } catch (_) { gateAreas = const []; }
+        await SellerGeo.ensureLoaded(); gateLat = buyerProv.effectiveLat; gateLng = buyerProv.effectiveLng;
+      } catch (_) {}
       final String imageUrl = (_productData?['imageUrls'] as List?)?.isNotEmpty == true
           ? _productData!['imageUrls'][0] : '';
 
@@ -138,7 +140,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         unitIndex: offer.unitIndex ?? 0,
         imageUrl: imageUrl,
         userRole: 'buyer',
-        buyerAreas: gateAreas,
+        buyerLat: gateLat,
+        buyerLng: gateLng,
         quantityToAdd: offer.minQty ?? 1,
         mainId: _productData?['mainId'],
         subId: _productData?['subId'],

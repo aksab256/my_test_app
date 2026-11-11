@@ -7,6 +7,7 @@ import 'dart:math';
 import 'package:my_test_app/services/marketplace_data_service.dart';
 import 'package:my_test_app/utils/quantity_limits.dart';
 import 'package:my_test_app/utils/offer_geo_filter.dart';
+import 'package:my_test_app/utils/seller_geo.dart';
 
 // =========================================================================
 // 💡 هياكل البيانات المساعدة (Models)
@@ -489,7 +490,8 @@ class CartProvider with ChangeNotifier {
     int minOrderQuantity = 1,
     int? availableStock,
     int? maxOrderQuantity,
-    List<String>? buyerAreas,
+    double? buyerLat,
+    double? buyerLng,
   }) async {
     // تحديث فوري للـ UI قبل أي عمليات Firestore 🎯
     final limits = resolveQuantityLimits(
@@ -505,14 +507,14 @@ class CartProvider with ChangeNotifier {
     if (quantityToAdd < limits.effectiveMin) throw Exception('أقل من الحد الأدنى');
     if (limits.effectiveMax != null && newTotalQuantity > limits.effectiveMax!) throw Exception('تجاوز الحد المتاح');
 
-    if (userRole == 'buyer' && buyerAreas != null) {
+    if (userRole == 'buyer') {
       final fresh = await _getProductOfferDetails(offerId, unitIndex, userRole: userRole);
       final String? blocked = offerBlockedReason({'status': fresh['status']});
       if (blocked != null) {
         throw Exception(blocked);
       }
       final zones = (fresh['deliveryZones'] as List?)?.whereType<String>().toList() ?? const [];
-      if (!isOfferVisibleForBuyer(offerData: {'deliveryZones': zones}, buyerAreas: buyerAreas, context: OfferListContext.productOffers)) {
+      if (!await SellerGeo.isOfferVisibleByCoords(offerData: {'deliveryZones': zones}, buyerLat: buyerLat, buyerLng: buyerLng, context: OfferListContext.productOffers)) {
         throw Exception('هذا العرض غير متاح لمنطقتك');
       }
     }
@@ -612,7 +614,7 @@ class CartProvider with ChangeNotifier {
   }
 
   Future<List<String>> validateCheckoutQuantities(
-      List<Map<String, dynamic>> groupedOrders, String userRole, {List<String>? buyerAreas}) async {
+      List<Map<String, dynamic>> groupedOrders, String userRole, {double? buyerLat, double? buyerLng}) async {
     final List<String> errors = [];
     for (final group in groupedOrders) {
       final sellerId = (group['sellerId'] ?? '').toString();
@@ -649,14 +651,14 @@ class CartProvider with ChangeNotifier {
             'طلب $sellerName أقل من الحد الأدنى (${minTotal.toStringAsFixed(2)}).');
       }
     }
-    if (userRole == 'buyer' && buyerAreas != null) {
+    if (userRole == 'buyer') {
       for (final group in groupedOrders) {
         final items = (group['items'] as List?)?.whereType<Map<String, dynamic>>().toList() ?? [];
         for (final item in items) {
           if (item['isGift'] == true) continue;
           final details = await _getProductOfferDetails((item['offerId'] ?? '').toString(), (item['unitIndex'] as num?)?.toInt() ?? 0, userRole: userRole);
           final zones = (details['deliveryZones'] as List?)?.whereType<String>().toList() ?? const [];
-          if (!isOfferVisibleForBuyer(offerData: {'deliveryZones': zones}, buyerAreas: buyerAreas, context: OfferListContext.productOffers)) {
+          if (!await SellerGeo.isOfferVisibleByCoords(offerData: {'deliveryZones': zones}, buyerLat: buyerLat, buyerLng: buyerLng, context: OfferListContext.productOffers)) {
             errors.add('${item['name'] ?? 'صنف'} غير قابل للتوصيل لمنطقتك الحالية.');
           }
         }

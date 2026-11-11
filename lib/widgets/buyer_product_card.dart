@@ -7,7 +7,7 @@ import 'package:my_test_app/utils/offer_data_model.dart';
 import 'package:my_test_app/providers/product_offers_provider.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
-import 'package:my_test_app/services/buyer_area_resolver.dart';
+import 'package:my_test_app/utils/seller_geo.dart';
 import 'package:provider/provider.dart';
 import 'package:my_test_app/services/analytics_service.dart';
 import 'package:sizer/sizer.dart';
@@ -42,11 +42,11 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
 
   void _addToCart(OfferModel offer, int qty) async {
     if (qty == 0) return;
-    List<String>? gateAreas;
+    double? gateLat; double? gateLng;
     try {
       final buyerProv = Provider.of<BuyerDataProvider>(context, listen: false);
-      gateAreas = await BuyerAreaResolver.resolveBuyerAreas(lat: buyerProv.effectiveLat, lng: buyerProv.effectiveLng);
-    } catch (_) { gateAreas = const []; }
+      await SellerGeo.ensureLoaded(); gateLat = buyerProv.effectiveLat; gateLng = buyerProv.effectiveLng;
+    } catch (_) {}
     final String imageUrl = widget.productData['imageUrls']?.isNotEmpty == true
         ? widget.productData['imageUrls'][0]
         : '';
@@ -71,7 +71,8 @@ class _BuyerProductCardState extends State<BuyerProductCard> {
         quantityToAdd: qty,
         imageUrl: imageUrl,
         userRole: currentUserRole,
-        buyerAreas: gateAreas,
+        buyerLat: gateLat,
+        buyerLng: gateLng,
         minOrderQuantity: offer.minQty ?? 1,
         availableStock: offer.stock,
         maxOrderQuantity: offer.maxQty ?? 9999,

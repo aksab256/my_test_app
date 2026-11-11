@@ -6,8 +6,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart'; 
 import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
-import 'package:my_test_app/services/buyer_area_resolver.dart';
 import 'package:my_test_app/utils/offer_geo_filter.dart';
+import 'package:my_test_app/utils/seller_geo.dart';
 import 'package:facebook_app_events/facebook_app_events.dart';
 import 'package:my_test_app/services/analytics_service.dart';
 
@@ -254,10 +254,8 @@ class CheckoutController {
         };
         
         if (!isConsumer) {
-            List<String> orderBuyerAreas = const [];
-            try {
-              orderBuyerAreas = await BuyerAreaResolver.resolveBuyerAreas(lat: buyerProvider.effectiveLat, lng: buyerProvider.effectiveLng);
-            } catch (_) { orderBuyerAreas = const []; }
+            final double? orderLat = buyerProvider.effectiveLat;
+            final double? orderLng = buyerProvider.effectiveLng;
             for (final sellerId in groupedItems.keys) {
               final sellerOrder = groupedItems[sellerId]!;
               final items = (sellerOrder['items'] as List?)?.whereType<Map<String, dynamic>>().toList() ?? [];
@@ -277,7 +275,7 @@ class CheckoutController {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${item['name'] ?? 'صنف'} لم يعد متاحًا (تم إيقاف العرض).')));
                   return false;
                 }
-                if (!isOfferVisibleForBuyer(offerData: {'deliveryZones': freshZones}, buyerAreas: orderBuyerAreas, context: OfferListContext.productOffers)) {
+                if (!await SellerGeo.isOfferVisibleByCoords(offerData: {'deliveryZones': freshZones}, buyerLat: orderLat, buyerLng: orderLng, context: OfferListContext.productOffers)) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${item['name'] ?? 'صنف'} غير قابل للتوصيل لمنطقتك.'), backgroundColor: kErrorColor));
                   return false;
                 }

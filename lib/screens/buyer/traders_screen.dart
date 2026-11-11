@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/services/buyer_area_resolver.dart';
 import 'package:my_test_app/utils/offer_geo_filter.dart' as geof;
+import 'package:my_test_app/utils/seller_geo.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -182,7 +183,10 @@ class _TradersScreenState extends State<TradersScreen> {
 
   // مناطق المشتري بنفس مصدر صفحة المنتجات: GPS الجلسة أولاً ثم العنوان الثابت،
   // مع fallback للموقع المحفوظ محلياً عند غياب الـ Provider.
-  Future<List<String>> _resolveBuyerAreas() async {
+  // (محفوظ للمرجع: حل الأسماء القديم — العقد الحالي إحداثيات عبر SellerGeo)
+  // (محفوظ للمرجع: حل الأسماء القديم — العقد الحالي إحداثيات عبر SellerGeo)
+  // ignore: unused_element
+  Future<List<String>> _resolveBuyerAreasLegacy() async {
     try {
       final buyer = Provider.of<BuyerDataProvider>(context, listen: false);
       final areas = await BuyerAreaResolver.resolveBuyerAreas(
@@ -212,10 +216,14 @@ class _TradersScreenState extends State<TradersScreen> {
       final Set<String> sellersWithVisibleOffers = {};
       bool offersCheckOk = false;
       try {
+        final gateBuyer = Provider.of<BuyerDataProvider>(context, listen: false);
+        final double? gateLat = gateBuyer.effectiveLat ?? _userCoordinates?.lat;
+        final double? gateLng = gateBuyer.effectiveLng ?? _userCoordinates?.lng;
+        await SellerGeo.ensureLoaded();
         final offersSnap = await _db.collection('productOffers').where('status', isEqualTo: 'active').get();
-        sellersWithVisibleOffers.addAll(geof.visibleOfferSellerIds(
+        sellersWithVisibleOffers.addAll(await SellerGeo.visibleOfferSellerIdsByCoords(
           offerDocs: offersSnap.docs.map((d) => d.data()),
-          buyerAreas: await _resolveBuyerAreas(),
+          buyerLat: gateLat, buyerLng: gateLng,
         ));
         offersCheckOk = true;
       } catch (e) { debugPrint("Offers visibility error: $e"); }

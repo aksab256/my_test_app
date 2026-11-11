@@ -11,7 +11,7 @@ import 'package:sizer/sizer.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/providers/cart_provider.dart';
 import 'package:my_test_app/screens/buyer/trader_offers_screen.dart';
-import 'package:my_test_app/services/buyer_area_resolver.dart';
+import 'package:my_test_app/utils/seller_geo.dart';
 import 'package:my_test_app/services/gift_eligibility_service.dart';
 
 class GiftPromoCard extends StatefulWidget {
@@ -55,7 +55,7 @@ class _GiftPromoCardState extends State<GiftPromoCard> {
     try {
       final cart = Provider.of<CartProvider>(context, listen: false);
       final buyer = Provider.of<BuyerDataProvider>(context, listen: false);
-      final areas = await BuyerAreaResolver.resolveBuyerAreas(
+      final buyerPoint = SellerGeo.buyerPoint(
         lat: buyer.effectiveLat,
         lng: buyer.effectiveLng,
       );
@@ -72,7 +72,8 @@ class _GiftPromoCardState extends State<GiftPromoCard> {
           quantityToAdd: t.quantityBase,
           imageUrl: t.imageUrl,
           userRole: 'buyer',
-          buyerAreas: areas,
+          buyerLat: buyerPoint.lat,
+          buyerLng: buyerPoint.lng,
         );
       }
       await cart.loadCartAndRecalculate('buyer');

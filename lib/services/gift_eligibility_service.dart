@@ -2,7 +2,7 @@
 //
 // منطق أهلية عروض الهدايا الموحد للمشتري (Aksab Marketplace).
 // يستخدمه تبويب الهدايا وقسم «اكسب هدايا» بنفس القواعد:
-// مناطق المشتري عبر BuyerAreaResolver + effectiveLat/effectiveLng،
+// نقطة المشتري (effectiveLat/effectiveLng) ضد مضلعات الملف،
 // صلاحية العرض (status + expiry)، والميزانية المتبقية (max-used)،
 // وتغطية التاجر لمنطقة المشتري، وصلاحية عروض المحفز والهدية.
 //
@@ -11,7 +11,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
-import 'package:my_test_app/services/buyer_area_resolver.dart';
+import 'package:my_test_app/utils/seller_geo.dart';
 import 'package:my_test_app/utils/offer_geo_filter.dart';
 
 /// سطر شراء واحد داخل العرض.
@@ -191,13 +191,11 @@ class GiftEligibilityService {
     return '$la,$ln|${areas.join(',')}';
   }
 
-  /// هل التاجر يغطي المشتري: بلا مناطق = عام، وإلا تقاطع مع مناطق المشتري.
-  /// مشترٍ بلا موقع معروف يرى العام فقط (نفس قاعدة TradersScreen).
-  static bool sellerCoversBuyer(
-      List<String> sellerAreas, List<String> buyerAreas) {
-    if (sellerAreas.isEmpty) return true;
-    if (buyerAreas.isEmpty) return false;
-    return sellerAreas.any(buyerAreas.contains);
+  /// هل التاجر يغطي نقطة المشتري (عقد الإحداثيات): بلا مناطق = عام،
+  /// وإلا نقطة GPS ضد مضلعات الملف. مشترٍ بلا إحداثيات يرى العام فقط.
+  static Future<bool> sellerCoversPoint(
+      List<String> sellerAreas, double? lat, double? lng) {
+    return SellerGeo.pointServesNames(lat, lng, sellerAreas);
   }
 
   static List<String> readSellerAreas(Map<String, dynamic> sellerData) {
@@ -364,9 +362,8 @@ class GiftEligibilityService {
     return b.remaining.compareTo(a.remaining);
   }
 
-  static Future<List<String>> _buyerAreas(double? lat, double? lng) {
-    return BuyerAreaResolver.resolveBuyerAreas(lat: lat, lng: lng);
-  }
+  static String _pointKey(double? lat, double? lng) =>
+      cacheKeyFor(lat, lng, const []);
 
   /// أفضل N عروض مؤهلة للصفحة الرئيسية — خفيف: يفحص الحياة والتغطية أولاً،
   /// ويثري صور أول المرشحين فقط مع حد أقصى للفحص.
@@ -380,7 +377,6 @@ class GiftEligibilityService {
     DateTime? nowOverride,
   }) async {
     final now = nowOverride ?? DateTime.now();
-    final buyerAreas = await _buyerAreas(lat, lng);
     final promosSnap = await db
         .collection('giftPromos')
         .where('status', isEqualTo: 'active')
@@ -415,7 +411,9 @@ class GiftEligibilityService {
       final sellerId = (data['sellerId']?.toString() ?? '').trim();
       final sellerDoc = sellers[sellerId];
       if (sellerDoc == null) continue;
-      if (!sellerCoversBuyer(readSellerAreas(sellerDoc), buyerAreas)) continue;
+      if (!await sellerCoversPoint(readSellerAreas(sellerDoc), lat, lng)) {
+        continue;
+      }
 
       final needOfferIds = <String>{};
       final giftId = (data['giftOfferId']?.toString() ?? '').trim();
@@ -455,8 +453,7 @@ class GiftEligibilityService {
     DateTime? nowOverride,
   }) async {
     final now = nowOverride ?? DateTime.now();
-    final buyerAreas = await _buyerAreas(lat, lng);
-    final key = '${cacheKeyFor(lat, lng, buyerAreas)}|$queryLimit';
+    final key = '${_pointKey(lat, lng)}|$queryLimit';
     if (useCache &&
         _cacheKey == key &&
         _cacheAt != null &&
@@ -497,7 +494,7 @@ class GiftEligibilityService {
         skippedNoSeller++;
         continue;
       }
-      if (!sellerCoversBuyer(readSellerAreas(sellerDoc), buyerAreas)) {
+      if (!await sellerCoversPoint(readSellerAreas(sellerDoc), lat, lng)) {
         skippedNoCoverage++;
         continue;
       }

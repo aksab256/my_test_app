@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:my_test_app/utils/offer_data_model.dart';
 import 'package:my_test_app/utils/offer_geo_filter.dart';
+import 'package:my_test_app/utils/seller_geo.dart';
 
 class ProductOffersProvider with ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -10,7 +11,8 @@ class ProductOffersProvider with ChangeNotifier {
   // 🎯 قائمة المناطق المكتشفة للمشتري بناءً على الـ GPS والـ GeoJSON.
   // مهم: ليست عنوان الشارع الحر (userAddress) — بل أسماء مناطق مطابقة
   // لنفس مفردات deliveryAreas/deliveryZones.
-  final List<String> userDetectedAreas;
+  final double? buyerLat;
+  final double? buyerLng;
 
   // 🎯 سياق القائمة: productOffers (مع geo-filter) هو الافتراضي للحفاظ على
   // السلوك الحالي. sellerStore (بدون إعادة geo-filter) للاستخدام داخل متجر
@@ -20,11 +22,12 @@ class ProductOffersProvider with ChangeNotifier {
   // 💡 المُنشئ لاستقبال المنتج والمناطق المكتشفة والسياق الصريح
   ProductOffersProvider({
     required this.productId,
-    required this.userDetectedAreas,
+    required this.buyerLat,
+    required this.buyerLng,
     this.geoContext = OfferListContext.productOffers,
   }) {
     // جلب العروض فور إنشاء البروفايدر
-    fetchOffers(productId, userDetectedAreas, geoContext: geoContext);
+    fetchOffers(productId, buyerLat, buyerLng, geoContext: geoContext);
   }
 
   List<OfferModel> _availableOffers = [];
@@ -40,7 +43,8 @@ class ProductOffersProvider with ChangeNotifier {
   // 💥 دالة جلب العروض والفلترة الجغرافية المطابقة لبيانات Firestore
   Future<void> fetchOffers(
     String productId,
-    List<String> detectedAreas, {
+    double? buyerLat,
+    double? buyerLng, {
     OfferListContext geoContext = OfferListContext.productOffers,
   }) async {
     _isLoading = true;
@@ -69,11 +73,12 @@ class ProductOffersProvider with ChangeNotifier {
             ...?offer.deliveryZones,
             ...?offer.deliveryAreas,
           ].toSet().toList();
-          final visible = isOfferVisibleForBuyer(
+          final visible = await SellerGeo.isOfferVisibleByCoords(
             offerData: {
               'deliveryZones': zones,
             },
-            buyerAreas: detectedAreas,
+            buyerLat: buyerLat,
+            buyerLng: buyerLng,
             context: geoContext,
           );
 

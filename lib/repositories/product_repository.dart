@@ -4,6 +4,7 @@ import 'package:my_test_app/models/product_model.dart' hide CategoryModel;
 import 'package:my_test_app/models/category_model.dart';
 import 'package:my_test_app/models/user_role.dart';
 import 'package:my_test_app/utils/offer_geo_filter.dart';
+import 'package:my_test_app/utils/seller_geo.dart';
 
 class ProductRepository {
   final FirebaseFirestore _firestore;
@@ -51,7 +52,8 @@ class ProductRepository {
     String? mainCategoryId,
     String? subCategoryId,
     required ProductSortOption sortOption,
-    List<String>? buyerAreas,
+    double? buyerLat,
+    double? buyerLng,
   }) async {
     // 1. العمل دائماً على كولكشن العروض للتاجر
     final collectionName = 'productOffers';
@@ -94,11 +96,11 @@ class ProductRepository {
     final snapshot = await query.get();
 
     List<ProductModel> results = [];
-    final bool enforceBuyerGeo = userRole == UserRole.buyer && buyerAreas != null;
-    final List<String> buyerZoneFilter = buyerAreas ?? const [];
+    final bool enforceBuyerGeo = userRole == UserRole.buyer;
+    await SellerGeo.ensureLoaded();
 
     for (var doc in snapshot.docs) {
-      if (enforceBuyerGeo && !isOfferVisibleForBuyer(offerData: doc.data(), buyerAreas: buyerZoneFilter, context: OfferListContext.productOffers)) continue;
+      if (enforceBuyerGeo && !await SellerGeo.isOfferVisibleByCoords(offerData: doc.data(), buyerLat: buyerLat, buyerLng: buyerLng, context: OfferListContext.productOffers)) continue;
       final data = doc.data();
       
       // جلب السعر من مصفوفة الوحدات (Units) كما في بياناتك
