@@ -4,13 +4,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:provider/provider.dart';
 import 'dart:convert';
 
 // استيراد الـ Widgets والمحتويات
 import 'package:my_test_app/widgets/home_content.dart';
 import 'package:my_test_app/widgets/buyer_header_widget.dart';
 import 'package:my_test_app/widgets/buyer_mobile_nav_widget.dart';
-import 'package:my_test_app/widgets/chat_support_widget.dart';
+import 'package:my_test_app/widgets/home_action_buttons.dart';
+import 'package:my_test_app/providers/cart_provider.dart';
 
 // 🎯 استيراد الصفحة مباشرة لضمان عمل التوجيه المستقل
 import 'package:my_test_app/screens/buyer/my_orders_screen.dart';
@@ -26,8 +28,7 @@ class BuyerHomeScreen extends StatefulWidget {
   State<BuyerHomeScreen> createState() => _BuyerHomeScreenState();
 }
 
-// 🛑 إضافة SingleTickerProviderStateMixin للتحكم في الأنميشن
-class _BuyerHomeScreenState extends State<BuyerHomeScreen> with SingleTickerProviderStateMixin {
+class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   // 🎯 نحن في الصفحة الرئيسية، لذا الاندكس هو 1 دائماً في هذا الملف
@@ -41,35 +42,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with SingleTickerProv
   bool _deliveryPricesAvailable = false;
   bool _deliveryIsActive = false;
 
-  // 🚀 متغيرات الأنميشن (النبض)
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
-
   @override
   void initState() {
     super.initState();
     _initializeAppLogic();
-
-    // 🚀 تهيئة أنميشن النبض: الحركة ناعمة وبطيئة (ثانية ونصف للنبضة الواحدة)
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    );
-
-    // النبض بيبدأ من الحجم الطبيعي (1.0) لزيادة خفيفة جداً (1.1) ويرجع تاني
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-
-    // جعل الأنميشن يستمر للأبد (ينبض ويرجع)
-    _pulseController.repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    // 🛑 مهم جداً: إغلاق الكنترولر عند إغلاق الصفحة لمنع تسريب الذاكرة
-    _pulseController.dispose();
-    super.dispose();
   }
 
   // --- منطق تهيئة التطبيق ---
@@ -279,6 +255,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with SingleTickerProv
               menuNotificationDotActive: _newOrdersCount > 0,
               userName: _userName,
               onLogout: _handleLogout,
+              chatUid: _currentUserId,
             ),
             const Expanded(child: HomeContent()),
           ],
@@ -289,76 +266,11 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> with SingleTickerProv
           cartCount: _cartCount,
           ordersChanged: false,
         ),
-        // 🚀 تحديث أيقونة شـيرا لتكون هي اللوجو الجديد وتصميم عصري عائم
-        floatingActionButton: GestureDetector(
-          onTap: () {
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (context) => ChatSupportWidget(
-                uid: _currentUserId!,
-                role: 'buyer',
-              ),
-            );
-          },
-          // 🚀 استخدام ScaleTransition لتنفيذ تأثير النبض
-          child: ScaleTransition(
-            scale: _pulseAnimation,
-            child: Hero(
-              tag: "buyer_home_chat_btn",
-              child: Container(
-                width: 70,
-                height: 70,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xff1a237e), Color(0xFF4CAF50)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xff1a237e).withOpacity(0.4),
-                      blurRadius: 15,
-                      spreadRadius: 2,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                  border: Border.all(color: Colors.white, width: 2),
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // استخدام اللوجو الجديد كخلفية للزر
-                    ClipOval(
-                      child: Image.asset(
-                        'assets/images/shira_logo.png',
-                        width: 55,
-                        height: 55,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => 
-                            const Icon(Icons.auto_awesome, color: Colors.white, size: 30),
-                      ),
-                    ),
-                    // مؤشر "الذكاء" النشط
-                    Positioned(
-                      top: 5,
-                      right: 5,
-                      child: Container(
-                        width: 14,
-                        height: 14,
-                        decoration: BoxDecoration(
-                          color: Colors.yellowAccent,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+        // 🛒 زر السلة بعدّاد حي — يحل محل زر شيرا (انتقلت للهيدر)
+        floatingActionButton: Consumer<CartProvider>(
+          builder: (context, cart, _) => CartFabButton(
+            count: cart.cartTotalItems,
+            onTap: () => Navigator.of(context).pushNamed('/cart'),
           ),
         ),
       ),

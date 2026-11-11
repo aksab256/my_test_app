@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:google_fonts/google_fonts.dart'; 
+import 'package:google_fonts/google_fonts.dart';
+import 'package:my_test_app/widgets/chat_support_widget.dart';
+import 'package:my_test_app/widgets/home_action_buttons.dart';
 
 // تعريفات Firebase
 final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -42,6 +44,7 @@ class BuyerHeaderWidget extends StatelessWidget {
   final String userName;
   final bool menuNotificationDotActive;
   final VoidCallback onLogout;
+  final String? chatUid;
 
   const BuyerHeaderWidget({
     super.key,
@@ -49,6 +52,7 @@ class BuyerHeaderWidget extends StatelessWidget {
     required this.userName,
     this.menuNotificationDotActive = false,
     required this.onLogout,
+    this.chatUid,
   });
 
   // --- بناء المودال المؤقتة ---
@@ -75,6 +79,17 @@ class BuyerHeaderWidget extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  // --- فتح شات شيرا من الهيدر (نفس شيت الدعم السابق) ---
+  static void _openShiraChat(BuildContext context, String? uid) {
+    if (uid == null) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ChatSupportWidget(uid: uid, role: 'buyer'),
     );
   }
 
@@ -314,7 +329,13 @@ class BuyerHeaderWidget extends StatelessWidget {
                     Text('أسواق أكسب', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)), 
                   ],
                 ),
-                const SizedBox(width: 40),
+                if (chatUid != null)
+                  ShiraPulseButton(
+                    onTap: () => _openShiraChat(context, chatUid),
+                    size: 38,
+                  )
+                else
+                  const SizedBox(width: 40),
               ],
             ),
             Padding(
