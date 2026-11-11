@@ -175,7 +175,21 @@ class _OrderCard extends StatelessWidget {
                 dense: true,
                 title: Text(item['name'] ?? 'منتج', style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text("الكمية: ${item['quantity']} | ${item['unit'] ?? ''}"),
-                trailing: Text("${item['price']} ج", style: const TextStyle(color: Colors.blueGrey)),
+                trailing: Builder(builder: (_) {
+                  final p = (item['price'] as num?)?.toDouble() ?? 0.0;
+                  final o = (item['originalPrice'] as num?)?.toDouble();
+                  if (o != null && o > p) {
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text("$p ج", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                        Text("$o ج", style: const TextStyle(color: Colors.blueGrey, decoration: TextDecoration.lineThrough, fontSize: 11)),
+                      ],
+                    );
+                  }
+                  return Text("$p ج", style: const TextStyle(color: Colors.blueGrey));
+                }),
               )),
           const Divider(),
           Padding(

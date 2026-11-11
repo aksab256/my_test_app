@@ -29,6 +29,13 @@ class SellerGeo {
     _boxes = null;
   }
 
+  /// حقن مضلعات في الاختبارات فقط (يغني عن ملفات الـGeoJSON).
+  @visibleForTesting
+  static void setPolygonsForTest(Map<String, List<GeoPoint>> polys) {
+    _polys = polys;
+    _boxes = buildAreaBBoxes(polys);
+  }
+
   static Future<void> ensureLoaded() async {
     if (_polys != null) return;
     final loaded = await BuyerAreaResolver.loadAreaPolygons();

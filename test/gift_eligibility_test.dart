@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_test_app/services/gift_eligibility_service.dart';
+import 'package:my_test_app/utils/offer_geo_filter.dart';
+import 'package:my_test_app/utils/seller_geo.dart';
 
 Map<String, dynamic> promo({
   String status = 'active',
@@ -163,27 +165,47 @@ void main() {
     });
   });
 
-  group('GiftEligibilityService.sellerCoversBuyer', () {
-    test('global seller covers everyone; zoned needs overlap', () {
-      expect(
-          GiftEligibilityService.sellerCoversBuyer(const [], ['المنطقة أ']),
+  group('GiftEligibilityService.sellerCoversPoint (عقد الإحداثيات)', () {
+    setUp(() {
+      // مربع 10x10 حول (10,10) باسم ثابت — بلا ملفات GeoJSON.
+      SellerGeo.setPolygonsForTest({
+        'المنطقة أ': const [
+          GeoPoint(lat: 5, lng: 5),
+          GeoPoint(lat: 5, lng: 15),
+          GeoPoint(lat: 15, lng: 15),
+          GeoPoint(lat: 15, lng: 5),
+        ],
+      });
+    });
+
+    tearDown(() => SellerGeo.clearCache());
+
+    test('global seller covers everyone; zoned needs the point inside', () async {
+      expect(await GiftEligibilityService.sellerCoversPoint(const [], 10, 10),
           isTrue);
       expect(
-          GiftEligibilityService.sellerCoversBuyer(
-              ['المنطقة أ'], ['المنطقة أ']),
+          await GiftEligibilityService.sellerCoversPoint(
+              ['المنطقة أ'], 10, 10),
           isTrue);
       expect(
-          GiftEligibilityService.sellerCoversBuyer(
-              ['المنطقة ب'], ['المنطقة أ']),
+          await GiftEligibilityService.sellerCoversPoint(
+              ['المنطقة أ'], 50, 50),
           isFalse);
     });
 
-    test('unknown buyer location sees global only', () {
-      expect(GiftEligibilityService.sellerCoversBuyer(const [], const []),
+    test('unknown buyer location sees global only', () async {
+      expect(await GiftEligibilityService.sellerCoversPoint(const [], null, null),
           isTrue);
       expect(
-          GiftEligibilityService.sellerCoversBuyer(
-              ['المنطقة أ'], const []),
+          await GiftEligibilityService.sellerCoversPoint(
+              ['المنطقة أ'], null, null),
+          isFalse);
+    });
+
+    test('unknown polygon names never match', () async {
+      expect(
+          await GiftEligibilityService.sellerCoversPoint(
+              ['اسم-غير-موجود'], 10, 10),
           isFalse);
     });
   });

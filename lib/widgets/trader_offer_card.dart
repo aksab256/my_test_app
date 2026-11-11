@@ -33,7 +33,7 @@ class TraderOfferCard extends StatelessWidget {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     final unitName = unit['unitName']?.toString() ?? 'الكمية الأساسية';
-    final price = (unit['price'] as num?)?.toDouble() ?? (offerData['price'] as num?)?.toDouble() ?? 0.0;
+    final price = (unit['offerPrice'] as num?)?.toDouble() ?? (offerData['offerPrice'] as num?)?.toDouble() ?? (unit['price'] as num?)?.toDouble() ?? (offerData['price'] as num?)?.toDouble() ?? 0.0;
     final availableStock = unit['availableStock'] as num? ?? offerData['availableQuantity'] as num? ?? 0;
     final isDisabled = availableStock <= 0;
     final limits = resolveQuantityLimits(

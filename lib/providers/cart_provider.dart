@@ -19,6 +19,7 @@ class CartItem {
   final String sellerName;
   final String name;
   double price;
+  double? originalPrice;
   final String unit;
   final int unitIndex;
   int quantity;
@@ -34,6 +35,7 @@ class CartItem {
     required this.sellerName,
     required this.name,
     required this.price,
+    this.originalPrice,
     required this.unit,
     required this.unitIndex,
     this.quantity = 1,
@@ -50,6 +52,7 @@ class CartItem {
     'sellerName': sellerName,
     'name': name,
     'price': price,
+    'originalPrice': originalPrice,
     'unit': unit,
     'unitIndex': unitIndex,
     'quantity': quantity,
@@ -67,6 +70,7 @@ class CartItem {
       sellerName: json['sellerName']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      originalPrice: (json['originalPrice'] as num?)?.toDouble(),
       unit: json['unit']?.toString() ?? '',
       unitIndex: (json['unitIndex'] as num?)?.toInt() ?? -1,
       quantity: (json['quantity'] as num?)?.toInt() ?? 1,
@@ -339,11 +343,23 @@ class CartProvider with ChangeNotifier {
   }
 
   // 🚀 تحسين: جلب التفاصيل بذكاء حسب نوع المستخدم لتقليل الـ Try/Catch
+  /// سعر الوحدة مع تفضيل سعر العرض (وحدة ثم جذر المستند) على الأساسي.
+  /// يطابق قاعدة offer_data_model المستخدمة في واجهات العرض.
+  static double _offerUnitPrice(
+      Map<String, dynamic> data, Map<String, dynamic>? unitData, double fallback) {
+    final unitOffer = (unitData?['offerPrice'] as num?)?.toDouble();
+    if (unitOffer != null && unitOffer > 0) return unitOffer;
+    final rootOffer = (data['offerPrice'] as num?)?.toDouble();
+    if (rootOffer != null && rootOffer > 0) return rootOffer;
+    return fallback;
+  }
+
   Future<Map<String, dynamic>> _getProductOfferDetails(String offerId, int unitIndex, {String userRole = 'buyer'}) async {
     int productMinQty = 1;
     int? productMaxQty;
     int? actualAvailableStock;
     double currentPrice = 0.0;
+    double basePrice = 0.0;
     List<String> offerZones = const [];
     String? offerStatus;
 
@@ -357,6 +373,7 @@ class CartProvider with ChangeNotifier {
           if (units != null && unitIndex >= 0 && unitIndex < units.length) {
             final unitData = units[unitIndex] as Map<String, dynamic>?;
             currentPrice = (unitData?['price'] as num?)?.toDouble() ?? 0.0;
+            basePrice = currentPrice;
           }
           return {
             'minQty': (data['minOrder'] as num?)?.toInt() ?? 1,
@@ -385,7 +402,9 @@ class CartProvider with ChangeNotifier {
           final unitData = data['units'][unitIndex] as Map<String, dynamic>?;
           if (unitData != null) {
             actualAvailableStock = (unitData['availableStock'] as num?)?.toInt() ?? 0;
-            currentPrice = (unitData['price'] as num?)?.toDouble() ?? 0.0;
+            basePrice = (unitData['price'] as num?)?.toDouble() ?? 0.0;
+            // سعر العرض أولاً (وحدة ثم جذر)، ثم السعر الأساسي — نفس قاعدة offer_data_model.
+            currentPrice = _offerUnitPrice(data, unitData, basePrice);
           }
         }
       }
@@ -393,7 +412,7 @@ class CartProvider with ChangeNotifier {
       actualAvailableStock = 0;
     }
 
-    return {'minQty': productMinQty, 'maxQty': productMaxQty, 'stock': actualAvailableStock, 'currentPrice': currentPrice, 'deliveryZones': offerZones, 'status': offerStatus};
+    return {'minQty': productMinQty, 'maxQty': productMaxQty, 'stock': actualAvailableStock, 'currentPrice': currentPrice, 'basePrice': basePrice, 'deliveryZones': offerZones, 'status': offerStatus};
   }
 
   Future<void> _saveCartToLocal(Map<String, SellerOrderData> currentOrders) async {
@@ -448,7 +467,12 @@ class CartProvider with ChangeNotifier {
 
       for (var item in sellerData.items) {
         final details = await _getProductOfferDetails(item.offerId, item.unitIndex, userRole: userRole);
-        if (details['currentPrice'] > 0.0) item.price = details['currentPrice'];
+        if ((details['currentPrice'] as num? ?? 0) > 0.0) {
+          item.price = (details['currentPrice'] as num).toDouble();
+          final base = (details['basePrice'] as num?)?.toDouble() ?? 0.0;
+          // الاحتفاظ بالأصلي المشطوب متى وجد خصم — يظهر حتى الفاتورة.
+          item.originalPrice = (base > item.price) ? base : null;
+        }
         _validateCartItemAgainstStock(item, details);
         sellerData.total += (item.price * item.quantity);
       }
