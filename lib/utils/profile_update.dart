@@ -17,3 +17,11 @@ Map<String, dynamic> buildProfileNameUpdate({
   final String key = isConsumerCollection ? 'fullname' : 'name';
   return <String, dynamic>{key: name.trim()};
 }
+
+/// Display label for the locked address: shows the registered value
+/// exactly as stored, even when partial — falls back only when missing.
+String registeredAddressLabel(Object? address) {
+  final String text =
+      (address is String ? address : address?.toString() ?? '').trim();
+  return text.isEmpty ? 'غير متوفر' : text;
+}

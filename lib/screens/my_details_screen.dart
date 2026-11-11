@@ -224,7 +224,7 @@ class _MyDetailsScreenState extends State<MyDetailsScreen> {
       children: [
         _buildReadOnlyField('رقم الهاتف', _userData?['phone'] ?? 'غير متوفر', Icons.phone_android),
         _buildReadOnlyField('عنوان التوصيل (ثابت كما تم تسجيله)',
-            _userData?['address'] ?? 'غير متوفر', Icons.location_on_outlined),
+            registeredAddressLabel(_userData?['address']), Icons.location_on_outlined),
         _buildReadOnlyField(
             'البريد الإلكتروني', _userData?['email'] ?? 'غير متوفر', Icons.alternate_email),
         _buildReadOnlyField(
