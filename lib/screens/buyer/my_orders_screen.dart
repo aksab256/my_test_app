@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 // 🎯 استيراد الشريط الموحد الخاص بالـ Buyer والـ Header إذا لزم الأمر
 import 'package:my_test_app/widgets/buyer_mobile_nav_widget.dart';
+import 'package:my_test_app/widgets/buyer/order_status_bar.dart';
 
 class MyOrdersScreen extends StatefulWidget {
   static const String routeName = '/my_orders';
@@ -156,6 +157,7 @@ class _OrderCard extends StatelessWidget {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            OrderStatusBar(status: status),
             Text("التاريخ: ${DateFormat('yyyy-MM-dd').format(orderDate)}",
                 style: const TextStyle(fontSize: 12)),
             FutureBuilder<String>(
