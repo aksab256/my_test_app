@@ -4,13 +4,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:my_test_app/screens/consumer/consumer_data_models.dart';
 
 class ConsumerDataService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore;
+  // Test seam: defaults preserve the production wiring exactly.
+  ConsumerDataService({FirebaseFirestore? firestore})
+      : _firestore = firestore ?? FirebaseFirestore.instance;
 
-  // 1. جلب بيانات الأقسام المميزة (كما هي بدون تغيير مؤثر)
+  // 1. الأقسام المميزة للمستهلك: فلتر offerBehavior فقط دون اعتبار status.
   Future<List<ConsumerCategory>> fetchMainCategories() async {
     try {
       final qSnapshot = await _firestore.collection("mainCategory")
-          .where("status", isEqualTo: "active")
           .where("offerBehavior", isEqualTo: "supermarket_offers")
           .orderBy("order", descending: false)
           .get();
@@ -67,4 +69,3 @@ class ConsumerDataService {
     }
   }
 }
-
