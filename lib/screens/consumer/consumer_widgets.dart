@@ -262,7 +262,7 @@ class ConsumerCategoriesBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 120,
+      height: 165,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
@@ -283,16 +283,16 @@ class ConsumerCategoriesBanner extends StatelessWidget {
               );
             },
             child: Padding(
-              padding: const EdgeInsets.all(8.0),
+              padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
               child: Column(
                 children: [
                   CircleAvatar(
-                    radius: 30,
+                    radius: 44,
                     backgroundImage: NetworkImage(category.imageUrl),
                     backgroundColor: Colors.grey[200],
                   ),
-                  const SizedBox(height: 5),
-                  Text(category.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                  const SizedBox(height: 8),
+                  Text(category.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
                 ],
               ),
             ),
