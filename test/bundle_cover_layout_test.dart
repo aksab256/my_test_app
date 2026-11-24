@@ -89,12 +89,11 @@ void main() {
           isNot(coverFingerprint(before)));
     });
 
-    test('storage path is deterministic per bundle id', () {
-      expect(BundleCoverSpec.objectPath('b123'), 'bundles/b123/cover.jpg');
-      expect(BundleCoverSpec.objectPath('b123'),
-          BundleCoverSpec.objectPath('b123'));
-      expect(BundleCoverSpec.objectPath('b1'),
-          isNot(BundleCoverSpec.objectPath('b2')));
+    test('cover canvas stays fixed (reference is the Cloudinary public_id)', () {
+      // Covers are stored on Cloudinary: the stored reference is the
+      // public_id returned at upload time, never a client-built path.
+      expect(BundleCoverSpec.canvasSize, 1080);
+      expect(BundleCoverSpec.jpegQuality, 85);
     });
 
     test('centerSquare crops to the largest centered square', () {

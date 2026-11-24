@@ -37,8 +37,8 @@ SellerBundleModel sample() => SellerBundleModel(
       originalTotal: 190.0,
       currency: 'EGP',
       status: 'active',
-      coverImagePath: 'bundles/b1/cover.jpg',
-      coverImageUrl: 'https://storage/b1/cover.jpg',
+      coverImagePath: 'bundle_covers/b1',
+      coverImageUrl: 'https://res.cloudinary.com/dgmmx6jbu/image/upload/v9/bundle_covers/b1.jpg',
       coverUpdatedAt: DateTime.utc(2026, 11, 24, 10, 0, 0),
       coverVersion: 1,
       coverStatus: 'ready',
@@ -58,8 +58,8 @@ void main() {
       expect(back.sellerId, 's1');
       expect(back.bundleName, 'بندل الفطار');
       expect(back.description, 'كل احتياجات الفطار');
-      expect(back.coverImagePath, 'bundles/b1/cover.jpg');
-      expect(back.coverImageUrl, 'https://storage/b1/cover.jpg');
+      expect(back.coverImagePath, 'bundle_covers/b1');
+      expect(back.coverImageUrl, 'https://res.cloudinary.com/dgmmx6jbu/image/upload/v9/bundle_covers/b1.jpg');
       expect(back.coverVersion, 1);
       expect(back.coverStatus, 'ready');
       expect(back.sellerName, 'متجر النور');

@@ -85,9 +85,14 @@ class SellerBundleModel {
   /// Legacy placeholder (kept for backward compat; superseded by cover*).
   final String? bundleImagePath;
 
-  // ---- Cover (Bundle Image Composer) ----
+  // ---- Cover (Bundle Image Composer, stored on Cloudinary) ----
   final String description;
+
+  /// Cloudinary `public_id` of the cover (stable reference for any future
+  /// server-side cleanup). Never a Firebase Storage path.
   final String? coverImagePath;
+
+  /// Cloudinary `secure_url` (res.cloudinary.com) for direct display.
   final String? coverImageUrl;
   final DateTime? coverUpdatedAt;
   final int coverVersion;

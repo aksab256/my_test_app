@@ -2,17 +2,40 @@
 //
 // Bundle Image Composer (frontend): rasterizes ORIGINAL component images
 // into one fixed cover (1080x1080 JPEG q85) with a deterministic tile plan,
-// uploads it to Firebase Storage, and returns path metadata for the bundle
-// record. No AI, no regeneration: tiles are center-cropped originals;
+// uploads it to Cloudinary with the SAME unsigned setup the app already
+// uses everywhere else (cloud dgmmx6jbu + preset "commerce", no API secret
+// in the app), and returns reference metadata for the bundle record.
+//
+// No AI, no regeneration: tiles are center-cropped originals;
 // missing/invalid images become neutral numbered fallback tiles.
+// The stored reference is Cloudinary's `public_id` (coverImagePath) plus
+// `secure_url` (coverImageUrl). Old assets are never deleted: the app has
+// no image-deletion flow (logoUrl replacement orphans the old asset), so a
+// cover replace only points the bundle doc at the new asset after a
+// successful upload — the new reference is never written before success.
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 import 'package:my_test_app/utils/bundle_cover_layout.dart';
+
+/// Same unsigned Cloudinary setup the app already uses (seller logos,
+/// merchant onboarding docs): no keys or secrets live in the client.
+class BundleCoverCloudinary {
+  static const String uploadUrl =
+      'https://api.cloudinary.com/v1_1/dgmmx6jbu/image/upload';
+  static const String uploadPreset = 'commerce';
+
+  /// Folder for bundle covers (mirrors the `merchant_logos` folder usage).
+  static const String folder = 'bundle_covers';
+
+  /// Only URLs served by our own Cloudinary cloud are stored.
+  static const String imageHost = 'res.cloudinary.com';
+}
 
 /// Thrown when the cover cannot be produced or uploaded at all.
 /// Callers treat this as "proceed without cover" (fallback display).
@@ -25,10 +48,11 @@ class BundleCoverException implements Exception {
 }
 
 class BundleCoverResult {
-  /// Storage object path, e.g. `bundles/b_<key>/cover.jpg`.
+  /// Cloudinary `public_id` of the uploaded cover (stable reference for any
+  /// future server-side cleanup; never a Firebase Storage path).
   final String coverImagePath;
 
-  /// Public download URL for direct display (buyer-ready).
+  /// Cloudinary `secure_url` for direct display (buyer-ready).
   final String coverImageUrl;
 
   final DateTime coverUpdatedAt;
@@ -59,17 +83,20 @@ class BundleCoverResult {
 }
 
 class BundleCoverService {
-  final FirebaseStorage _storage;
+  final http.Client _http;
   final Duration fetchTimeout;
 
   BundleCoverService(
-      {FirebaseStorage? storage,
+      {http.Client? httpClient,
       this.fetchTimeout = const Duration(seconds: 10)})
-      : _storage = storage ?? FirebaseStorage.instance;
+      : _http = httpClient ?? http.Client();
 
-  /// Compose the cover from [inputs] and upload it for [bundleDocId].
-  /// Returns metadata for the bundle record. Throws [BundleCoverException]
-  /// only when no cover bytes could be produced or uploaded.
+  /// Compose the cover from [inputs] and upload it to Cloudinary.
+  /// Returns reference metadata for the bundle record. Throws
+  /// [BundleCoverException] when no cover bytes could be produced or the
+  /// upload fails — in that case NOTHING is written to the bundle doc by
+  /// this service, so the caller must keep the existing (or missing) cover
+  /// reference and the reservation stays untouched.
   Future<BundleCoverResult> composeAndUpload({
     required String bundleDocId,
     required List<CoverInput> inputs,
@@ -106,34 +133,49 @@ class BundleCoverService {
       jpg = Uint8List.fromList(
           img.encodeJpg(canvas, quality: BundleCoverSpec.jpegQuality));
     } catch (e) {
-      throw BundleCoverException('تعذر ترميز صورة الغلاف: $e');
+      throw BundleCoverException('تعذر تركيب صورة الغلاف: $e');
     }
 
-    final path = BundleCoverSpec.objectPath(bundleDocId);
     final now = DateTime.now().toUtc();
-    late final String url;
+    late final String publicId;
+    late final String secureUrl;
     try {
-      final ref = _storage.ref(path);
-      await ref.putData(
-        jpg,
-        SettableMetadata(
-          contentType: 'image/jpeg',
-          customMetadata: {
-            'bundleDocId': bundleDocId,
-            'coverVersion': '$version',
-            'fingerprint': coverFingerprint(inputs),
-            'composedAt': now.toIso8601String(),
-          },
-        ),
-      );
-      url = await ref.getDownloadURL();
+      final request = http.MultipartRequest(
+          'POST', Uri.parse(BundleCoverCloudinary.uploadUrl));
+      request.fields['upload_preset'] = BundleCoverCloudinary.uploadPreset;
+      request.fields['folder'] = BundleCoverCloudinary.folder;
+      request.files.add(http.MultipartFile.fromBytes('file', jpg,
+          filename: 'cover.jpg'));
+      final streamed =
+          await _http.send(request).timeout(fetchTimeout);
+      final body = await streamed.stream.bytesToString();
+      if (streamed.statusCode != 200) {
+        throw BundleCoverException(
+            'فشل رفع صورة الغلاف إلى Cloudinary (${streamed.statusCode}).');
+      }
+      final decoded = jsonDecode(body);
+      if (decoded is! Map) {
+        throw BundleCoverException(
+            'فشل رفع صورة الغلاف إلى Cloudinary (رد غير صالح).');
+      }
+      publicId = (decoded['public_id'] ?? '').toString();
+      secureUrl = (decoded['secure_url'] ?? '').toString();
+      final host = Uri.tryParse(secureUrl)?.host ?? '';
+      if (publicId.isEmpty ||
+          secureUrl.isEmpty ||
+          host != BundleCoverCloudinary.imageHost) {
+        throw BundleCoverException(
+            'فشل رفع صورة الغلاف إلى Cloudinary (بيانات ناقصة).');
+      }
+    } on BundleCoverException {
+      rethrow;
     } catch (e) {
-      throw BundleCoverException('فشل رفع صورة الغلاف إلى التخزين: $e');
+      throw BundleCoverException('فشل رفع صورة الغلاف إلى Cloudinary: $e');
     }
 
     return BundleCoverResult(
-      coverImagePath: path,
-      coverImageUrl: url,
+      coverImagePath: publicId,
+      coverImageUrl: secureUrl,
       coverUpdatedAt: now,
       coverVersion: version,
       fingerprint: coverFingerprint(inputs),
@@ -171,7 +213,7 @@ class BundleCoverService {
       return Uint8List.fromList(
           img.encodeJpg(canvas, quality: BundleCoverSpec.jpegQuality));
     } catch (e) {
-      throw BundleCoverException('تعذر ترميز معاينة الغلاف: $e');
+      throw BundleCoverException('تعذر تركيب معاينة الغلاف: $e');
     }
   }
 

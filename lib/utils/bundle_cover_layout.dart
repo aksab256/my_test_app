@@ -9,13 +9,12 @@
 import 'dart:math' as math;
 
 /// Fixed cover canvas (square, uniform for every bundle).
+/// Covers are stored on Cloudinary (unsigned preset, folder
+/// `bundle_covers`); the stored reference is the Cloudinary `public_id`,
+/// never a local storage path.
 class BundleCoverSpec {
   static const int canvasSize = 1080;
   static const int jpegQuality = 85;
-
-  /// Storage object path for a bundle cover (deterministic per bundle).
-  static String objectPath(String bundleDocId) =>
-      'bundles/$bundleDocId/cover.jpg';
 }
 
 /// One tile inside the canvas (pixel rect).
