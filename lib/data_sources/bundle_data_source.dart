@@ -44,7 +44,50 @@ class BundleCatalogRow {
   });
 }
 
-class BundleDataSource {
+/// Testable seam for the seller bundle flow (implemented by
+/// [BundleDataSource]; fakes implement it in widget tests so no Firebase
+/// instance is ever touched).
+abstract class BundleServiceGateway {
+  Future<List<BundleCatalogRow>> loadSellerCatalog(String sellerId,
+      {bool activeOnly = true});
+  Future<List<BundleCatalogRow>> refetchRows(
+      List<Map<String, dynamic>> items);
+  Future<Map<String, dynamic>> loadSellerProfile(String sellerId);
+  Future<Map<String, dynamic>> createBundle({
+    required String bundleName,
+    required List<Map<String, dynamic>> items,
+    required double totalPrice,
+    required String idempotencyKey,
+    int bundleCount,
+    String description,
+    String currency,
+    String sellerName,
+    String sellerPhone,
+    List<String> deliveryZones,
+    String? deliveryZonesSource,
+    String? coverImagePath,
+    String? coverImageUrl,
+    String? coverUpdatedAt,
+    int coverVersion,
+    String coverStatus,
+  });
+  Future<Map<String, dynamic>> updateBundleItems({
+    required String bundleId,
+    required List<Map<String, dynamic>> items,
+    int? bundleCount,
+    double? totalPrice,
+    String? description,
+    List<String>? deliveryZones,
+    String? deliveryZonesSource,
+    String? coverImagePath,
+    String? coverImageUrl,
+    String? coverUpdatedAt,
+    int? coverVersion,
+    String? coverStatus,
+  });
+}
+
+class BundleDataSource implements BundleServiceGateway {
   final FirebaseFirestore _db;
   final FirebaseFunctions _functions;
 
@@ -88,6 +131,7 @@ class BundleDataSource {
 
   /// Seller catalog only (2-5 pick happens in the UI).
   /// Reads each `productOffers` unit as its own row (unit 0 primary).
+  @override
   Future<List<BundleCatalogRow>> loadSellerCatalog(String sellerId,
       {bool activeOnly = true}) async {
     Query query =
@@ -140,6 +184,7 @@ class BundleDataSource {
   }
 
   /// Fresh refetch of the exact offer/unit rows before submit.
+  @override
   Future<List<BundleCatalogRow>> refetchRows(
       List<Map<String, dynamic>> items) async {
     final out = <BundleCatalogRow>[];
@@ -155,6 +200,7 @@ class BundleDataSource {
 
   /// Seller trade profile (real source: `sellers/{sellerId}`).
   /// Name priority mirrors SellerModel (merchantName first).
+  @override
   Future<Map<String, dynamic>> loadSellerProfile(String sellerId) async {
     String name = '';
     String phone = '';
@@ -195,11 +241,13 @@ class BundleDataSource {
             .toList());
   }
 
+  @override
   Future<Map<String, dynamic>> createBundle({
     required String bundleName,
     required List<Map<String, dynamic>> items,
     required double totalPrice,
     required String idempotencyKey,
+    int bundleCount = 1,
     String description = '',
     String currency = 'EGP',
     String sellerName = '',
@@ -221,6 +269,7 @@ class BundleDataSource {
       'totalPrice': totalPrice,
       'currency': currency,
       'idempotencyKey': idempotencyKey,
+      'bundleCount': bundleCount,
       'sellerName': sellerName,
       'sellerPhone': sellerPhone,
       'deliveryZones': deliveryZones,
@@ -235,9 +284,12 @@ class BundleDataSource {
     return Map<String, dynamic>.from(res.data as Map);
   }
 
+  @override
   Future<Map<String, dynamic>> updateBundleItems({
     required String bundleId,
     required List<Map<String, dynamic>> items,
+    int? bundleCount,
+    double? totalPrice,
     String? description,
     List<String>? deliveryZones,
     String? deliveryZonesSource,
@@ -252,6 +304,8 @@ class BundleDataSource {
     final res = await callable.call({
       'bundleId': bundleId,
       'items': items,
+      if (bundleCount != null) 'bundleCount': bundleCount,
+      if (totalPrice != null) 'totalPrice': totalPrice,
       if (description != null) 'description': description,
       if (deliveryZones != null) 'deliveryZones': deliveryZones,
       if (deliveryZonesSource != null)
@@ -277,10 +331,15 @@ class BundleDataSource {
   }
 
   Future<Map<String, dynamic>> consumeBundleSale(
-      {required String bundleId, required int bundleCount}) async {
+      {required String bundleId,
+      required int bundleCount,
+      required String saleId}) async {
     final callable = _functions.httpsCallable('consumeBundleSale');
-    final res = await callable
-        .call({'bundleId': bundleId, 'bundleCount': bundleCount});
+    final res = await callable.call({
+      'bundleId': bundleId,
+      'bundleCount': bundleCount,
+      'saleId': saleId,
+    });
     return Map<String, dynamic>.from(res.data as Map);
   }
 }

@@ -79,6 +79,15 @@ class SellerBundleModel {
   final int consumedCount;
   final int releasedCount;
 
+  /// Total units offered for sale (N). One doc sells N identical units.
+  final int bundleCount;
+
+  /// Units already sold (consumed from the lock).
+  final int soldCount;
+
+  /// Units still available for sale (locked, unsold).
+  final int remainingCount;
+
   /// Client-generated UUID sent with create; backend enforces uniqueness.
   final String? idempotencyKey;
 
@@ -131,6 +140,9 @@ class SellerBundleModel {
     this.reservedCount = 0,
     this.consumedCount = 0,
     this.releasedCount = 0,
+    this.bundleCount = 1,
+    this.soldCount = 0,
+    this.remainingCount = 1,
     this.idempotencyKey,
     this.bundleImagePath,
     this.coverImagePath,
@@ -198,6 +210,15 @@ class SellerBundleModel {
       reservedCount: (data['reservedCount'] as num?)?.toInt() ?? 0,
       consumedCount: (data['consumedCount'] as num?)?.toInt() ?? 0,
       releasedCount: (data['releasedCount'] as num?)?.toInt() ?? 0,
+      bundleCount: (data['bundleCount'] as num?)?.toInt() ?? 1,
+      soldCount: (data['soldCount'] as num?)?.toInt() ??
+          ((data['consumedCount'] as num?)?.toInt() ?? 0),
+      remainingCount: (data['remainingCount'] as num?)?.toInt() ??
+          (((data['status'] as String?) ?? 'active') == 'active'
+              ? (((data['bundleCount'] as num?)?.toInt() ?? 1) -
+                  ((data['soldCount'] as num?)?.toInt() ??
+                      ((data['consumedCount'] as num?)?.toInt() ?? 0)))
+              : 0),
       idempotencyKey: data['idempotencyKey'] as String?,
       bundleImagePath: data['bundleImagePath'] as String?,
       coverImagePath: data['coverImagePath'] as String?,
@@ -232,6 +253,9 @@ class SellerBundleModel {
       'reservedCount': reservedCount,
       'consumedCount': consumedCount,
       'releasedCount': releasedCount,
+      'bundleCount': bundleCount,
+      'soldCount': soldCount,
+      'remainingCount': remainingCount,
       if (idempotencyKey != null) 'idempotencyKey': idempotencyKey,
       'bundleImagePath': bundleImagePath,
       if (coverImagePath != null) 'coverImagePath': coverImagePath,

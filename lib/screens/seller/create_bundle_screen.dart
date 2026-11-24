@@ -5,7 +5,6 @@
 
 import 'dart:typed_data';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
@@ -23,7 +22,12 @@ class _PickedLine {
 }
 
 class CreateBundleScreen extends StatefulWidget {
-  const CreateBundleScreen({super.key});
+  final String? sellerId;
+  final BundleServiceGateway? gateway;
+  final BundleCoverService? coverService;
+
+  const CreateBundleScreen(
+      {super.key, this.sellerId, this.gateway, this.coverService});
 
   @override
   State<CreateBundleScreen> createState() => _CreateBundleScreenState();
@@ -31,15 +35,24 @@ class CreateBundleScreen extends StatefulWidget {
 
 class _CreateBundleScreenState extends State<CreateBundleScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _dataSource = BundleDataSource();
   final _nameController = TextEditingController();
   final _descController = TextEditingController();
   final _priceController = TextEditingController();
-  final _coverService = BundleCoverService();
+  final _countController = TextEditingController(text: '1');
 
-  final String _sellerId = FirebaseAuth.instance.currentUser?.uid ?? '';
+  late final BundleServiceGateway _gateway;
+  late final BundleCoverService _coverService;
+
+  /// Injected in tests; otherwise the signed-in seller.
+  String get _sellerId =>
+      widget.sellerId ?? FirebaseAuth.instance.currentUser?.uid ?? '';
+  BundleServiceGateway get _dataSource => _gateway;
   List<BundleCatalogRow> _catalog = [];
   final List<_PickedLine> _picked = [];
+
+  /// The 3-product trial preselect runs only on the very first catalog load,
+  /// so a post-submit refresh never resurrects the cleared selection.
+  bool _didInitialPreselect = false;
   bool _isLoading = true;
   bool _isSubmitting = false;
   String? _message;
@@ -58,6 +71,8 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
   @override
   void initState() {
     super.initState();
+    _gateway = widget.gateway ?? BundleDataSource();
+    _coverService = widget.coverService ?? BundleCoverService();
     _loadCatalog();
     _loadSellerProfile();
   }
@@ -96,6 +111,7 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
     _nameController.dispose();
     _descController.dispose();
     _priceController.dispose();
+    _countController.dispose();
     super.dispose();
   }
 
@@ -113,8 +129,12 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
       setState(() {
         _catalog = rows;
         _isLoading = false;
-        // Natural 3-product trial: preselect the first 3 distinct offers.
-        if (_picked.isEmpty && rows.length >= 3) {
+        // Natural 3-product trial: preselect the first 3 distinct offers,
+        // once per screen lifetime (never after a successful submit).
+        if (!_didInitialPreselect &&
+            _picked.isEmpty &&
+            rows.length >= 3) {
+          _didInitialPreselect = true;
           final seen = <String>{};
           for (final r in rows) {
             final key = '${r.offerId}||${r.unitIndex}';
@@ -179,6 +199,9 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
     });
   }
 
+  int get _requestedCount =>
+      int.tryParse(_countController.text.trim()) ?? 0;
+
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
@@ -190,10 +213,12 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
       return;
     }
     final bundlePrice = double.parse(_priceController.text.trim());
+    final requested = _requestedCount;
     setState(() {
       _isSubmitting = true;
       _message = null;
     });
+    String bundleId = '';
     try {
       // Re-fetch fresh stock immediately before the create request.
       final fresh = await _dataSource.refetchRows(_picked
@@ -231,8 +256,25 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
         setState(() => _catalog = refreshedCatalog);
         return;
       }
+      // Requested unit count vs the live computable maximum (fresh data).
+      final countCheck =
+          validateBundleCount(lines: recheck, requested: requested);
+      if (!countCheck.ok) {
+        if (!mounted) return;
+        setState(() {
+          _isSubmitting = false;
+          _message = countCheck.message;
+          _isSuccess = false;
+        });
+        final refreshedCatalog =
+            await _dataSource.loadSellerCatalog(_sellerId);
+        if (!mounted) return;
+        setState(() => _catalog = refreshedCatalog);
+        return;
+      }
+      // Unique per attempt; retries use a new key (no Firestore dependency).
       final idempotencyKey =
-          FirebaseFirestore.instance.collection('_bundleKeys').doc().id;
+          'b${DateTime.now().microsecondsSinceEpoch}-${_sellerId.hashCode}';
       final itemsPayload = _picked
           .map((p) => {
                 'offerId': p.row.offerId,
@@ -240,14 +282,15 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
                 'qtyRequired': p.qty,
               })
           .toList();
-      // Step 1: create the bundle + reserve stock (backend is the only
-      // writer of reservations). Cover starts as missing.
+      // Step 1: create the bundle + reserve N*Q per line (backend is the
+      // only writer of reservations). Cover starts as missing.
       final result = await _dataSource.createBundle(
         bundleName: _nameController.text.trim(),
         description: _descController.text.trim(),
         items: itemsPayload,
         totalPrice: bundlePrice,
         idempotencyKey: idempotencyKey,
+        bundleCount: requested,
         sellerName: _sellerName,
         sellerPhone: _sellerPhone,
         deliveryZones: _deliveryZones,
@@ -255,11 +298,11 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
         coverStatus: 'missing',
         coverVersion: 0,
       );
-      final bundleId = (result['bundleId'] ?? '').toString();
+      bundleId = (result['bundleId'] ?? '').toString();
 
-      // Step 2: compose + upload the cover (best effort — the bundle and
-      // its reservation already exist even if the cover fails).
-      String coverNote = '';
+      // Step 2: compose + upload the cover. If this stage fails, the
+      // bundle and its reservation already exist and stay consistent —
+      // the cover simply stays missing and the seller keeps the form.
       if (bundleId.isNotEmpty && _picked.length >= 2) {
         try {
           final cover = await _coverService.composeAndUpload(
@@ -276,9 +319,6 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
             coverVersion: cover.coverVersion,
             coverStatus: cover.fallbackCount > 0 ? 'fallback' : 'ready',
           );
-          coverNote = cover.fallbackCount > 0
-              ? ' (الغلاف جاهز مع بدائل محايدة لبعض الصور)'
-              : ' (صورة الغلاف جاهزة)';
         } on BundleCoverException catch (e) {
           // Record the failure so the UI shows a fallback, not a cover.
           try {
@@ -289,20 +329,35 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
               coverStatus: 'upload_failed',
             );
           } catch (_) {}
-          coverNote = ' (تعذر رفع الغلاف: $e)';
+          if (!mounted) return;
+          setState(() {
+            _isSubmitting = false;
+            _isSuccess = false;
+            _message =
+                'تم إنشاء البندل وحجز $requested بندل ($bundleId)، لكن تعذر رفع الغلاف في هذه المرحلة: $e — اختياراتك محفوظة ويمكن إعادة المحاولة من إدارة البندلات.';
+          });
+          return;
         }
       }
       if (!mounted) return;
+      final pricingSnapshot = _pricing;
+      final savingText = pricingSnapshot == null
+          ? ''
+          : ' • التوفير: ${pricingSnapshot.saving.toStringAsFixed(2)} ج.م';
+      final createdName = _nameController.text.trim();
       setState(() {
         _isSubmitting = false;
         _isSuccess = true;
-        _message = 'تم إنشاء البندل وحجز مكوناته: $bundleId$coverNote';
+        _message = 'تم إنشاء البندل بنجاح: "$createdName" — '
+            'عدد البندلات المتاحة للبيع: $requested • '
+            'السعر النهائي: ${bundlePrice.toStringAsFixed(2)} ج.م$savingText';
       });
       _formKey.currentState!.reset();
       _nameController.clear();
       _descController.clear();
       _priceController.clear();
       setState(() {
+        _countController.text = '1';
         _picked.clear();
         _previewFingerprint = null;
         _previewFuture = null;
@@ -313,7 +368,11 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
       setState(() {
         _isSubmitting = false;
         _isSuccess = false;
-        _message = 'فشل الإنشاء: $e';
+        // A bundle created before the failure keeps its reservation; the
+        // seller keeps the form and can retry or inspect the bundle.
+        _message = bundleId.isNotEmpty
+            ? 'تم إنشاء البندل ($bundleId) وحجز مخزونه، لكن خطوة لاحقة فشلت: $e — اختياراتك محفوظة.'
+            : 'فشل الإنشاء: $e';
       });
     }
   }
@@ -440,19 +499,30 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
                 step: '4',
                 title: 'معاينة البندل',
                 children: [
-                  for (final p in _picked)
-                    Text(
-                        '• ${p.row.productName} (${p.row.unitName}) × ${p.qty} '
-                        '— متاح: ${p.row.availableStock}، سيُحجز: ${p.qty}'),
+                  TextFormField(
+                    controller: _countController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                        labelText: 'عدد البندلات المتاحة للبيع',
+                        hintText: 'مثال: 5'),
+                    validator: (v) {
+                      final n = int.tryParse((v ?? '').trim());
+                      if (n == null || n < 1) {
+                        return 'أدخل عددًا صحيحًا (1 على الأقل)';
+                      }
+                      return null;
+                    },
+                    onChanged: (_) => setState(() {}),
+                  ),
                   SizedBox(height: 1.h),
                   if (pricing != null) ...[
                     Text(
-                        'مجموع الأسعار الأصلية: ${pricing.originalTotal.toStringAsFixed(2)} ج.م'),
+                        'مجموع الأسعار الأصلية للبندل الواحد: ${pricing.originalTotal.toStringAsFixed(2)} ج.م'),
                     Text(
-                        'سعر البندل: ${pricing.bundlePrice.toStringAsFixed(2)} ج.م',
+                        'سعر البندل الواحد: ${pricing.bundlePrice.toStringAsFixed(2)} ج.م',
                         style: const TextStyle(fontWeight: FontWeight.bold)),
                     Text(
-                        'التوفير: ${pricing.saving.toStringAsFixed(2)} ج.م',
+                        'التوفير في البندل الواحد: ${pricing.saving.toStringAsFixed(2)} ج.م',
                         style: TextStyle(
                             color: pricing.saving >= 0
                                 ? Colors.green.shade800
@@ -460,15 +530,16 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
                             fontWeight: FontWeight.bold)),
                   ],
                   SizedBox(height: 1.h),
-                  Text(
-                    validation.canCreate
-                        ? 'يمكن تكوين ${validation.maxBundles} بندل بهذه الكميات.'
-                        : (validation.message ?? 'غير ممكن حاليًا.'),
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: validation.canCreate
-                            ? Colors.green.shade800
-                            : Colors.red.shade800),
+                  _countSummary(validation),
+                  const Divider(height: 24),
+                  ExpansionTile(
+                    title: Text('تفاصيل المنتجات (${_picked.length})',
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: const Text(
+                        'الصورة والكمية والسعر لكل منتج داخل البندل الواحد'),
+                    children: [
+                      for (final p in _picked) _productDetailRow(p),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   const Text(
@@ -580,6 +651,84 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
       },
     );
   }
+
+  /// Requested-count summary against the live computable maximum.
+  Widget _countSummary(BundleValidation validation) {
+    final requested = _requestedCount;
+    if (!validation.canCreate) {
+      return Text(
+        validation.message ?? 'غير ممكن حاليًا.',
+        style: TextStyle(
+            fontWeight: FontWeight.bold, color: Colors.red.shade800),
+      );
+    }
+    final check =
+        validateBundleCount(lines: _stockLines, requested: requested);
+    if (check.ok) {
+      return Text(
+        'يمكن إتاحة $requested بندل للبيع (الحد الأقصى ${check.maxBundles}).',
+        style: TextStyle(
+            fontWeight: FontWeight.bold, color: Colors.green.shade800),
+      );
+    }
+    return Text(
+      check.message ?? 'العدد المطلوب يتجاوز الحد الأقصى.',
+      style:
+          TextStyle(fontWeight: FontWeight.bold, color: Colors.red.shade800),
+    );
+  }
+
+  /// One product row inside the «تفاصيل المنتجات» dropdown.
+  Widget _productDetailRow(_PickedLine p) {
+    final lineTotal = p.row.price * p.qty;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: (p.row.imageUrl != null && p.row.imageUrl!.isNotEmpty)
+                ? Image.network(
+                    p.row.imageUrl!,
+                    width: 56,
+                    height: 56,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _productImageFallback(),
+                  )
+                : _productImageFallback(),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${p.row.productName} (${p.row.unitName})',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                    'الكمية داخل البندل الواحد: ${p.qty} • سعر الوحدة: ${p.row.price.toStringAsFixed(2)} ج.م'),
+                Text(
+                    'إجمالي الكمية: ${lineTotal.toStringAsFixed(2)} ج.م • المتاح للحجز: ${p.row.availableStock}',
+                    style: const TextStyle(color: Colors.black54)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _productImageFallback() => Container(
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(
+          color: const Color(0xFF1B5E20),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        alignment: Alignment.center,
+        child: const Icon(Icons.image_not_supported,
+            color: Colors.white, size: 28),
+      );
 
   Widget _qtyRow(int index) {
     final p = _picked[index];

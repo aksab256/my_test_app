@@ -168,6 +168,81 @@ BundleValidation validateBundleDraft(List<BundleStockLine> lines) {
   );
 }
 
+/// Requested bundle-unit count vs the live computable maximum.
+///
+/// Independent from the product count and from per-bundle quantities:
+/// `requested` is how many identical bundles the seller wants to offer.
+class BundleCountCheck {
+  final bool ok;
+  final int requested;
+  final int maxBundles;
+  final String? limitingLabel;
+  final int limitingAvail;
+  final int limitingNeed;
+  final String? message;
+
+  const BundleCountCheck({
+    required this.ok,
+    required this.requested,
+    required this.maxBundles,
+    this.limitingLabel,
+    this.limitingAvail = 0,
+    this.limitingNeed = 0,
+    this.message,
+  });
+}
+
+BundleCountCheck validateBundleCount(
+    {required List<BundleStockLine> lines, required int requested}) {
+  BundleCountCheck fail(String message,
+          {int max = 0,
+          String? label,
+          int avail = 0,
+          int need = 0}) =>
+      BundleCountCheck(
+          ok: false,
+          requested: requested,
+          maxBundles: max,
+          limitingLabel: label,
+          limitingAvail: avail,
+          limitingNeed: need,
+          message: message);
+  if (requested < 1) {
+    return fail('عدد البندلات المتاحة للبيع يجب أن يكون 1 على الأقل.');
+  }
+  if (lines.length < 2 || lines.length > 5) {
+    return fail(
+        'اختر من منتجين إلى 5 منتجات مختلفة (الحالي: ${lines.length}).');
+  }
+  int best = -1;
+  BundleStockLine? limiting;
+  for (final line in lines) {
+    if (line.qtyRequired <= 0) {
+      return fail('كمية "${line.label}" يجب أن تكون 1 على الأقل.');
+    }
+    final int avail = bundleLineAvailable(line);
+    final int m = maxBundlesForLine(avail, line.qtyRequired);
+    if (best < 0 || m < best) {
+      best = m;
+      limiting = line;
+    }
+  }
+  final int maxAll = best < 0 ? 0 : best;
+  if (requested > maxAll) {
+    final l = limiting!;
+    final int avail = bundleLineAvailable(l);
+    return fail(
+      'الحد الأقصى $maxAll بندل — المنتج "${l.label}" يقيّد العدد '
+      '(يحتاج ${l.qtyRequired} لكل بندل، المتاح $avail).',
+      max: maxAll,
+      label: l.label,
+      avail: avail,
+      need: l.qtyRequired,
+    );
+  }
+  return BundleCountCheck(ok: true, requested: requested, maxBundles: maxAll);
+}
+
 /// Pricing summary: original sum vs bundle price.
 class BundlePricing {
   final double originalTotal;

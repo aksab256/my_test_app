@@ -65,12 +65,18 @@ class _ManageBundlesScreenState extends State<ManageBundlesScreen> {
       ),
     );
     if (count == null || count <= 0) return;
+    // Unique per confirmed sale: retries with the same id never double-sell.
+    final saleId = 'sale-${DateTime.now().microsecondsSinceEpoch}';
     try {
-      await _dataSource.consumeBundleSale(
-          bundleId: b.id ?? '', bundleCount: count);
+      final result = await _dataSource.consumeBundleSale(
+          bundleId: b.id ?? '', bundleCount: count, saleId: saleId);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تم استهلاك الحجز وخصم المكونات')));
+        final remaining = result['remainingCount'];
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result['alreadyProcessed'] == true
+                ? 'هذه العملية مسجلة مسبقًا — لم يحدث خصم جديد.'
+                : 'تم استهلاك $count من الحجز دون إعادة للمتاح.'
+                    '${remaining != null ? ' المتبقي للبيع: $remaining.' : ''}')));
       }
     } catch (e) {
       if (mounted) {
@@ -193,6 +199,9 @@ class _ManageBundlesScreenState extends State<ManageBundlesScreen> {
             Text(
                 'الإجمالي: ${b.totalPrice} ج.م • الأصلي: ${b.originalTotal} ج.م • التوفير: ${b.saving.toStringAsFixed(2)}'),
             Text(
+                'البندلات: متاح ${b.remainingCount} من ${b.bundleCount} • مباع: ${b.soldCount}',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(
                 'الغلاف: ${b.coverStatus} • إصدار ${b.coverVersion}'
                 '${b.coverImagePath != null ? ' • ${b.coverImagePath}' : ''}'),
             Text(
@@ -244,15 +253,34 @@ class _ManageBundlesScreenState extends State<ManageBundlesScreen> {
         '${it.offerId}||${it.unitIndex}':
             TextEditingController(text: '${it.qtyRequired}')
     };
+    final countCtrl = TextEditingController(text: '${b.bundleCount}');
+    final priceCtrl =
+        TextEditingController(text: b.totalPrice.toStringAsFixed(2));
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('تعديل كميات المكونات'),
+        title: const Text('تعديل البندل'),
         content: SizedBox(
           width: double.maxFinite,
           child: ListView(
             shrinkWrap: true,
             children: [
+              TextField(
+                controller: countCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                    labelText:
+                        'عدد البندلات المتاحة (لا يقل عن المباع: ${b.soldCount})'),
+              ),
+              TextField(
+                controller: priceCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                    labelText: 'السعر النهائي للبندل الواحد (ج.م)'),
+              ),
+              const Divider(),
+              Text('مباع حتى الآن: ${b.soldCount} — المكونات والكميات '
+                  'مقفلة بعد أول بيع.'),
               for (final it in b.items)
                 TextField(
                   controller: ctrls[
@@ -288,8 +316,14 @@ class _ManageBundlesScreenState extends State<ManageBundlesScreen> {
           'qtyRequired': q,
         };
       }).toList();
+      final newCount = int.tryParse(countCtrl.text.trim());
+      final newPrice = double.tryParse(priceCtrl.text.trim());
       await _dataSource.updateBundleItems(
-          bundleId: b.id ?? '', items: items);
+        bundleId: b.id ?? '',
+        items: items,
+        bundleCount: newCount,
+        totalPrice: (newPrice != null && newPrice > 0) ? newPrice : null,
+      );
       // Recompose the cover after any component change (best effort:
       // the reservation update above already succeeded).
       await _recomposeCover(b, items);

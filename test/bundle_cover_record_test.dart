@@ -37,6 +37,9 @@ SellerBundleModel sample() => SellerBundleModel(
       originalTotal: 190.0,
       currency: 'EGP',
       status: 'active',
+      bundleCount: 5,
+      soldCount: 2,
+      remainingCount: 3,
       coverImagePath: 'bundle_covers/b1',
       coverImageUrl: 'https://res.cloudinary.com/dgmmx6jbu/image/upload/v9/bundle_covers/b1.jpg',
       coverUpdatedAt: DateTime.utc(2026, 11, 24, 10, 0, 0),
@@ -70,6 +73,9 @@ void main() {
       expect(back.items[0].productId, 'p1');
       expect(back.items[0].qtyRequired, 2);
       expect(back.items[0].priceSnapshot, 50.0);
+      expect(back.bundleCount, 5);
+      expect(back.soldCount, 2);
+      expect(back.remainingCount, 3);
     });
 
     test('pricing exposes original, final, and saving', () {
@@ -92,6 +98,17 @@ void main() {
       // Components remain the source of truth.
       expect(back.items.length, 2);
       expect(back.items[1].offerId, 'o2');
+    });
+
+    test('legacy docs without count fields default to one bundle', () {
+      final json = sample().toJson()
+        ..remove('bundleCount')
+        ..remove('soldCount')
+        ..remove('remainingCount');
+      final back = SellerBundleModel.fromFirestore(json, 'b1');
+      expect(back.bundleCount, 1);
+      expect(back.soldCount, 0);
+      expect(back.remainingCount, 1);
     });
 
     test('upload failure status survives the round trip', () {

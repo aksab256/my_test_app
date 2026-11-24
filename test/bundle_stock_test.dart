@@ -6,6 +6,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_test_app/utils/bundle_stock.dart';
 
+/// Task table: avail 20/5/100 with per-unit qty 2/1/1 => max 5, limiter p2.
+List<BundleStockLine> tableLines() => [
+      line(offer: 'p1', physical: 20, need: 2),
+      line(offer: 'p2', physical: 5, need: 1),
+      line(offer: 'p3', physical: 100, need: 1),
+    ];
+
 BundleStockLine line({
   String offer = 'o',
   int physical = 10,
@@ -116,6 +123,72 @@ void main() {
       );
       expect(p.originalTotal, 800.0);
       expect(p.saving, 100.0);
+    });
+  });
+
+  group('bundle_count', () {
+    test('exact max request (5 of 5) is accepted', () {
+      final c = validateBundleCount(lines: tableLines(), requested: 5);
+      expect(c.ok, isTrue);
+      expect(c.maxBundles, 5);
+      expect(c.requested, 5);
+    });
+
+    test('request above max (6 of 5) names the limiting product', () {
+      final c = validateBundleCount(lines: tableLines(), requested: 6);
+      expect(c.ok, isFalse);
+      expect(c.maxBundles, 5);
+      expect(c.limitingLabel, 'p2');
+      expect(c.limitingAvail, 5);
+      expect(c.limitingNeed, 1);
+      expect(c.message, contains('الحد الأقصى 5'));
+      expect(c.message, contains('p2'));
+      expect(c.message, contains('المتاح 5'));
+    });
+
+    test('count is independent from product count and per-unit qty', () {
+      // 2 lines only, large quantities: max driven by stock, not by shape.
+      final lines = [
+        line(offer: 'a', physical: 100, need: 10),
+        line(offer: 'b', physical: 100, need: 10),
+      ];
+      expect(validateBundleCount(lines: lines, requested: 10).ok, isTrue);
+      expect(validateBundleCount(lines: lines, requested: 11).ok, isFalse);
+      // Product count stays 2 while the unit count varies freely.
+      expect(validateBundleCount(lines: lines, requested: 1).ok, isTrue);
+    });
+
+    test('zero or negative counts rejected', () {
+      expect(validateBundleCount(lines: tableLines(), requested: 0).ok,
+          isFalse);
+      expect(
+          validateBundleCount(lines: tableLines(), requested: 0).message,
+          contains('1 على الأقل'));
+    });
+
+    test('uses available stock after existing reservations, never physical alone', () {
+      final lines = [
+        line(offer: 'p1', physical: 20, bundleReserved: 12, need: 2),
+        line(offer: 'p2', physical: 5, need: 1),
+        line(offer: 'p3', physical: 100, need: 1),
+      ];
+      // p1: avail 8 -> floor(8/2)=4 becomes the new limiter.
+      final c = validateBundleCount(lines: lines, requested: 5);
+      expect(c.ok, isFalse);
+      expect(c.maxBundles, 4);
+      expect(c.limitingLabel, 'p1');
+      expect(validateBundleCount(lines: lines, requested: 4).ok, isTrue);
+    });
+
+    test('per-bundle pricing math is stable regardless of the count', () {
+      // Same per-bundle totals whether the seller offers 3 or 5 units.
+      final p = bundlePricing(
+        linePrices: [320.0, 370.0, 701.0],
+        lineQuantities: [2, 1, 1],
+        bundlePrice: 1500.0,
+      );
+      expect(p.originalTotal, 1711.0);
+      expect(p.saving, 211.0);
     });
   });
 }
