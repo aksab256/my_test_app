@@ -9,6 +9,7 @@ import 'package:my_test_app/screens/seller/offers_screen.dart';
 import 'package:my_test_app/screens/orders_screen.dart';
 import 'package:my_test_app/screens/reports_screen.dart';
 import 'package:my_test_app/screens/seller/create_gift_promo_screen.dart';
+import 'package:my_test_app/screens/seller/manage_bundles_screen.dart';
 import 'package:my_test_app/screens/seller/seller_settings_screen.dart';
 import 'package:my_test_app/screens/delivery_area_screen.dart';
 import 'package:my_test_app/screens/platform_balance_screen.dart';
@@ -87,6 +88,7 @@ class _SellerSidebarState extends State<SellerSidebar> {
 
     if (canEdit) {
       items.addAll([
+        {'title': 'البندلات', 'icon': Icons.inventory_2_rounded, 'screen': ManageBundlesScreen(sellerId: currentSellerId), 'route': 'البندلات'},
         {'title': 'الهدايا الترويجية', 'icon': Icons.card_giftcard_rounded, 'screen': CreateGiftPromoScreen(currentSellerId: currentSellerId), 'route': 'الهدايا الترويجية'},
         {'title': 'تحديد مناطق التوصيل', 'icon': Icons.map_rounded, 'screen': DeliveryAreaScreen(currentSellerId: currentSellerId, hasWriteAccess: true), 'route': 'تحديد مناطق التوصيل'},
       ]);
