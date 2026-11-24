@@ -3,13 +3,17 @@
 // Bundle creation (preview-only stock math; real reservation is backend-only).
 // Catalog is restricted to the current seller's own `productOffers`.
 
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 
+import 'package:my_test_app/data_sources/bundle_cover_service.dart';
 import 'package:my_test_app/data_sources/bundle_data_source.dart';
 import 'package:my_test_app/screens/seller/manage_bundles_screen.dart';
+import 'package:my_test_app/utils/bundle_cover_layout.dart';
 import 'package:my_test_app/utils/bundle_stock.dart';
 
 class _PickedLine {
@@ -29,7 +33,9 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
   final _formKey = GlobalKey<FormState>();
   final _dataSource = BundleDataSource();
   final _nameController = TextEditingController();
+  final _descController = TextEditingController();
   final _priceController = TextEditingController();
+  final _coverService = BundleCoverService();
 
   final String _sellerId = FirebaseAuth.instance.currentUser?.uid ?? '';
   List<BundleCatalogRow> _catalog = [];
@@ -39,15 +45,56 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
   String? _message;
   bool _isSuccess = false;
 
+  // Seller snapshot (real source: sellers/{sellerId}) for the bundle record.
+  String _sellerName = '';
+  String _sellerPhone = '';
+  List<String> _deliveryZones = const [];
+  String? _deliveryZonesSource;
+
+  // Cover preview memoization: recompose only when the fingerprint changes.
+  String? _previewFingerprint;
+  Future<List<int>>? _previewFuture;
+
   @override
   void initState() {
     super.initState();
     _loadCatalog();
+    _loadSellerProfile();
   }
+
+  Future<void> _loadSellerProfile() async {
+    if (_sellerId.isEmpty) return;
+    try {
+      final profile = await _dataSource.loadSellerProfile(_sellerId);
+      if (!mounted) return;
+      setState(() {
+        _sellerName = (profile['sellerName'] ?? '').toString();
+        _sellerPhone = (profile['sellerPhone'] ?? '').toString();
+        final zones = profile['deliveryAreas'];
+        _deliveryZones =
+            zones is List ? zones.map((e) => e.toString()).toList() : const [];
+        _deliveryZonesSource = profile['deliveryZonesSource']?.toString();
+      });
+    } catch (_) {
+      // Bundle creation still works; zones stay empty and purchase-time
+      // checks must re-read the live sellers doc.
+    }
+  }
+
+  /// Original component images only — the cover never invents imagery.
+  List<CoverInput> _coverInputs() => _picked
+      .map((p) => CoverInput(
+            offerId: p.row.offerId,
+            unitIndex: p.row.unitIndex,
+            imageUrl: p.row.imageUrl,
+            label: p.row.productName,
+          ))
+      .toList();
 
   @override
   void dispose() {
     _nameController.dispose();
+    _descController.dispose();
     _priceController.dispose();
     super.dispose();
   }
@@ -186,29 +233,80 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
       }
       final idempotencyKey =
           FirebaseFirestore.instance.collection('_bundleKeys').doc().id;
+      final itemsPayload = _picked
+          .map((p) => {
+                'offerId': p.row.offerId,
+                'unitIndex': p.row.unitIndex,
+                'qtyRequired': p.qty,
+              })
+          .toList();
+      // Step 1: create the bundle + reserve stock (backend is the only
+      // writer of reservations). Cover starts as missing.
       final result = await _dataSource.createBundle(
         bundleName: _nameController.text.trim(),
-        items: _picked
-            .map((p) => {
-                  'offerId': p.row.offerId,
-                  'unitIndex': p.row.unitIndex,
-                  'qtyRequired': p.qty,
-                })
-            .toList(),
+        description: _descController.text.trim(),
+        items: itemsPayload,
         totalPrice: bundlePrice,
         idempotencyKey: idempotencyKey,
+        sellerName: _sellerName,
+        sellerPhone: _sellerPhone,
+        deliveryZones: _deliveryZones,
+        deliveryZonesSource: _deliveryZonesSource,
+        coverStatus: 'missing',
+        coverVersion: 0,
       );
+      final bundleId = (result['bundleId'] ?? '').toString();
+
+      // Step 2: compose + upload the cover (best effort — the bundle and
+      // its reservation already exist even if the cover fails).
+      String coverNote = '';
+      if (bundleId.isNotEmpty && _picked.length >= 2) {
+        try {
+          final cover = await _coverService.composeAndUpload(
+            bundleDocId: bundleId,
+            inputs: _coverInputs(),
+            version: 1,
+          );
+          await _dataSource.updateBundleItems(
+            bundleId: bundleId,
+            items: itemsPayload,
+            coverImagePath: cover.coverImagePath,
+            coverImageUrl: cover.coverImageUrl,
+            coverUpdatedAt: cover.coverUpdatedAt.toIso8601String(),
+            coverVersion: cover.coverVersion,
+            coverStatus: cover.fallbackCount > 0 ? 'fallback' : 'ready',
+          );
+          coverNote = cover.fallbackCount > 0
+              ? ' (الغلاف جاهز مع بدائل محايدة لبعض الصور)'
+              : ' (صورة الغلاف جاهزة)';
+        } on BundleCoverException catch (e) {
+          // Record the failure so the UI shows a fallback, not a cover.
+          try {
+            await _dataSource.updateBundleItems(
+              bundleId: bundleId,
+              items: itemsPayload,
+              coverVersion: 0,
+              coverStatus: 'upload_failed',
+            );
+          } catch (_) {}
+          coverNote = ' (تعذر رفع الغلاف: $e)';
+        }
+      }
       if (!mounted) return;
       setState(() {
         _isSubmitting = false;
         _isSuccess = true;
-        _message =
-            'تم إنشاء البندل وحجز مكوناته: ${result['bundleId'] ?? ''}';
+        _message = 'تم إنشاء البندل وحجز مكوناته: $bundleId$coverNote';
       });
       _formKey.currentState!.reset();
       _nameController.clear();
+      _descController.clear();
       _priceController.clear();
-      setState(() => _picked.clear());
+      setState(() {
+        _picked.clear();
+        _previewFingerprint = null;
+        _previewFuture = null;
+      });
       await _loadCatalog();
     } catch (e) {
       if (!mounted) return;
@@ -283,6 +381,14 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
                         hintText: 'مثال: بندل العائلة'),
                     validator: (v) =>
                         (v == null || v.trim().isEmpty) ? 'أدخل اسم البندل' : null,
+                  ),
+                  SizedBox(height: 1.5.h),
+                  TextFormField(
+                    controller: _descController,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                        labelText: 'وصف البندل (اختياري)',
+                        hintText: 'مثال: كل احتياجات الفطار في عرض واحد'),
                   ),
                   SizedBox(height: 1.5.h),
                   TextFormField(
@@ -371,6 +477,22 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
                   ),
                 ],
               ),
+              _stepCard(
+                step: '5',
+                title: 'معاينة صورة الغلاف',
+                subtitle: 'تُركّب تلقائيًا من الصور الأصلية (1080×1080).',
+                children: [
+                  _coverPreview(),
+                  SizedBox(height: 1.h),
+                  Text(
+                    _deliveryZones.isEmpty
+                        ? 'مناطق التوصيل: ستُقرأ وقت الشراء من ملف التاجر (لا توجد مناطق محفوظة حاليًا).'
+                        : 'مناطق التوصيل (${_deliveryZones.length}): ${_deliveryZones.take(6).join('، ')}${_deliveryZones.length > 6 ? '…' : ''}',
+                    style:
+                        const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                ],
+              ),
               SizedBox(height: 1.h),
               SizedBox(
                 width: double.infinity,
@@ -388,6 +510,74 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Live cover preview: recomposes automatically when the component
+  /// set or any original image changes (fingerprint-keyed).
+  Widget _coverPreview() {
+    if (_picked.length < 2 || _picked.length > 5) {
+      return const Text('اختر من منتجين إلى 5 منتجات لعرض معاينة الغلاف.',
+          style: TextStyle(color: Colors.grey));
+    }
+    List<CoverInput> inputs;
+    String fingerprint;
+    try {
+      inputs = _coverInputs();
+      fingerprint = coverFingerprint(inputs);
+    } catch (e) {
+      return Text('تعذر تجهيز المعاينة: $e',
+          style: const TextStyle(color: Colors.red));
+    }
+    // Recompose only when the inputs actually changed.
+    if (_previewFuture == null || _previewFingerprint != fingerprint) {
+      _previewFingerprint = fingerprint;
+      _previewFuture = _coverService
+          .composePreviewBytes(inputs)
+          .then((bytes) => bytes.toList());
+    }
+    return FutureBuilder<List<int>>(
+      future: _previewFuture,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const AspectRatio(
+            aspectRatio: 1,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snap.hasError || !snap.hasData) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1B5E20),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text(
+              'تعذر تحميل بعض الصور — سيظهر الغلاف النهائي ببدائل محايدة.',
+              style: TextStyle(color: Colors.white),
+              textAlign: TextAlign.center,
+            ),
+          );
+        }
+        final bytes = snap.data!;
+        return Column(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.memory(
+                Uint8List.fromList(bytes),
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'معاينة تقريبية بالصور الأصلية — قد تظهر بدائل محايدة عند غياب صورة.',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        );
+      },
     );
   }
 

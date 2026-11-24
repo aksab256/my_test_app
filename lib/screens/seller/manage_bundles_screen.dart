@@ -7,9 +7,11 @@
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 
+import 'package:my_test_app/data_sources/bundle_cover_service.dart';
 import 'package:my_test_app/data_sources/bundle_data_source.dart';
 import 'package:my_test_app/models/bundle_model.dart';
 import 'package:my_test_app/screens/seller/create_bundle_screen.dart';
+import 'package:my_test_app/utils/bundle_cover_layout.dart';
 
 class ManageBundlesScreen extends StatefulWidget {
   final String sellerId;
@@ -21,6 +23,7 @@ class ManageBundlesScreen extends StatefulWidget {
 
 class _ManageBundlesScreenState extends State<ManageBundlesScreen> {
   final _dataSource = BundleDataSource();
+  final _coverService = BundleCoverService();
 
   Future<void> _setStatus(SellerBundleModel b, String status) async {
     try {
@@ -117,6 +120,44 @@ class _ManageBundlesScreenState extends State<ManageBundlesScreen> {
     );
   }
 
+  Widget _coverThumb(SellerBundleModel b) {
+    final url = b.coverImageUrl ?? '';
+    if (url.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          url,
+          height: 120,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _coverFallback(b),
+        ),
+      );
+    }
+    return _coverFallback(b);
+  }
+
+  Widget _coverFallback(SellerBundleModel b) {
+    return Container(
+      height: 72,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1B5E20),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        b.coverStatus == 'upload_failed'
+            ? 'تعذر رفع الغلاف — تُعرض المكونات كمرجع'
+            : b.coverStatus == 'missing'
+                ? 'بدون غلاف بعد — المكونات هي المرجع'
+                : 'غلاف ${b.coverStatus}',
+        style: const TextStyle(color: Colors.white, fontSize: 12),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
   Widget _card(SellerBundleModel b) {
     final isActive = b.status == 'active';
     return Card(
@@ -128,6 +169,8 @@ class _ManageBundlesScreenState extends State<ManageBundlesScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _coverThumb(b),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
@@ -141,11 +184,23 @@ class _ManageBundlesScreenState extends State<ManageBundlesScreen> {
                 ),
               ],
             ),
+            if (b.description.isNotEmpty)
+              Text(b.description,
+                  style: const TextStyle(color: Colors.black54)),
             Text(
                 'الحالة: ${b.status} • الحجز: ${b.reservationStatus} • '
                 'محجوز: ${b.reservedCount} • مستهلك: ${b.consumedCount} • محرر: ${b.releasedCount}'),
             Text(
                 'الإجمالي: ${b.totalPrice} ج.م • الأصلي: ${b.originalTotal} ج.م • التوفير: ${b.saving.toStringAsFixed(2)}'),
+            Text(
+                'الغلاف: ${b.coverStatus} • إصدار ${b.coverVersion}'
+                '${b.coverImagePath != null ? ' • ${b.coverImagePath}' : ''}'),
+            Text(
+              b.deliveryZones.isEmpty
+                  ? 'التوصيل: يُتحقق وقت الشراء من ملف التاجر'
+                  : 'التوصيل (${b.deliveryZones.length}): ${b.deliveryZones.take(6).join('، ')}',
+              style: const TextStyle(color: Colors.black54, fontSize: 12),
+            ),
             const Divider(),
             for (final it in b.items)
               Text('• ${it.productName} (${it.unitName}) × ${it.qtyRequired}'),
@@ -235,9 +290,12 @@ class _ManageBundlesScreenState extends State<ManageBundlesScreen> {
       }).toList();
       await _dataSource.updateBundleItems(
           bundleId: b.id ?? '', items: items);
+      // Recompose the cover after any component change (best effort:
+      // the reservation update above already succeeded).
+      await _recomposeCover(b, items);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('تم تعديل الحجز ذريًا.')));
+            content: Text('تم تعديل الحجز ذريًا وإعادة تركيب الغلاف.')));
       }
     } catch (e) {
       if (mounted) {
@@ -245,6 +303,48 @@ class _ManageBundlesScreenState extends State<ManageBundlesScreen> {
             .showSnackBar(SnackBar(content: Text('خطأ: $e')));
       }
     }
+  }
+
+  /// Rebuild the cover from the bundle's own original images and persist
+  /// the new path/metadata. Never throws: failures are recorded as
+  /// `upload_failed` so the components stay the source of truth.
+  Future<void> _recomposeCover(
+      SellerBundleModel b, List<Map<String, dynamic>> items) async {
+    final bundleId = b.id ?? '';
+    if (bundleId.isEmpty || b.items.length < 2 || b.items.length > 5) return;
+    final inputs = b.items
+        .map((it) => CoverInput(
+              offerId: it.offerId,
+              unitIndex: it.unitIndex,
+              imageUrl: it.imageUrl,
+              label: it.productName,
+            ))
+        .toList();
+    try {
+      final cover = await _coverService.composeAndUpload(
+        bundleDocId: bundleId,
+        inputs: inputs,
+        version: b.coverVersion + 1,
+      );
+      await _dataSource.updateBundleItems(
+        bundleId: bundleId,
+        items: items,
+        coverImagePath: cover.coverImagePath,
+        coverImageUrl: cover.coverImageUrl,
+        coverUpdatedAt: cover.coverUpdatedAt.toIso8601String(),
+        coverVersion: cover.coverVersion,
+        coverStatus: cover.fallbackCount > 0 ? 'fallback' : 'ready',
+      );
+    } on BundleCoverException {
+      try {
+        await _dataSource.updateBundleItems(
+          bundleId: bundleId,
+          items: items,
+          coverVersion: b.coverVersion,
+          coverStatus: 'upload_failed',
+        );
+      } catch (_) {}
+    } catch (_) {}
   }
 
   void _confirmDelete(SellerBundleModel b) {

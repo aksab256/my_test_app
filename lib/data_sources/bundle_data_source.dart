@@ -153,6 +153,37 @@ class BundleDataSource {
     return out;
   }
 
+  /// Seller trade profile (real source: `sellers/{sellerId}`).
+  /// Name priority mirrors SellerModel (merchantName first).
+  Future<Map<String, dynamic>> loadSellerProfile(String sellerId) async {
+    String name = '';
+    String phone = '';
+    List<String> areas = [];
+    try {
+      final doc = await _db.collection('sellers').doc(sellerId).get();
+      final data = doc.data();
+      if (data != null) {
+        name = (data['merchantName'] ??
+                data['fullname'] ??
+                data['supermarketName'] ??
+                data['name'] ??
+                '')
+            .toString();
+        phone = (data['phone'] ?? '').toString();
+        final raw = data['deliveryAreas'];
+        if (raw is List) {
+          areas = raw.map((e) => e.toString()).toList();
+        }
+      }
+    } catch (_) {}
+    return {
+      'sellerName': name,
+      'sellerPhone': phone,
+      'deliveryAreas': areas,
+      'deliveryZonesSource': 'sellers/$sellerId.deliveryAreas',
+    };
+  }
+
   Stream<List<SellerBundleModel>> streamSellerBundles(String sellerId) {
     return _db
         .collection('sellerBundles')
@@ -169,14 +200,37 @@ class BundleDataSource {
     required List<Map<String, dynamic>> items,
     required double totalPrice,
     required String idempotencyKey,
+    String description = '',
+    String currency = 'EGP',
+    String sellerName = '',
+    String sellerPhone = '',
+    List<String> deliveryZones = const [],
+    String? deliveryZonesSource,
+    String? coverImagePath,
+    String? coverImageUrl,
+    String? coverUpdatedAt,
+    int coverVersion = 0,
+    String coverStatus = 'missing',
   }) async {
     final callable =
         _functions.httpsCallable('createBundleWithReservation');
     final res = await callable.call({
       'bundleName': bundleName,
+      'description': description,
       'items': items,
       'totalPrice': totalPrice,
+      'currency': currency,
       'idempotencyKey': idempotencyKey,
+      'sellerName': sellerName,
+      'sellerPhone': sellerPhone,
+      'deliveryZones': deliveryZones,
+      if (deliveryZonesSource != null)
+        'deliveryZonesSource': deliveryZonesSource,
+      if (coverImagePath != null) 'coverImagePath': coverImagePath,
+      if (coverImageUrl != null) 'coverImageUrl': coverImageUrl,
+      if (coverUpdatedAt != null) 'coverUpdatedAt': coverUpdatedAt,
+      'coverVersion': coverVersion,
+      'coverStatus': coverStatus,
     });
     return Map<String, dynamic>.from(res.data as Map);
   }
@@ -184,10 +238,30 @@ class BundleDataSource {
   Future<Map<String, dynamic>> updateBundleItems({
     required String bundleId,
     required List<Map<String, dynamic>> items,
+    String? description,
+    List<String>? deliveryZones,
+    String? deliveryZonesSource,
+    String? coverImagePath,
+    String? coverImageUrl,
+    String? coverUpdatedAt,
+    int? coverVersion,
+    String? coverStatus,
   }) async {
     final callable =
         _functions.httpsCallable('updateBundleReservation');
-    final res = await callable.call({'bundleId': bundleId, 'items': items});
+    final res = await callable.call({
+      'bundleId': bundleId,
+      'items': items,
+      if (description != null) 'description': description,
+      if (deliveryZones != null) 'deliveryZones': deliveryZones,
+      if (deliveryZonesSource != null)
+        'deliveryZonesSource': deliveryZonesSource,
+      if (coverImagePath != null) 'coverImagePath': coverImagePath,
+      if (coverImageUrl != null) 'coverImageUrl': coverImageUrl,
+      if (coverUpdatedAt != null) 'coverUpdatedAt': coverUpdatedAt,
+      if (coverVersion != null) 'coverVersion': coverVersion,
+      if (coverStatus != null) 'coverStatus': coverStatus,
+    });
     return Map<String, dynamic>.from(res.data as Map);
   }
 

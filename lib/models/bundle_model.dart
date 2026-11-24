@@ -82,18 +82,45 @@ class SellerBundleModel {
   /// Client-generated UUID sent with create; backend enforces uniqueness.
   final String? idempotencyKey;
 
-  /// Future Bundle Image Composer hook. Always null in this task.
+  /// Legacy placeholder (kept for backward compat; superseded by cover*).
   final String? bundleImagePath;
 
+  // ---- Cover (Bundle Image Composer) ----
+  final String description;
+  final String? coverImagePath;
+  final String? coverImageUrl;
+  final DateTime? coverUpdatedAt;
+  final int coverVersion;
+  /// missing | ready | fallback | upload_failed
+  final String coverStatus;
+
+  // ---- Pricing ----
+  /// ISO code; the app prices in EGP (ج.م) everywhere.
+  final String currency;
+
+  // ---- Seller snapshot (display + future purchase checks) ----
+  final String sellerName;
+  final String sellerPhone;
+
+  /// Snapshot of the seller's live `deliveryAreas` at creation/update.
+  /// Purchase-time eligibility MUST re-read the live sellers doc
+  /// (same rule as offers: server/live data is final truth).
+  final List<String> deliveryZones;
+  final String? deliveryZonesSource;
+  final DateTime? deliveryZonesSyncedAt;
+
   final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   const SellerBundleModel({
     this.id,
     required this.sellerId,
     required this.bundleName,
+    this.description = '',
     required this.items,
     required this.totalPrice,
     required this.originalTotal,
+    this.currency = 'EGP',
     this.status = 'active',
     this.reservationStatus = 'active',
     this.reservedCount = 0,
@@ -101,7 +128,18 @@ class SellerBundleModel {
     this.releasedCount = 0,
     this.idempotencyKey,
     this.bundleImagePath,
+    this.coverImagePath,
+    this.coverImageUrl,
+    this.coverUpdatedAt,
+    this.coverVersion = 0,
+    this.coverStatus = 'missing',
+    this.sellerName = '',
+    this.sellerPhone = '',
+    this.deliveryZones = const [],
+    this.deliveryZonesSource,
+    this.deliveryZonesSyncedAt,
     this.createdAt,
+    this.updatedAt,
   });
 
   double get saving => originalTotal - totalPrice;
@@ -119,13 +157,36 @@ class SellerBundleModel {
     } else if (c is String) {
       created = DateTime.tryParse(c);
     }
+    DateTime? updated;
+    final u = data['updatedAt'];
+    if (u is Timestamp) {
+      updated = u.toDate();
+    } else if (u is String) {
+      updated = DateTime.tryParse(u);
+    }
+    DateTime? coverAt;
+    final ca = data['coverUpdatedAt'];
+    if (ca is Timestamp) {
+      coverAt = ca.toDate();
+    } else if (ca is String) {
+      coverAt = DateTime.tryParse(ca);
+    }
+    DateTime? zonesAt;
+    final za = data['deliveryZonesSyncedAt'];
+    if (za is Timestamp) {
+      zonesAt = za.toDate();
+    } else if (za is String) {
+      zonesAt = DateTime.tryParse(za);
+    }
     return SellerBundleModel(
       id: docId,
       sellerId: data['sellerId'] as String? ?? '',
       bundleName: data['bundleName'] as String? ?? 'بندل',
+      description: data['description']?.toString() ?? '',
       items: items,
       totalPrice: (data['totalPrice'] as num?)?.toDouble() ?? 0.0,
       originalTotal: (data['originalTotal'] as num?)?.toDouble() ?? 0.0,
+      currency: data['currency']?.toString() ?? 'EGP',
       status: data['status'] as String? ?? 'active',
       reservationStatus:
           data['reservationStatus'] as String? ?? 'active',
@@ -134,7 +195,20 @@ class SellerBundleModel {
       releasedCount: (data['releasedCount'] as num?)?.toInt() ?? 0,
       idempotencyKey: data['idempotencyKey'] as String?,
       bundleImagePath: data['bundleImagePath'] as String?,
+      coverImagePath: data['coverImagePath'] as String?,
+      coverImageUrl: data['coverImageUrl'] as String?,
+      coverUpdatedAt: coverAt,
+      coverVersion: (data['coverVersion'] as num?)?.toInt() ?? 0,
+      coverStatus: data['coverStatus']?.toString() ?? 'missing',
+      sellerName: data['sellerName']?.toString() ?? '',
+      sellerPhone: data['sellerPhone']?.toString() ?? '',
+      deliveryZones: ((data['deliveryZones'] as List?) ?? [])
+          .map((e) => e.toString())
+          .toList(),
+      deliveryZonesSource: data['deliveryZonesSource'] as String?,
+      deliveryZonesSyncedAt: zonesAt,
       createdAt: created,
+      updatedAt: updated,
     );
   }
 
@@ -142,10 +216,12 @@ class SellerBundleModel {
     return {
       'sellerId': sellerId,
       'bundleName': bundleName,
+      'description': description,
       'items': items.map((e) => e.toMap()).toList(),
       'totalPrice': totalPrice,
       'originalTotal': originalTotal,
       'saving': saving,
+      'currency': currency,
       'status': status,
       'reservationStatus': reservationStatus,
       'reservedCount': reservedCount,
@@ -153,6 +229,20 @@ class SellerBundleModel {
       'releasedCount': releasedCount,
       if (idempotencyKey != null) 'idempotencyKey': idempotencyKey,
       'bundleImagePath': bundleImagePath,
+      if (coverImagePath != null) 'coverImagePath': coverImagePath,
+      if (coverImageUrl != null) 'coverImageUrl': coverImageUrl,
+      if (coverUpdatedAt != null)
+        'coverUpdatedAt': coverUpdatedAt!.toIso8601String(),
+      'coverVersion': coverVersion,
+      'coverStatus': coverStatus,
+      'sellerName': sellerName,
+      'sellerPhone': sellerPhone,
+      'deliveryZones': deliveryZones,
+      if (deliveryZonesSource != null)
+        'deliveryZonesSource': deliveryZonesSource,
+      if (deliveryZonesSyncedAt != null)
+        'deliveryZonesSyncedAt':
+            deliveryZonesSyncedAt!.toIso8601String(),
     };
   }
 }
