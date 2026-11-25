@@ -133,7 +133,28 @@ List<BundleCatalogRow> _catalog() => [
       _row('p1', 'الأول', 20),
       _row('p2', 'الثاني', 5),
       _row('p3', 'الثالث', 100),
+      _row('p4', 'الرابع', 50),
+      _row('p5', 'الخامس', 8),
+      _row('p6', 'السادس', 30),
     ];
+
+/// Opens the picker sheet and waits for its entrance animation.
+Future<void> _openPicker(WidgetTester tester) async {
+  await _tapVisible(tester, find.byKey(const Key('open-product-picker')));
+}
+
+/// Searches inside the open sheet, then taps the matching result tile.
+Future<void> _searchAndPick(WidgetTester tester, String query, String offer,
+    {int unit = 0}) async {
+  await tester.enterText(
+      find.byKey(const Key('product-search-field')), query);
+  await tester.pump();
+  final tile = find.byKey(Key('picker-result-$offer-$unit'));
+  await tester.ensureVisible(tile);
+  await tester.pumpAndSettle();
+  await tester.tap(tile);
+  await tester.pumpAndSettle();
+}
 
 Future<void> _pump(WidgetTester tester,
     {required _FakeGateway gateway,
@@ -191,8 +212,12 @@ void main() {
               TextFormField, 'السعر الإجمالي للبندل (ج.م)'),
           '400');
       await tester.pump();
-      // Collapsed: details are offstage.
-      expect(find.text('الأول (علبة)', skipOffstage: true), findsNothing);
+      // Collapsed: per-product detail rows are offstage (the selected
+      // list in step 3 intentionally keeps showing names + stock).
+      expect(
+          find.textContaining('الكمية داخل البندل الواحد',
+              skipOffstage: true),
+          findsNothing);
 
       await _tapVisible(tester, find.text('تفاصيل المنتجات (3)'));
 
@@ -264,6 +289,176 @@ void main() {
       expect(find.textContaining('تعذر رفع الغلاف'), findsOneWidget);
       expect(find.textContaining('اختياراتك محفوظة'), findsOneWidget);
       expect(find.text('تفاصيل المنتجات (3)'), findsOneWidget);
+    });
+  });
+
+  group('product_picker', () {
+    testWidgets('main screen never renders the full catalog', (tester) async {
+      final gateway = _FakeGateway(_catalog());
+      await _pump(tester, gateway: gateway, cloud: _FakeCloudinary());
+
+      // 6 catalog rows, but none of the unpicked ones is on screen.
+      expect(find.text('الرابع (علبة)'), findsNothing);
+      expect(find.text('السادس (علبة)'), findsNothing);
+      expect(
+          find.byKey(const Key('open-product-picker')), findsOneWidget);
+    });
+
+    testWidgets('search by name filters and adds the product', (tester) async {
+      final gateway = _FakeGateway(_catalog());
+      await _pump(tester, gateway: gateway, cloud: _FakeCloudinary());
+
+      await _openPicker(tester);
+      await _searchAndPick(tester, 'الرابع', 'p4');
+
+      // Sheet closed, selection grew 3 -> 4 with full detail in step 3.
+      expect(find.text('تفاصيل المنتجات (4)'), findsOneWidget);
+      expect(find.textContaining('المختارة:'), findsOneWidget);
+      expect(find.textContaining('الرابع'), findsWidgets);
+      expect(find.textContaining('كود العرض: p4'), findsWidgets);
+      expect(find.textContaining('متاح 50'), findsOneWidget);
+    });
+
+    testWidgets('search by offer and product codes finds the product',
+        (tester) async {
+      final gateway = _FakeGateway(_catalog());
+      await _pump(tester, gateway: gateway, cloud: _FakeCloudinary());
+
+      // By offer code.
+      await _openPicker(tester);
+      await tester.enterText(
+          find.byKey(const Key('product-search-field')), 'p5');
+      await tester.pump();
+      expect(find.byKey(const Key('picker-result-p5-0')), findsOneWidget);
+      expect(find.byKey(const Key('picker-result-p6-0')), findsNothing);
+      await tester.ensureVisible(
+          find.byKey(const Key('picker-result-p5-0')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('picker-result-p5-0')));
+      await tester.pumpAndSettle();
+      expect(find.text('تفاصيل المنتجات (4)'), findsOneWidget);
+
+      // By product code (prod-p6) for the next one.
+      await _openPicker(tester);
+      await tester.enterText(
+          find.byKey(const Key('product-search-field')), 'prod-p6');
+      await tester.pump();
+      expect(find.byKey(const Key('picker-result-p6-0')), findsOneWidget);
+      await tester.ensureVisible(
+          find.byKey(const Key('picker-result-p6-0')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('picker-result-p6-0')));
+      await tester.pumpAndSettle();
+      expect(find.text('تفاصيل المنتجات (5)'), findsOneWidget);
+    });
+
+    testWidgets('empty query shows all, gibberish shows empty state',
+        (tester) async {
+      final gateway = _FakeGateway(_catalog());
+      await _pump(tester, gateway: gateway, cloud: _FakeCloudinary());
+
+      await _openPicker(tester);
+      expect(find.textContaining('النتائج: 6'), findsOneWidget);
+      await tester.enterText(
+          find.byKey(const Key('product-search-field')), 'zzzلا-يوجد');
+      await tester.pump();
+      expect(find.textContaining('لا توجد نتائج مطابقة'), findsWidgets);
+      expect(find.byKey(const Key('picker-result-p1-0')), findsNothing);
+    });
+
+    testWidgets('picked product cannot duplicate, only toggles',
+        (tester) async {
+      final gateway = _FakeGateway(_catalog());
+      await _pump(tester, gateway: gateway, cloud: _FakeCloudinary());
+
+      // p1 is preselected: it shows as picked, tapping removes it.
+      await _openPicker(tester);
+      await _searchAndPick(tester, 'الأول', 'p1');
+      // Tapping a picked row unpicks WITHOUT closing the sheet: the
+      // summary behind it drops to 2 while the search field stays.
+      expect(find.text('تفاصيل المنتجات (2)'), findsOneWidget);
+      expect(
+          find.byKey(const Key('product-search-field')), findsOneWidget);
+      await tester.tap(find.text('تم'));
+      await tester.pumpAndSettle();
+      expect(find.text('تفاصيل المنتجات (2)'), findsOneWidget);
+
+      // Re-adding restores exactly one line.
+      await _openPicker(tester);
+      await _searchAndPick(tester, 'الأول', 'p1');
+      expect(find.text('تفاصيل المنتجات (3)'), findsOneWidget);
+    });
+
+    testWidgets('sixth product is blocked with a limit message',
+        (tester) async {
+      final gateway = _FakeGateway(_catalog());
+      await _pump(tester, gateway: gateway, cloud: _FakeCloudinary());
+
+      await _openPicker(tester);
+      await _searchAndPick(tester, 'الرابع', 'p4');
+      await _openPicker(tester);
+      await _searchAndPick(tester, 'الخامس', 'p5');
+      expect(find.text('تفاصيل المنتجات (5)'), findsOneWidget);
+
+      await _openPicker(tester);
+      await tester.enterText(
+          find.byKey(const Key('product-search-field')), 'السادس');
+      await tester.pump();
+      await tester.ensureVisible(
+          find.byKey(const Key('picker-result-p6-0')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('picker-result-p6-0')));
+      await tester.pump();
+      // Still 5, sheet open with the limit error.
+      expect(find.textContaining('الحد الأقصى 5'), findsWidgets);
+      await tester.tap(find.text('تم'));
+      await tester.pumpAndSettle();
+      expect(find.text('تفاصيل المنتجات (5)'), findsOneWidget);
+    });
+
+    testWidgets('qty edits and removal update the max-bundle limit',
+        (tester) async {
+      final gateway = _FakeGateway(_catalog());
+      await _pump(tester, gateway: gateway, cloud: _FakeCloudinary());
+
+      // Preselect: p1(20) p2(5) p3(100) -> limiter is الثاني at 5.
+      expect(find.textContaining('الحد الأقصى 5'), findsOneWidget);
+      await _tapVisible(tester, find.byKey(const Key('qty-inc-1')));
+      expect(find.textContaining('الحد الأقصى 2'), findsOneWidget);
+      await _tapVisible(tester, find.byKey(const Key('qty-del-1')));
+      expect(find.text('تفاصيل المنتجات (2)'), findsOneWidget);
+      expect(find.textContaining('الحد الأقصى 20'), findsOneWidget);
+    });
+
+    testWidgets('selections survive a screen rebuild', (tester) async {
+      final gateway = _FakeGateway(_catalog());
+      await _pump(tester, gateway: gateway, cloud: _FakeCloudinary());
+
+      await _openPicker(tester);
+      await _searchAndPick(tester, 'الرابع', 'p4');
+      expect(find.text('تفاصيل المنتجات (4)'), findsOneWidget);
+
+      // Any setState rebuild (typing the price) keeps the selection.
+      await tester.enterText(
+          find.widgetWithText(
+              TextFormField, 'السعر الإجمالي للبندل (ج.م)'),
+          '400');
+      await tester.pump();
+      expect(find.text('تفاصيل المنتجات (4)'), findsOneWidget);
+      expect(find.textContaining('الرابع'), findsWidgets);
+      expect(find.textContaining('يمكن إتاحة 1 بندل للبيع'),
+          findsOneWidget);
+    });
+
+    testWidgets('large catalogs are capped inside the sheet', (tester) async {
+      final big = List<BundleCatalogRow>.generate(
+          40, (i) => _row('px$i', 'منتج $i', 100));
+      final gateway = _FakeGateway(big);
+      await _pump(tester, gateway: gateway, cloud: _FakeCloudinary());
+
+      await _openPicker(tester);
+      expect(find.textContaining('عرض أول 30'), findsOneWidget);
+      expect(find.byKey(const Key('picker-result-px30-0')), findsNothing);
     });
   });
 }

@@ -40,6 +40,12 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
   final _priceController = TextEditingController();
   final _countController = TextEditingController(text: '1');
 
+  /// Picker search field state lives on the screen (not in the sheet):
+  /// `Navigator.pop` completes the sheet future while the exit animation
+  /// still rebuilds the TextField, so a sheet-local controller would be
+  /// used after dispose. Reset on every open.
+  final _pickerSearchController = TextEditingController();
+
   late final BundleServiceGateway _gateway;
   late final BundleCoverService _coverService;
 
@@ -112,6 +118,7 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
     _descController.dispose();
     _priceController.dispose();
     _countController.dispose();
+    _pickerSearchController.dispose();
     super.dispose();
   }
 
@@ -180,6 +187,221 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
 
   bool _isPicked(BundleCatalogRow r) => _picked.any((p) =>
       p.row.offerId == r.offerId && p.row.unitIndex == r.unitIndex);
+
+  /// Arabic-tolerant normalization for instant search: unifies alef/hamza,
+  /// taa-marbuta/haa and alef-maqsura/yaa, strips diacritics, lowercases.
+  static String normalizeSearchInput(String s) {
+    var out = s.trim();
+    out = out.replaceAll(RegExp(r'[أإآ]'), 'ا');
+    out = out.replaceAll('ة', 'ه');
+    out = out.replaceAll('ى', 'ي');
+    out = out.replaceAll(RegExp(r'[ً-ٰٟ]'), '');
+    return out.toLowerCase();
+  }
+
+  /// Smart match: every query token must appear in the row's searchable
+  /// identifiers (name, offer code, product code, unit). No barcode field
+  /// exists in productOffers/products, so these four are the full key set.
+  static bool rowMatchesQuery(BundleCatalogRow r, String rawQuery) {
+    final tokens = normalizeSearchInput(rawQuery)
+        .split(RegExp(r'\s+'))
+        .where((t) => t.isNotEmpty)
+        .toList();
+    if (tokens.isEmpty) return true;
+    final haystack = normalizeSearchInput(
+        '${r.productName} ${r.offerId} ${r.productId} ${r.unitName}');
+    return tokens.every(haystack.contains);
+  }
+
+  /// Filtered matches for the picker sheet (picked rows included, so the
+  /// seller can unpick from the same list). Callers cap the display.
+  List<BundleCatalogRow> _filterCatalog(String query) =>
+      _catalog.where((r) => rowMatchesQuery(r, query)).toList();
+
+  /// Searchable product picker: a bottom sheet (phone-friendly) with an
+  /// instant-search field. The main screen never renders the full catalog.
+  Future<void> _openProductPicker() async {
+    _pickerSearchController.clear();
+    String query = '';
+    String? sheetError;
+    const int resultCap = 30;
+    await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (sheetContext) => DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.85,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) => StatefulBuilder(
+            builder: (context, setSheetState) {
+              final matches = _filterCatalog(query);
+              final shown = matches.take(resultCap).toList();
+              final hidden = matches.length - shown.length;
+              return ListView(
+                controller: scrollController,
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 12,
+                  bottom:
+                      MediaQuery.of(context).viewInsets.bottom + 16,
+                ),
+                children: [
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text('اختيار المنتجات',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w900, fontSize: 17)),
+                  const SizedBox(height: 2),
+                  Text(
+                    'بحث فوري بالاسم أو كود العرض/المنتج — المختارة ${_picked.length}/5',
+                    style:
+                        const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    key: const Key('product-search-field'),
+                    controller: _pickerSearchController,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: 'ابحث هنا',
+                      hintText: 'مثال: اسم المنتج أو p1',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: query.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'مسح البحث',
+                              icon: const Icon(Icons.clear),
+                              onPressed: () => setSheetState(() {
+                                _pickerSearchController.clear();
+                                query = '';
+                                sheetError = null;
+                              }),
+                            ),
+                      border: const OutlineInputBorder(),
+                    ),
+                    onChanged: (v) => setSheetState(() {
+                      query = v;
+                      sheetError = null;
+                    }),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    matches.isEmpty
+                        ? 'لا توجد نتائج مطابقة — جرّب كلمة أخرى.'
+                        : 'النتائج: ${matches.length}'
+                            '${hidden > 0 ? ' (عرض أول $resultCap — ضيّق البحث لرؤية المزيد)' : ''}',
+                    style:
+                        const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                  if (sheetError != null) ...[
+                    const SizedBox(height: 6),
+                    Text(sheetError!,
+                        style: TextStyle(
+                            color: Colors.red.shade800,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13)),
+                  ],
+                  const SizedBox(height: 6),
+                  if (matches.isEmpty)
+                    const Center(
+                        child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Text('لا توجد منتجات مطابقة.',
+                          style: TextStyle(color: Colors.grey)),
+                    )),
+                  for (final r in shown) ...[
+                    Builder(builder: (context) {
+                      final picked = _isPicked(r);
+                      return _pickerResultTile(
+                        r,
+                        picked: picked,
+                        onTap: () {
+                          if (picked) {
+                            _togglePick(r);
+                            setSheetState(() {});
+                          } else if (_picked.length >= 5) {
+                            setSheetState(() => sheetError =
+                                'الحد الأقصى 5 منتجات مختلفة في البندل.');
+                          } else {
+                            _togglePick(r);
+                            Navigator.of(sheetContext).pop();
+                          }
+                        },
+                      );
+                    }),
+                    const SizedBox(height: 8),
+                  ],
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () =>
+                          Navigator.of(sheetContext).pop(),
+                      child: const Text('تم'),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      );
+  }
+
+  /// One picker result: thumbnail, name, codes, price and live stock.
+  Widget _pickerResultTile(BundleCatalogRow r,
+      {required bool picked, required VoidCallback onTap}) {
+    return ListTile(
+      key: Key('picker-result-${r.offerId}-${r.unitIndex}'),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+            color: picked ? Colors.green : Colors.grey.shade300),
+      ),
+      tileColor: picked ? Colors.green.shade50 : null,
+      leading: _thumb(r.imageUrl, 48),
+      title: Text('${r.productName} (${r.unitName})',
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('كود العرض: ${r.offerId} • كود المنتج: ${r.productId}',
+              style:
+                  const TextStyle(color: Colors.black54, fontSize: 12)),
+          Text(
+              'السعر: ${r.price.toStringAsFixed(2)} ج.م • المتاح للبندلات: ${r.availableStock}',
+              style: const TextStyle(fontSize: 12)),
+          Text(
+              'فعلي: ${r.physicalStock} • محجوز لبندلات: ${r.bundleReserved}',
+              style:
+                  const TextStyle(color: Colors.black54, fontSize: 12)),
+        ],
+      ),
+      isThreeLine: true,
+      trailing: Icon(
+        picked ? Icons.check_circle : Icons.add_circle_outline,
+        color: picked ? Colors.green : Colors.grey,
+      ),
+      onTap: onTap,
+    );
+  }
 
   void _togglePick(BundleCatalogRow r) {
     setState(() {
@@ -468,22 +690,40 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
               _stepCard(
                 step: '2',
                 title: 'اختيار المنتجات (${_picked.length}/5)',
-                subtitle: 'التجربة الطبيعية: 3 منتجات. من كتالوجك فقط.',
+                subtitle:
+                    'التجربة الطبيعية: 3 منتجات. من كتالوجك فقط (${_catalog.length}).',
                 children: [
                   if (_catalog.isEmpty)
                     const Text('لا توجد عروض نشطة في كتالوجك بعد.'),
-                  for (final r in _catalog)
-                    CheckboxListTile(
-                      value: _isPicked(r),
-                      onChanged: (_) => _togglePick(r),
-                      title: Text(
-                          '${r.productName} — ${r.unitName}',
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text(
-                          'فعلي: ${r.physicalStock} | محجوز لبندلات: ${r.bundleReserved} | '
-                          'متاح: ${r.availableStock} | سعر: ${r.price} ج.م'),
-                      dense: true,
+                  if (_catalog.isNotEmpty)
+                    InkWell(
+                      key: const Key('open-product-picker'),
+                      onTap: _openProductPicker,
+                      borderRadius: BorderRadius.circular(12),
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'ابحث واختر من الكتالوج',
+                          hintText: 'اسم المنتج أو كود العرض/المنتج',
+                          prefixIcon: Icon(Icons.search),
+                          suffixIcon: Icon(Icons.arrow_drop_down),
+                          border: OutlineInputBorder(),
+                        ),
+                        child: Text(
+                          _picked.isEmpty
+                              ? 'اضغط لفتح قائمة البحث (${_catalog.length} منتجًا)'
+                              : 'تم اختيار ${_picked.length} من 5 — اضغط لإضافة أو إزالة',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ),
                     ),
+                  if (_picked.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'المختارة: ${_picked.map((p) => p.row.productName).join('، ')}',
+                      style:
+                          const TextStyle(color: Colors.black54, fontSize: 13),
+                    ),
+                  ],
                 ],
               ),
               _stepCard(
@@ -686,18 +926,7 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: (p.row.imageUrl != null && p.row.imageUrl!.isNotEmpty)
-                ? Image.network(
-                    p.row.imageUrl!,
-                    width: 56,
-                    height: 56,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _productImageFallback(),
-                  )
-                : _productImageFallback(),
-          ),
+          _thumb(p.row.imageUrl, 56),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -718,16 +947,31 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
     );
   }
 
-  Widget _productImageFallback() => Container(
-        width: 56,
-        height: 56,
+  Widget _productImageFallback({double size = 56}) => Container(
+        width: size,
+        height: size,
         decoration: BoxDecoration(
           color: const Color(0xFF1B5E20),
           borderRadius: BorderRadius.circular(8),
         ),
         alignment: Alignment.center,
-        child: const Icon(Icons.image_not_supported,
-            color: Colors.white, size: 28),
+        child: Icon(Icons.image_not_supported,
+            color: Colors.white, size: size / 2),
+      );
+
+  /// Product thumbnail shared by the picker and the selected list.
+  Widget _thumb(String? imageUrl, double size) => ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: (imageUrl != null && imageUrl.isNotEmpty)
+            ? Image.network(
+                imageUrl,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) =>
+                    _productImageFallback(size: size),
+              )
+            : _productImageFallback(size: size),
       );
 
   Widget _qtyRow(int index) {
@@ -736,27 +980,52 @@ class _CreateBundleScreenState extends State<CreateBundleScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _thumb(p.row.imageUrl, 48),
+          const SizedBox(width: 10),
           Expanded(
-            child: Text('${p.row.productName} (${p.row.unitName})\n'
-                'فعلي ${p.row.physicalStock} • محجوز ${p.row.bundleReserved} • متاح $avail'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.remove_circle_outline),
-            onPressed: p.qty > 1
-                ? () => setState(() => p.qty--)
-                : null,
-          ),
-          Text('${p.qty}',
-              style:
-                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline),
-            onPressed: () => setState(() => p.qty++),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, color: Colors.red),
-            onPressed: () => setState(() => _picked.removeAt(index)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${p.row.productName} (${p.row.unitName})',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                    'كود العرض: ${p.row.offerId} • كود المنتج: ${p.row.productId}',
+                    style: const TextStyle(
+                        color: Colors.black54, fontSize: 12)),
+                Text(
+                    'سعر الوحدة: ${p.row.price.toStringAsFixed(2)} ج.م\n'
+                    'فعلي ${p.row.physicalStock} • محجوز ${p.row.bundleReserved} • متاح $avail',
+                    style: const TextStyle(fontSize: 12)),
+                Row(
+                  children: [
+                    IconButton(
+                      key: Key('qty-dec-$index'),
+                      icon: const Icon(Icons.remove_circle_outline),
+                      onPressed: p.qty > 1
+                          ? () => setState(() => p.qty--)
+                          : null,
+                    ),
+                    Text('الكمية: ${p.qty}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16)),
+                    IconButton(
+                      key: Key('qty-inc-$index'),
+                      icon: const Icon(Icons.add_circle_outline),
+                      onPressed: () => setState(() => p.qty++),
+                    ),
+                    IconButton(
+                      key: Key('qty-del-$index'),
+                      icon: const Icon(
+                          Icons.delete_outline, color: Colors.red),
+                      onPressed: () =>
+                          setState(() => _picked.removeAt(index)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
