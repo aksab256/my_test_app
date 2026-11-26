@@ -145,6 +145,7 @@ class CartItemCard extends StatelessWidget {
           const Divider(height: 15),
 
           _buildPriceRow(textColor),
+          if (item.isBundle) _buildBundleBadge(),
 
           const SizedBox(height: 10),
           // 💡 الإجمالي (Total) - تم تغيير لون الخط
@@ -241,6 +242,44 @@ class CartItemCard extends StatelessWidget {
       label: 'السعر:',
       value: '${item.price.toStringAsFixed(2)} جنيه',
       color: textColor,
+    );
+  }
+
+  Widget _buildBundleBadge() {
+    final count = item.bundleItems?.length ?? 0;
+    final names = (item.bundleItems ?? [])
+        .map((e) => (e['productName'] ?? '').toString())
+        .where((e) => e.isNotEmpty)
+        .take(3)
+        .join('، ');
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.inventory_2, size: 16, color: Colors.green.shade800),
+              const SizedBox(width: 6),
+              const Text(
+                'باقة — تباع كوحدة واحدة',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            count > 0 ? 'المكونات ($count): $names' : 'المكونات محفوظة في الطلب',
+            style: const TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+        ],
+      ),
     );
   }
 

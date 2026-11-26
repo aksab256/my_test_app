@@ -6,7 +6,10 @@ import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/services/gift_eligibility_service.dart';
 import 'package:my_test_app/widgets/gift_promo_card.dart';
-import 'package:my_test_app/screens/buyer/trader_offers_screen.dart'; 
+import 'package:my_test_app/screens/buyer/trader_offers_screen.dart';
+import 'package:my_test_app/data_sources/bundle_data_source.dart';
+import 'package:my_test_app/models/bundle_model.dart';
+import 'package:my_test_app/widgets/bundle_home_hero.dart';
 
 final FirebaseFirestore _db = FirebaseFirestore.instance;
 
@@ -20,7 +23,7 @@ class HomeContent extends StatefulWidget {
 class _HomeContentState extends State<HomeContent> {
   List<Map<String, dynamic>> _categories = [];
   List<Map<String, dynamic>> _banners = [];
-  List<Map<String, dynamic>> _recentProducts = [];
+  List<SellerBundleModel> _bundles = [];
 
   bool _isLoading = true;
   List<EnrichedGift> _earnGifts = [];
@@ -84,7 +87,7 @@ class _HomeContentState extends State<HomeContent> {
   // --- جلب البيانات (تظل كما هي لضمان استقرار الباك إند) ---
   Future<void> _loadAllData() async {
     try {
-      await Future.wait([_loadCategories(), _loadRetailerBanners(), _loadRecentlyAddedProducts()]);
+      await Future.wait([_loadCategories(), _loadRetailerBanners(), _loadBundles()]);
       if (mounted) {
         setState(() => _isLoading = false);
         _startBannerAutoSlide();
@@ -108,14 +111,17 @@ class _HomeContentState extends State<HomeContent> {
     }
   }
 
-  Future<void> _loadRecentlyAddedProducts() async {
-    final q = await _db.collection('products').where('status', isEqualTo: 'active').orderBy('createdAt', descending: true).limit(10).get();
-    if (mounted) {
-      setState(() => _recentProducts = q.docs.map((doc) {
-        final data = doc.data();
-        final List<dynamic>? urls = data['imageUrls'] as List<dynamic>?;
-        return {'id': doc.id, 'name': data['name'] ?? '', 'imageUrl': (urls != null && urls.isNotEmpty) ? urls.first : '', 'subId': data['subId'] ?? '', 'mainId': data['mainId'] ?? ''};
-      }).toList());
+  // باقات المشتري: نشطة + متاحة + مطابقة لمنطقة التوصيل (نفس نظام المناطق).
+  Future<void> _loadBundles() async {
+    try {
+      final buyer = Provider.of<BuyerDataProvider>(context, listen: false);
+      final bundles = await BundleDataSource().loadActiveBundlesForBuyer(
+        buyerLat: buyer.effectiveLat,
+        buyerLng: buyer.effectiveLng,
+      );
+      if (mounted) setState(() => _bundles = bundles);
+    } catch (_) {
+      if (mounted) setState(() => _bundles = []);
     }
   }
 
@@ -166,6 +172,15 @@ class _HomeContentState extends State<HomeContent> {
           
           // 1. البانرات المتحركة
           _buildBannerSlider(),
+
+          // 1.5 باقات مميزة — محتوى رئيسي بارز بعد البانرات.
+          if (_bundles.isNotEmpty) ...[
+            BundleHomeHero(
+              bundles: _bundles,
+              onOpen: (b) => Navigator.of(context).pushNamed('/bundleDetails', arguments: b.id),
+              onViewAll: () => Navigator.of(context).pushNamed('/bundles'),
+            ),
+          ],
           
           const SizedBox(height: 25),
           
@@ -195,16 +210,6 @@ class _HomeContentState extends State<HomeContent> {
 
           // 3.5 قسم «اكسب هدايا» — يظهر فقط عند وجود عروض مؤهلة.
           _buildEarnGiftsSection(),
-
-          // 4. المنتجات المضافة حديثاً
-          if (_recentProducts.isNotEmpty) ...[
-             const Padding(
-               padding: EdgeInsets.only(right: 15, top: 20),
-               child: Text('أضيف حديثاً', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Tajawal')),
-             ),
-             const SizedBox(height: 10),
-             _buildRecentProductsList(),
-          ],
           const SizedBox(height: 30),
         ],
       ),
@@ -350,49 +355,5 @@ class _HomeContentState extends State<HomeContent> {
     );
   }
 
-  Widget _buildRecentProductsList() {
-    return SizedBox(
-      height: 200,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        reverse: true,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        itemCount: _recentProducts.length,
-        itemBuilder: (context, index) {
-          final p = _recentProducts[index];
-          return InkWell(
-            onTap: () => Navigator.of(context).pushNamed('/products', arguments: {'subId': p['subId'], 'mainId': p['mainId']}),
-            child: Container(
-              width: 140,
-              margin: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5, spreadRadius: 1)],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                      child: Image.network(p['imageUrl'], fit: BoxFit.cover),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                    child: Text(p['name'], 
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12, fontWeight: FontWeight.w600),
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                  )
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
 }
 

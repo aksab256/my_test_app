@@ -39,7 +39,7 @@ class OrderModel {
       finalOrderDate = DateTime.now();
     }
 
-    const allowedStatuses = ['new-order', 'processing', 'shipped', 'delivered', 'cancelled'];
+    const allowedStatuses = ['new-order', 'processing', 'shipped', 'delivered', 'cancelled', 'returned'];
     String rawStatus = data['status'] ?? 'new-order';
     String validatedStatus = allowedStatuses.contains(rawStatus) ? rawStatus : 'new-order';
 
@@ -128,6 +128,7 @@ class OrderModel {
       case 'shipped': return 'تم الشحن';
       case 'delivered': return 'تم التسليم';
       case 'cancelled': return 'ملغى';
+      case 'returned': return 'مرتجع';
       default: return 'طلب جديد';
     }
   }

@@ -88,6 +88,10 @@ class SellerBundleModel {
   /// Units still available for sale (locked, unsold).
   final int remainingCount;
 
+  /// Units currently held for open buyer orders (default 0 pre-hold docs).
+  /// Holds hide units from other buyers WITHOUT touching the component lock.
+  final int heldCount;
+
   /// Client-generated UUID sent with create; backend enforces uniqueness.
   final String? idempotencyKey;
 
@@ -143,6 +147,7 @@ class SellerBundleModel {
     this.bundleCount = 1,
     this.soldCount = 0,
     this.remainingCount = 1,
+    this.heldCount = 0,
     this.idempotencyKey,
     this.bundleImagePath,
     this.coverImagePath,
@@ -160,6 +165,12 @@ class SellerBundleModel {
   });
 
   double get saving => originalTotal - totalPrice;
+
+  /// Units a buyer can take right now (holds excluded, never negative).
+  int get sellableNow {
+    final int v = remainingCount - heldCount;
+    return v < 0 ? 0 : v;
+  }
 
   factory SellerBundleModel.fromFirestore(
       Map<String, dynamic> data, String docId) {
@@ -219,6 +230,7 @@ class SellerBundleModel {
                   ((data['soldCount'] as num?)?.toInt() ??
                       ((data['consumedCount'] as num?)?.toInt() ?? 0)))
               : 0),
+      heldCount: (data['heldCount'] as num?)?.toInt() ?? 0,
       idempotencyKey: data['idempotencyKey'] as String?,
       bundleImagePath: data['bundleImagePath'] as String?,
       coverImagePath: data['coverImagePath'] as String?,
@@ -256,6 +268,7 @@ class SellerBundleModel {
       'bundleCount': bundleCount,
       'soldCount': soldCount,
       'remainingCount': remainingCount,
+      'heldCount': heldCount,
       if (idempotencyKey != null) 'idempotencyKey': idempotencyKey,
       'bundleImagePath': bundleImagePath,
       if (coverImagePath != null) 'coverImagePath': coverImagePath,

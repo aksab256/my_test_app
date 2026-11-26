@@ -28,6 +28,14 @@ class CartItem {
   final String? mainId;
   final String? subId;
 
+  /// Bundle line (one bundle unit, never split into components).
+  /// All optional with safe defaults: old saved carts parse unchanged.
+  final bool isBundle;
+  final String? bundleId;
+  final int bundleCount;
+  final List<Map<String, dynamic>>? bundleItems;
+  final double? bundleOriginalTotal;
+
   CartItem({
     required this.offerId,
     required this.productId,
@@ -43,7 +51,12 @@ class CartItem {
     required this.imageUrl,
     this.mainId,
     this.subId,
-  });
+    this.isBundle = false,
+    this.bundleId,
+    int? bundleCount,
+    this.bundleItems,
+    this.bundleOriginalTotal,
+  }) : bundleCount = bundleCount ?? quantity;
 
   Map<String, dynamic> toJson() => {
     'offerId': offerId,
@@ -60,6 +73,11 @@ class CartItem {
     'imageUrl': imageUrl,
     'mainId': mainId,
     'subId': subId,
+    'isBundle': isBundle,
+    if (bundleId != null) 'bundleId': bundleId,
+    'bundleCount': bundleCount,
+    if (bundleItems != null) 'bundleItems': bundleItems,
+    if (bundleOriginalTotal != null) 'bundleOriginalTotal': bundleOriginalTotal,
   };
 
   factory CartItem.fromJson(Map<String, dynamic> json) {
@@ -78,6 +96,11 @@ class CartItem {
       imageUrl: json['imageUrl']?.toString() ?? '',
       mainId: json['mainId']?.toString(),
       subId: json['subId']?.toString(),
+      isBundle: json['isBundle'] as bool? ?? false,
+      bundleId: json['bundleId']?.toString(),
+      bundleCount: (json['bundleCount'] as num?)?.toInt() ?? (json['quantity'] as num?)?.toInt() ?? 1,
+      bundleItems: (json['bundleItems'] as List?)?.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList(),
+      bundleOriginalTotal: (json['bundleOriginalTotal'] as num?)?.toDouble(),
     );
   }
 }
@@ -355,6 +378,31 @@ class CartProvider with ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> _getProductOfferDetails(String offerId, int unitIndex, {String userRole = 'buyer'}) async {
+    // Bundle lines live in sellerBundles, not productOffers: fresh sellable
+    // count (remaining - held) drives the same stock gates as offers.
+    if (offerId.startsWith('bundle:')) {
+      try {
+        final doc = await _db
+            .collection('sellerBundles')
+            .doc(offerId.substring('bundle:'.length))
+            .get();
+        if (!doc.exists) return {'minQty': 1, 'stock': 0, 'status': 'missing'};
+        final data = doc.data()!;
+        final int remaining = (data['remainingCount'] as num?)?.toInt() ?? 0;
+        final int held = (data['heldCount'] as num?)?.toInt() ?? 0;
+        final int sellable = (remaining - held) < 0 ? 0 : remaining - held;
+        return {
+          'minQty': 1,
+          'stock': sellable,
+          'currentPrice': (data['totalPrice'] as num?)?.toDouble() ?? 0.0,
+          'basePrice': (data['originalTotal'] as num?)?.toDouble() ?? 0.0,
+          'deliveryZones': readOfferZones(data),
+          'status': data['status']?.toString(),
+        };
+      } catch (_) {
+        return {'minQty': 1, 'stock': 0};
+      }
+    }
     int productMinQty = 1;
     int? productMaxQty;
     int? actualAvailableStock;
@@ -534,11 +582,17 @@ class CartProvider with ChangeNotifier {
     if (userRole == 'buyer') {
       final fresh = await _getProductOfferDetails(offerId, unitIndex, userRole: userRole);
       final String? blocked = offerBlockedReason({'status': fresh['status']});
+      if ((fresh['currentPrice'] as num? ?? 0) <= 0 && price <= 0) {
+        throw Exception('هذا العرض بلا سعر حتى الآن');
+      }
       if (blocked != null) {
         throw Exception(blocked);
       }
       final zones = (fresh['deliveryZones'] as List?)?.whereType<String>().toList() ?? const [];
       if (!await SellerGeo.isOfferVisibleByCoords(offerData: {'deliveryZones': zones}, buyerLat: buyerLat, buyerLng: buyerLng, context: OfferListContext.productOffers)) {
+        if ((fresh['currentPrice'] as num? ?? 0) <= 0 && price <= 0) { // مكرر للأمان: الفحص الحاسم أعلاه
+        throw Exception('هذا العرض بلا سعر حتى الآن');
+      }
         throw Exception('هذا العرض غير متاح لمنطقتك');
       }
     }
@@ -566,6 +620,108 @@ class CartProvider with ChangeNotifier {
     notifyListeners(); // إشعار لحظي للواجهة ⚡
 
     // تنفيذ الحسابات وحفظ البيانات في الخلفية
+    _saveCartToLocal(_sellersOrders);
+    loadCartAndRecalculate(userRole);
+  }
+
+  /// Adds ONE bundle as a single cart line (components never split).
+  /// Same gates as offers: zone check + fresh sellable count. Bundle price
+  /// counts once toward the seller minimum (components are not cart lines).
+  Future<void> addBundleToCart({
+    required String bundleId,
+    required String sellerId,
+    required String sellerName,
+    required String bundleName,
+    required double bundlePrice,
+    required double bundleOriginalTotal,
+    required String imageUrl,
+    required List<Map<String, dynamic>> itemsSnapshot,
+    required List<String> deliveryZones,
+    int quantityToAdd = 1,
+    required String userRole,
+    double? buyerLat,
+    double? buyerLng,
+  }) async {
+    final offerId = 'bundle:$bundleId';
+    if (userRole == 'buyer') {
+      // Seller-registered region is the truth: re-read live sellers doc,
+      // fall back to the bundle snapshot only when the seller doc is missing.
+      List<String> liveZones = deliveryZones;
+      try {
+        final sellerDoc = await _db.collection('sellers').doc(sellerId).get();
+        final raw = sellerDoc.data()?['deliveryAreas'];
+        if (raw is List && raw.isNotEmpty) {
+          liveZones = raw.map((e) => e.toString()).toList();
+        }
+      } catch (_) {}
+      final visible = await SellerGeo.isOfferVisibleByCoords(
+        offerData: {'deliveryZones': liveZones},
+        buyerLat: buyerLat,
+        buyerLng: buyerLng,
+        context: OfferListContext.productOffers,
+      );
+      if (!visible) throw Exception('هذه الباقة غير متاحة لمنطقتك');
+    }
+    final fresh = await _getProductOfferDetails(offerId, 0, userRole: userRole);
+    final int sellable = (fresh['stock'] as num?)?.toInt() ?? 0;
+    if (fresh['status']?.toString() != 'active' || sellable <= 0) {
+      throw Exception('هذه الباقة غير متاحة حاليًا');
+    }
+    final index = _cartItems.indexWhere(
+        (item) => item.offerId == offerId && !item.isGift);
+    final existing = index == -1 ? 0 : _cartItems[index].quantity;
+    if (existing + quantityToAdd > sellable) {
+      throw Exception('المتاح من هذه الباقة: $sellable فقط');
+    }
+    _cartItems.removeWhere((item) => item.isGift);
+    if (index != -1) {
+      final prev = _cartItems[index];
+      if (prev.isBundle) {
+        _cartItems[index] = CartItem(
+          offerId: prev.offerId,
+          productId: prev.productId,
+          sellerId: prev.sellerId,
+          sellerName: prev.sellerName,
+          name: prev.name,
+          price: prev.price,
+          originalPrice: prev.originalPrice,
+          unit: prev.unit,
+          unitIndex: prev.unitIndex,
+          quantity: existing + quantityToAdd,
+          imageUrl: prev.imageUrl,
+          mainId: prev.mainId,
+          subId: prev.subId,
+          isBundle: true,
+          bundleId: prev.bundleId,
+          bundleCount: existing + quantityToAdd,
+          bundleItems: prev.bundleItems,
+          bundleOriginalTotal: prev.bundleOriginalTotal,
+        );
+      } else {
+        _cartItems[index].quantity = existing + quantityToAdd;
+      }
+    } else {
+      _cartItems.add(CartItem(
+        offerId: offerId,
+        productId: bundleId,
+        sellerId: sellerId,
+        sellerName: sellerName,
+        name: bundleName,
+        price: bundlePrice,
+        originalPrice:
+            bundleOriginalTotal > bundlePrice ? bundleOriginalTotal : null,
+        unit: 'باقة',
+        unitIndex: 0,
+        quantity: quantityToAdd,
+        imageUrl: imageUrl,
+        isBundle: true,
+        bundleId: bundleId,
+        bundleCount: quantityToAdd,
+        bundleItems: itemsSnapshot,
+        bundleOriginalTotal: bundleOriginalTotal,
+      ));
+    }
+    notifyListeners();
     _saveCartToLocal(_sellersOrders);
     loadCartAndRecalculate(userRole);
   }
@@ -612,7 +768,31 @@ class CartProvider with ChangeNotifier {
       if (limits.validate(newQty) != null) return;
     }
 
-    _cartItems[index].quantity = newQty;
+    final current = _cartItems[index];
+    if (current.isBundle) {
+      _cartItems[index] = CartItem(
+        offerId: current.offerId,
+        productId: current.productId,
+        sellerId: current.sellerId,
+        sellerName: current.sellerName,
+        name: current.name,
+        price: current.price,
+        originalPrice: current.originalPrice,
+        unit: current.unit,
+        unitIndex: current.unitIndex,
+        quantity: newQty,
+        imageUrl: current.imageUrl,
+        mainId: current.mainId,
+        subId: current.subId,
+        isBundle: true,
+        bundleId: current.bundleId,
+        bundleCount: newQty,
+        bundleItems: current.bundleItems,
+        bundleOriginalTotal: current.bundleOriginalTotal,
+      );
+    } else {
+      _cartItems[index].quantity = newQty;
+    }
     notifyListeners(); // تحديث فوري ⚡
 
     await _saveCartToLocal(_sellersOrders);

@@ -39,6 +39,8 @@ import 'package:my_test_app/screens/buyer/buyer_home_screen.dart';
 import 'package:my_test_app/screens/consumer/consumer_home_screen.dart';
 import 'package:my_test_app/screens/auth/new_client_screen.dart';
 import 'package:my_test_app/screens/buyer/cart_screen.dart';
+import 'package:my_test_app/screens/buyer/all_bundles_screen.dart';
+import 'package:my_test_app/screens/buyer/bundle_details_screen.dart';
 import 'package:my_test_app/screens/checkout/checkout_screen.dart';
 import 'package:my_test_app/screens/buyer/my_orders_screen.dart';
 import 'package:my_test_app/screens/buyer/traders_screen.dart';
@@ -455,6 +457,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 isStoreOwner: args?['isStoreOwner'] ?? false,
               );
             },
+            '/bundles': (context) => const AllBundlesScreen(),
             '/customerTracking': (context) {
               final orderId = ModalRoute.of(context)?.settings.arguments as String? ?? '';
               return CustomerTrackingScreen(orderId: orderId);
@@ -520,6 +523,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   mainCategoryId: args['mainId'] ?? '',
                   subCategoryId: args['subId'] ?? '',
                 ),
+              );
+            }
+            if (settings.name == '/bundleDetails') {
+              final bundleId = settings.arguments as String? ?? '';
+              return MaterialPageRoute(
+                builder: (context) => BundleDetailsScreen(bundleId: bundleId),
               );
             }
             return null;

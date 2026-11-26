@@ -158,6 +158,52 @@ class CheckoutController {
         return dropped;
     }
 
+    static bool isBundleCheckoutLine(Map<String, dynamic> item) {
+      if (item['isBundle'] == true) return true;
+      final offerId = (item['offerId'] ?? '').toString();
+      return offerId.startsWith('bundle:');
+    }
+
+    static String bundleIdOfCheckoutLine(Map<String, dynamic> item) {
+      final raw = (item['bundleId'] ?? '').toString().trim();
+      if (raw.isNotEmpty) return raw;
+      final offerId = (item['offerId'] ?? '').toString();
+      if (offerId.startsWith('bundle:')) return offerId.substring('bundle:'.length);
+      return '';
+    }
+
+    static int bundleCountOfCheckoutLine(Map<String, dynamic> item) {
+      final bc = (item['bundleCount'] as num?)?.toInt() ?? 0;
+      if (bc >= 1) return bc;
+      return (item['quantity'] as num?)?.toInt() ?? 0;
+    }
+
+    static Future<void> holdBundleLines({
+      required FirebaseFirestore db,
+      required Map<String, String> orderIdBySeller,
+      required Map<String, Map<String, dynamic>> groupedItems,
+      Future<void> Function({required String bundleId, required String orderId, required int count})? bundleHoldCaller,
+    }) async {
+      for (final entry in groupedItems.entries) {
+        final orderId = orderIdBySeller[entry.key];
+        if (orderId == null || orderId.isEmpty) continue;
+        final items = (entry.value['items'] as List?)?.whereType<Map<String, dynamic>>() ?? [];
+        for (final item in items) {
+          if (item['isGift'] == true) continue;
+          if (!isBundleCheckoutLine(item)) continue;
+          final bundleId = bundleIdOfCheckoutLine(item);
+          final count = bundleCountOfCheckoutLine(item);
+          if (bundleId.isEmpty || count < 1) continue;
+          if (bundleHoldCaller != null) {
+            await bundleHoldCaller(bundleId: bundleId, orderId: orderId, count: count);
+          } else {
+            final callable = FirebaseFunctions.instance.httpsCallable('holdBundleForOrder');
+            await callable.call({'bundleId': bundleId, 'orderId': orderId, 'bundleCount': count});
+          }
+        }
+      }
+    }
+
     static Future<double> fetchCashback(String userId, String userRole, {FirebaseFirestore? firestore}) async {
         if (userId.isEmpty) return 0.0;
         final bool isConsumer = (userRole == 'consumer');
@@ -189,6 +235,7 @@ class CheckoutController {
         // Test seams: defaults preserve the production wiring exactly.
         FirebaseFirestore? firestore,
         Future<List<String>> Function(Map<String, dynamic> payload)? secureOrdersHandler,
+        Future<void> Function({required String bundleId, required String orderId, required int count})? bundleHoldCaller,
         }) async {
 
         final buyerProvider = Provider.of<BuyerDataProvider>(context, listen: false);
@@ -264,11 +311,40 @@ class CheckoutController {
                 List<String> freshZones = const [];
                 String? freshStatus;
                 try {
-                  final offerSnap = await db.collection('productOffers').doc((item['offerId'] ?? '').toString()).get();
-                  if (offerSnap.exists) {
-                    final Map<String, dynamic> freshData = offerSnap.data() ?? {};
-                    freshZones = readOfferZones(freshData);
-                    freshStatus = freshData['status']?.toString();
+                  if (isBundleCheckoutLine(item)) {
+                    final bid = bundleIdOfCheckoutLine(item);
+                    final bSnap = await db.collection('sellerBundles').doc(bid).get();
+                    if (bSnap.exists) {
+                      final Map<String, dynamic> bData = bSnap.data() ?? {};
+                      freshStatus = bData['status']?.toString();
+                      final int remaining = (bData['remainingCount'] as num?)?.toInt() ?? 0;
+                      final int held = (bData['heldCount'] as num?)?.toInt() ?? 0;
+                      final int sellable = remaining - held < 0 ? 0 : remaining - held;
+                      if (sellable < bundleCountOfCheckoutLine(item)) {
+                        freshStatus = 'sold-out';
+                      }
+                      // Seller-registered region is the truth for bundles.
+                      try {
+                        final sSnap = await db.collection('sellers').doc(sellerId).get();
+                        final raw = sSnap.data()?['deliveryAreas'];
+                        if (raw is List && raw.isNotEmpty) {
+                          freshZones = raw.map((e) => e.toString()).toList();
+                        } else {
+                          freshZones = readOfferZones(bData);
+                        }
+                      } catch (_) {
+                        freshZones = readOfferZones(bData);
+                      }
+                    } else {
+                      freshStatus = 'missing';
+                    }
+                  } else {
+                    final offerSnap = await db.collection('productOffers').doc((item['offerId'] ?? '').toString()).get();
+                    if (offerSnap.exists) {
+                      final Map<String, dynamic> freshData = offerSnap.data() ?? {};
+                      freshZones = readOfferZones(freshData);
+                      freshStatus = freshData['status']?.toString();
+                    }
                   }
                 } catch (_) {}
                 if (offerBlockedReason({'status': freshStatus}) != null) {
@@ -306,6 +382,7 @@ class CheckoutController {
         
         try {
             List<String> successfulOrderIds = [];
+            final Map<String, String> orderIdBySeller = {};
             final Map<String, double> commissionRatesCache = {};
             final Map<String, String?> sellerPhonesCache = {};
             
@@ -369,7 +446,12 @@ class CheckoutController {
                 });
 
                 if (secureOrdersHandler != null) {
-                    successfulOrderIds.addAll(await secureOrdersHandler(securePayload));
+                    final ids = await secureOrdersHandler(securePayload);
+                    successfulOrderIds.addAll(ids);
+                    for (int i = 0; i < ids.length && i < allOrdersData.length; i++) {
+                      final sid = (allOrdersData[i]['sellerId'] ?? '').toString();
+                      if (sid.isNotEmpty) orderIdBySeller[sid] = ids[i];
+                    }
                 } else {
                     final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'us-central1')
                         .httpsCallable('createOrdersWithPromos');
@@ -377,6 +459,10 @@ class CheckoutController {
                     final result = await callable.call(securePayload);
                     if (result.data != null && result.data['orderIds'] is List) {
                     successfulOrderIds.addAll(List<String>.from(result.data['orderIds']));
+                    for (int i = 0; i < successfulOrderIds.length && i < allOrdersData.length; i++) {
+                      final sid = (allOrdersData[i]['sellerId'] ?? '').toString();
+                      if (sid.isNotEmpty) orderIdBySeller.putIfAbsent(sid, () => successfulOrderIds[i]);
+                    }
                     }
                 }
             } else {
@@ -425,6 +511,7 @@ class CheckoutController {
                     
                     final docRef = await db.collection(ordersCollectionName).add(removeNullValues(orderData));
                     successfulOrderIds.add(docRef.id);
+                    orderIdBySeller[sellerId] = docRef.id;
                     await docRef.update({'orderId': docRef.id});
                 }
 
@@ -433,6 +520,23 @@ class CheckoutController {
                         cashbackFieldName: currentCashback - discountUsed
                     });
                 }
+            }
+
+            try {
+              await holdBundleLines(
+                db: db,
+                orderIdBySeller: orderIdBySeller,
+                groupedItems: groupedItems,
+                bundleHoldCaller: bundleHoldCaller,
+              );
+            } catch (holdError) {
+              for (final oid in orderIdBySeller.values) {
+                try {
+                  await db.collection(ordersCollectionName).doc(oid).update({'status': 'cancelled'});
+                } catch (_) {}
+              }
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر حجز الباقة: $holdError'), backgroundColor: kErrorColor));
+              return false;
             }
 
             if (successfulOrderIds.isNotEmpty) {

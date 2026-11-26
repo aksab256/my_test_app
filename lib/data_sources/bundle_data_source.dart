@@ -10,6 +10,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:my_test_app/models/bundle_model.dart';
+import 'package:my_test_app/utils/offer_geo_filter.dart';
+import 'package:my_test_app/utils/seller_geo.dart';
 
 /// One catalog row from the seller's own `productOffers`.
 class BundleCatalogRow {
@@ -239,6 +241,73 @@ class BundleDataSource implements BundleServiceGateway {
             .map((d) =>
                 SellerBundleModel.fromFirestore(d.data(), d.id))
             .toList());
+  }
+
+  /// Buyer storefront: active bundles with sellable units, filtered by the
+  /// buyer's delivery zone using the SAME polygon system as offers
+  /// (SellerGeo). Server query is status-only (composite-index free);
+  /// sellable + zone gates apply client-side in the data layer — never
+  /// hidden-view-only: add-to-cart re-checks both before writing.
+  Future<List<SellerBundleModel>> loadActiveBundlesForBuyer({
+    double? buyerLat,
+    double? buyerLng,
+    int limit = 50,
+  }) async {
+    final snap = await _db
+        .collection('sellerBundles')
+        .where('status', isEqualTo: 'active')
+        .limit(limit)
+        .get();
+    final out = <SellerBundleModel>[];
+    final sellerZonesCache = <String, List<String>>{};
+    Future<List<String>> liveZonesFor(String sellerId, List<String> fallback) async {
+      if (sellerZonesCache.containsKey(sellerId)) {
+        return sellerZonesCache[sellerId]!;
+      }
+      try {
+        final sdoc = await _db.collection('sellers').doc(sellerId).get();
+        final raw = sdoc.data()?['deliveryAreas'];
+        if (raw is List && raw.isNotEmpty) {
+          final zones = raw.map((e) => e.toString()).toList();
+          sellerZonesCache[sellerId] = zones;
+          return zones;
+        }
+      } catch (_) {}
+      sellerZonesCache[sellerId] = fallback;
+      return fallback;
+    }
+
+    for (final d in snap.docs) {
+      final b = SellerBundleModel.fromFirestore(d.data(), d.id);
+      if (b.sellableNow <= 0) continue;
+      // Seller-registered region is the truth (same polygon system as offers).
+      // The bundle snapshot is only a fallback when the seller doc is missing.
+      final zones = await liveZonesFor(b.sellerId, b.deliveryZones);
+      final visible = await SellerGeo.isOfferVisibleByCoords(
+        offerData: {'deliveryZones': zones},
+        buyerLat: buyerLat,
+        buyerLng: buyerLng,
+        context: OfferListContext.productOffers,
+      );
+      if (!visible) continue;
+      out.add(b);
+    }
+    return out;
+  }
+
+  /// Single bundle doc for the details screen (fresh read, not a stream).
+  Future<SellerBundleModel?> loadBundle(String bundleId) async {
+    if (bundleId.isEmpty) return null;
+    final doc = await _db.collection('sellerBundles').doc(bundleId).get();
+    if (!doc.exists) return null;
+    return SellerBundleModel.fromFirestore(doc.data() ?? {}, doc.id);
+  }
+
+  /// Fresh sellable count right before cart/checkout actions.
+  Future<int> loadBundleSellable(String bundleId) async {
+    final b = await loadBundle(bundleId);
+    if (b == null || b.status != 'active') return 0;
+    return b.sellableNow;
   }
 
   @override
