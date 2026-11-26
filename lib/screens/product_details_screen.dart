@@ -14,6 +14,18 @@ import 'package:my_test_app/services/analytics_service.dart';
 
 final FirebaseFirestore _db = FirebaseFirestore.instance;
 
+/// Resolves the chargeable price for the details-screen add-to-cart path.
+/// Firestore returns whole numbers as [int] and decimals as [double], while
+/// the cart API requires [double] — normalize via [num.toDouble].
+/// A positive numeric offer price wins; otherwise fall back to [price];
+/// missing/non-numeric values resolve to 0.0 (rejected downstream as
+/// priceless, never silently treated as a valid price).
+double resolveDetailsPrice(dynamic offerPrice, dynamic price) {
+  if (offerPrice is num && offerPrice > 0) return offerPrice.toDouble();
+  if (price is num) return price.toDouble();
+  return 0.0;
+}
+
 class ProductDetailsScreen extends StatefulWidget {
   static const routeName = '/productDetails';
   final String? productId;
@@ -137,7 +149,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         sellerId: offer.sellerId,
         sellerName: offer.sellerName,
         name: _productData?['name'] ?? 'منتج',
-        price: (offer.offerPrice != null && offer.offerPrice! > 0) ? offer.offerPrice! : ((offer.price is num) ? offer.price.toDouble() : 0.0),
+        price: resolveDetailsPrice(offer.offerPrice, offer.price),
         unit: offer.unitName,
         unitIndex: offer.unitIndex ?? 0,
         imageUrl: imageUrl,
@@ -160,7 +172,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           offerId: offer.offerId,
           sellerId: offer.sellerId,
           quantity: offer.minQty ?? 1,
-          price: (offer.offerPrice != null && offer.offerPrice! > 0) ? offer.offerPrice! : ((offer.price is num) ? offer.price.toDouble() : 0.0),
+          price: resolveDetailsPrice(offer.offerPrice, offer.price),
           unit: offer.unitName,
           role: 'buyer',
           screen: 'product_details',
