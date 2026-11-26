@@ -184,7 +184,7 @@ class _BundleDetailsScreenState extends State<BundleDetailsScreen> {
                   '${it.productName} (${it.unitName})',
                   style: const TextStyle(fontWeight: FontWeight.bold)),
               subtitle: Text(
-                  'الكمية في الباقة: ${it.qtyRequired} • سعر الوحدة التقريبي: ${it.priceSnapshot.toStringAsFixed(2)} ج.م'),
+                  'الكمية في الباقة: ${it.qtyRequired} • السعر الأصلي: ${it.priceSnapshot.toStringAsFixed(2)} ج.م'),
             ),
           ),
         const SizedBox(height: 14),
@@ -200,8 +200,8 @@ class _BundleDetailsScreenState extends State<BundleDetailsScreen> {
           ),
           child: Text(
             b.deliveryZones.isEmpty
-                ? 'التوصيل: جميع المناطق • الحجز يتم عند إنشاء الطلب، والخصم النهائي عند التسليم فقط.'
-                : 'التوصيل: ${b.deliveryZones.take(5).join('، ')}${b.deliveryZones.length > 5 ? '…' : ''} • الحجز يتم عند إنشاء الطلب، والخصم النهائي عند التسليم فقط.',
+                ? 'التوصيل: جميع المناطق'
+                : 'التوصيل: ${b.deliveryZones.take(5).join('، ')}${b.deliveryZones.length > 5 ? '…' : ''}',
             style: const TextStyle(fontSize: 12, color: Colors.black54),
           ),
         ),

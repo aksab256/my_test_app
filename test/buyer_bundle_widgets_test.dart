@@ -131,7 +131,10 @@ void main() {
       expect(find.byKey(const Key('bundle-component-p1-0')), findsOneWidget);
       expect(find.byKey(const Key('bundle-component-p2-0')), findsOneWidget);
       expect(find.textContaining('1500'), findsWidgets);
-      expect(find.textContaining('الحجز يتم عند إنشاء الطلب'), findsOneWidget);
+      expect(find.textContaining('الحجز يتم'), findsNothing);
+      expect(find.textContaining('جميع المناطق'), findsOneWidget);
+      expect(find.textContaining('السعر الأصلي'), findsWidgets);
+      expect(find.textContaining('التقريبي'), findsNothing);
       expect(find.byKey(const Key('bundle-add-to-cart')), findsOneWidget);
     });
 
