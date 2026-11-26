@@ -108,27 +108,31 @@ class _BundleHomeHeroState extends State<BundleHomeHero> {
           mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(
-              height: 172,
+              height: 132,
               width: double.infinity,
-              child: cover != null && cover.isNotEmpty
-                  ? Image.network(cover,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      loadingBuilder: (ctx, child, progress) => progress == null
-                          ? child
-                          : Container(
-                              color: Colors.grey.shade200,
-                              alignment: Alignment.center,
-                              child: const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2),
+              // خلفية محايدة تملأ الفراغ حول الصورة مع contain دون قص أي جزء منها.
+              child: Container(
+                color: Colors.grey.shade100,
+                child: cover != null && cover.isNotEmpty
+                    ? Image.network(cover,
+                        fit: BoxFit.contain,
+                        width: double.infinity,
+                        loadingBuilder: (ctx, child, progress) => progress == null
+                            ? child
+                            : Container(
+                                color: Colors.grey.shade200,
+                                alignment: Alignment.center,
+                                child: const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2),
+                                ),
                               ),
-                            ),
-                      errorBuilder: (_, __, ___) =>
-                          _coverFallback(b.bundleName))
-                  : _coverFallback(b.bundleName),
+                        errorBuilder: (_, __, ___) =>
+                            _coverFallback(b.bundleName))
+                    : _coverFallback(b.bundleName),
+              ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
