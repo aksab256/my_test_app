@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' hide GeoPoint;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_test_app/services/gift_eligibility_service.dart';
 import 'package:my_test_app/utils/offer_geo_filter.dart';

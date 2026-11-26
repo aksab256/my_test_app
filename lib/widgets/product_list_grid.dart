@@ -7,6 +7,7 @@ import 'package:my_test_app/providers/product_offers_provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/utils/offer_geo_filter.dart';
 import 'package:my_test_app/utils/seller_geo.dart';
+import 'package:my_test_app/utils/price_display.dart';
 
 /// شبكة منتجات سياق Product Offer Context:
 /// منتج واحد -> أسعار Sellers متعددين لهذا المنتج، مع geo-filter.
@@ -60,7 +61,7 @@ class _ProductListGridState extends State<ProductListGrid> {
   }
 
   /// معرفات المنتجات التي تملك عرض سعر واحداً ظاهراً على الأقل
-  /// (نشط + داخل مضلعات نقطة المشتري). دفعات whereIn حتى 10.
+  /// (نشط + مسعر بسعر صالح + داخل مضلعات نقطة المشتري). دفعات whereIn حتى 10.
   Future<Set<String>> _visibleProductIds(List<String> ids) async {
     if (ids.isEmpty) return const {};
     final out = <String>{};
@@ -75,6 +76,7 @@ class _ProductListGridState extends State<ProductListGrid> {
         final data = doc.data();
         final pid = (data['productId'] ?? '').toString();
         if (pid.isEmpty || out.contains(pid)) continue;
+        if (!hasPricedOfferDoc(data)) continue;
         if (await SellerGeo.isOfferVisibleByCoords(
           offerData: data,
           buyerLat: _buyerLat,

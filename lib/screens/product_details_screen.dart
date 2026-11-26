@@ -98,6 +98,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
       setState(() {
         _filteredOffers = allOffers.where((offer) {
+          if (!offer.hasUsablePrice) return false;
           return SellerGeo.isOfferVisibleSync(
             offerData: {
               'deliveryZones': [

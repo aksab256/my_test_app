@@ -8,6 +8,7 @@ import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/services/buyer_area_resolver.dart';
 import 'package:my_test_app/utils/offer_geo_filter.dart' as geof;
 import 'package:my_test_app/utils/seller_geo.dart';
+import 'package:my_test_app/utils/price_display.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -222,7 +223,7 @@ class _TradersScreenState extends State<TradersScreen> {
         await SellerGeo.ensureLoaded();
         final offersSnap = await _db.collection('productOffers').where('status', isEqualTo: 'active').get();
         sellersWithVisibleOffers.addAll(await SellerGeo.visibleOfferSellerIdsByCoords(
-          offerDocs: offersSnap.docs.map((d) => d.data()),
+          offerDocs: offersSnap.docs.map((d) => d.data()).where((d) => hasPricedOfferDoc(d)),
           buyerLat: gateLat, buyerLng: gateLng,
         ));
         offersCheckOk = true;

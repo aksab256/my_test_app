@@ -33,6 +33,40 @@ double payablePrice({
   return discountPriceOrNull(offerPrice) ?? basePriceOrZero(basePrice);
 }
 
+/// True when the buyer would pay a positive amount for this unit.
+/// Non-numeric bases (e.g. '?'), nulls, zeros and negatives are unpriced.
+bool hasUsablePrice({
+  required dynamic basePrice,
+  required dynamic offerPrice,
+}) {
+  return payablePrice(basePrice: basePrice, offerPrice: offerPrice) > 0;
+}
+
+/// True when a raw productOffers document carries at least one priced unit.
+///
+/// Units are checked first (unit offerPrice, then the document root
+/// offerPrice, then the unit base price — the same rule as
+/// OfferModel.fromFirestore). Documents without a units list fall back to
+/// the root price/offerPrice. Empty-units documents with no root price are
+/// unpriced and must stay hidden from buyer surfaces.
+bool hasPricedOfferDoc(Map<String, dynamic> data) {
+  final dynamic units = data['units'];
+  if (units is List && units.isNotEmpty) {
+    for (final unit in units) {
+      if (unit is Map) {
+        final dynamic base = unit['price'];
+        final dynamic offer = unit['offerPrice'] ?? data['offerPrice'];
+        if (hasUsablePrice(basePrice: base, offerPrice: offer)) return true;
+      }
+    }
+    return false;
+  }
+  return hasUsablePrice(
+    basePrice: data['price'],
+    offerPrice: data['offerPrice'],
+  );
+}
+
 /// Cart strike-through condition: a stamped original exists and is higher
 /// than the charged price (set by CartProvider.loadCartAndRecalculate).
 bool hasCartDiscount({

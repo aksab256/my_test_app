@@ -16,6 +16,12 @@ class OfferModel {
   final int? unitIndex; 
   final bool disabled;
 
+  /// True when this unit would charge the buyer a positive amount.
+  bool get hasUsablePrice {
+    if (offerPrice is num && (offerPrice as num) > 0) return true;
+    return price is num && (price as num) > 0;
+  }
+
   OfferModel({
     required this.offerId,
     required this.productId,

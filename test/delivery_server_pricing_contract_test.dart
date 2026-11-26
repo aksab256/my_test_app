@@ -24,7 +24,9 @@ import 'package:flutter_test/flutter_test.dart';
 /// Mirror of `priceTrip(distanceKm, cfg)` in order_monitor_island/index.js.
 /// Throws on invalid config/distance exactly like the backend.
 Map<String, double> specPriceTrip(double distanceKm, Map<String, Object?> cfg) {
-  double num(String key) {
+  // NOTE: must not be named `num` — a local function shadows dart:core's
+  // `num` type and `v is num` stops resolving as a type test.
+  double cfgNum(String key) {
     final v = cfg[key];
     final n = v is num ? v.toDouble() : double.tryParse('$v');
     if (n == null || !n.isFinite || n < 0) {
@@ -33,11 +35,11 @@ Map<String, double> specPriceTrip(double distanceKm, Map<String, Object?> cfg) {
     return n;
   }
 
-  final baseFare = num('baseFare');
-  final kmRate = num('kmRate');
-  final minFare = num('minFare');
-  final feeFixed = num('serviceFee');
-  final feePct = num('serviceFeePercentage');
+  final baseFare = cfgNum('baseFare');
+  final kmRate = cfgNum('kmRate');
+  final minFare = cfgNum('minFare');
+  final feeFixed = cfgNum('serviceFee');
+  final feePct = cfgNum('serviceFeePercentage');
   if (!distanceKm.isFinite || distanceKm < 0 || distanceKm > 500) {
     throw ArgumentError('invalid trip distance');
   }

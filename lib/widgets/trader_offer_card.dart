@@ -7,6 +7,7 @@ import 'package:collection/collection.dart'; // لاستخدام firstOrNull
 import 'package:my_test_app/utils/quantity_limits.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/utils/seller_geo.dart';
+import 'package:my_test_app/utils/price_display.dart';
 
 class TraderOfferCard extends StatelessWidget {
   final Map<String, dynamic> offerData;
@@ -147,6 +148,41 @@ class TraderOfferCard extends StatelessWidget {
     );
   }
 
+  // دالة مساعدة داخلية (ليست override).
+  /// وحدات العرض بسعر صالح فقط — بلا سعر تُخفى حتى تتسعر.
+  /// تحافظ على الفهرس الأصلي للوحدة (مطلوب لمسار السلة).
+  List<Widget> _pricedUnitWidgets(BuildContext context, List<dynamic>? units) {
+    if (units != null && units.isNotEmpty) {
+      final entries = <MapEntry<int, Map<String, dynamic>>>[];
+      for (var i = 0; i < units.length; i++) {
+        final unit = units[i];
+        if (unit is! Map<String, dynamic>) continue;
+        if (!hasUsablePrice(
+          basePrice: unit['price'],
+          offerPrice: unit['offerPrice'] ?? offerData['offerPrice'],
+        )) continue;
+        entries.add(MapEntry(i, unit));
+      }
+      if (entries.isNotEmpty) {
+        return entries.map((e) => _buildUnitItem(context, e.value, e.key)).toList();
+      }
+      return const [
+        Text('السعر يحدد قريبًا',
+            style: TextStyle(fontSize: 12, color: Colors.grey)),
+      ];
+    }
+    if (!hasUsablePrice(
+      basePrice: offerData['price'],
+      offerPrice: offerData['offerPrice'],
+    )) {
+      return const [
+        Text('السعر يحدد قريبًا',
+            style: TextStyle(fontSize: 12, color: Colors.grey)),
+      ];
+    }
+    return [_buildUnitItem(context, offerData, -1)];
+  }
+
   @override
   Widget build(BuildContext context) {
     final units = offerData['units'] as List<dynamic>?;
@@ -213,11 +249,11 @@ class TraderOfferCard extends StatelessWidget {
               const SizedBox(height: 4),
 
               if (units != null && units.isNotEmpty)
-                ...units.map((unit) => _buildUnitItem(context, unit as Map<String, dynamic>, units.indexOf(unit))).toList(),
+                ..._pricedUnitWidgets(context, units),
 
               if (units == null || units.isEmpty)
               // حالة الوحدة الواحدة فقط
-              _buildUnitItem(context, offerData, -1),
+              ..._pricedUnitWidgets(context, null),
             ],
           ),
         ),

@@ -82,9 +82,10 @@ class ProductOffersProvider with ChangeNotifier {
             context: geoContext,
           );
 
-          if (visible) {
-            filteredOffers.add(offer);
-          }
+          if (!visible) continue;
+          // بلا سعر صالح يُخفى من المشتري حتى يتسعر.
+          if (!offer.hasUsablePrice) continue;
+          filteredOffers.add(offer);
         }
       }
 

@@ -56,7 +56,7 @@ class _BundleHomeHeroState extends State<BundleHomeHero> {
           ),
         ),
         SizedBox(
-          height: 300,
+          height: 350,
           child: PageView.builder(
             controller: _controller,
             itemCount: widget.bundles.length,
@@ -101,88 +101,111 @@ class _BundleHomeHeroState extends State<BundleHomeHero> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: InkWell(
         onTap: widget.onOpen == null ? null : () => widget.onOpen!(b),
-        child: Row(
+        // Vertical layout: the designed cover gets the full card width
+        // on top (no side-cropping), details below in one compact block.
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              flex: 11,
+            SizedBox(
+              height: 172,
+              width: double.infinity,
               child: cover != null && cover.isNotEmpty
                   ? Image.network(cover,
                       fit: BoxFit.cover,
-                      height: double.infinity,
+                      width: double.infinity,
+                      loadingBuilder: (ctx, child, progress) => progress == null
+                          ? child
+                          : Container(
+                              color: Colors.grey.shade200,
+                              alignment: Alignment.center,
+                              child: const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2),
+                              ),
+                            ),
                       errorBuilder: (_, __, ___) =>
                           _coverFallback(b.bundleName))
                   : _coverFallback(b.bundleName),
             ),
-            Expanded(
-              flex: 9,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(b.bundleName,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w900, fontSize: 16),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 2),
-                    Text(b.sellerName,
-                        style: const TextStyle(
-                            color: Colors.black54, fontSize: 12),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                              '${b.totalPrice.toStringAsFixed(0)} ج.م',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 17,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .primary),
-                              overflow: TextOverflow.ellipsis),
-                        ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                              '${b.originalTotal.toStringAsFixed(0)} ج.م',
-                              style: const TextStyle(
-                                  decoration:
-                                      TextDecoration.lineThrough,
-                                  color: Colors.grey,
-                                  fontSize: 12),
-                              overflow: TextOverflow.ellipsis),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade700,
-                        borderRadius: BorderRadius.circular(20),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(b.bundleName,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w900, fontSize: 15),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
                       ),
-                      child: Text('وفّر ${b.saving.toStringAsFixed(0)} ج.م',
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 12)),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                        'المكونات (${b.items.length}): $shown$extra',
-                        style: const TextStyle(fontSize: 12),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 4),
-                    Text('المتاح: ${b.sellableNow} من الباقة',
-                        style: const TextStyle(
-                            color: Colors.black54, fontSize: 11)),
-                  ],
-                ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade700,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                            'وفّر ${b.saving.toStringAsFixed(0)} ج.م',
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 11)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(b.sellerName,
+                      style: const TextStyle(
+                          color: Colors.black54, fontSize: 12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                            '${b.totalPrice.toStringAsFixed(0)} ج.م',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 17,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .primary),
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                            '${b.originalTotal.toStringAsFixed(0)} ج.م',
+                            style: const TextStyle(
+                                decoration:
+                                    TextDecoration.lineThrough,
+                                color: Colors.grey,
+                                fontSize: 12),
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                      'المكونات (${b.items.length}): $shown$extra',
+                      style: const TextStyle(fontSize: 12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  Text('المتاح: ${b.sellableNow} من الباقة',
+                      style: const TextStyle(
+                          color: Colors.black54, fontSize: 11),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ],
               ),
             ),
           ],

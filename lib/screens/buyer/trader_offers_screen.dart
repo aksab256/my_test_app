@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:my_test_app/providers/buyer_data_provider.dart';
 import 'package:my_test_app/utils/seller_geo.dart';
+import 'package:my_test_app/utils/price_display.dart';
 import 'package:my_test_app/utils/offer_geo_filter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:my_test_app/theme/app_theme.dart';
@@ -232,7 +233,9 @@ class _OffersDataFetcherState extends State<OffersDataFetcher> {
     // المقيد خارج نطاق المشتري يُخفى) — دون منطق جغرافي جديد هنا.
     // شرط النشاط: أي عرض حالته ليست `active` مستبعد (المخفي لا يظهر).
     final activeOnly = loaded.where(isOfferActive).toList();
-    return SellerGeo.filterOfferDocsByCoords(activeOnly, buyerPoint.lat, buyerPoint.lng, OfferListContext.productOffers);
+    // بلا سعر صالح يُخفى من المشتري حتى يتسعر.
+    final pricedOnly = activeOnly.where((d) => hasPricedOfferDoc(d)).toList();
+    return SellerGeo.filterOfferDocsByCoords(pricedOnly, buyerPoint.lat, buyerPoint.lng, OfferListContext.productOffers);
   }
 
   /// حل مناطق المشتري من الموقع الفعّال لمرة واحدة لكل فتح للشاشة.
