@@ -44,13 +44,13 @@ class _BundleDetailsScreenState extends State<BundleDetailsScreen> {
       final buyer =
           Provider.of<BuyerDataProvider>(context, listen: false);
       final sellable = await BundleDataSource()
-          .loadBundleSellable(b.id);
+          .loadBundleSellable(b.id ?? '');
       if (sellable < _qty) {
         setState(() => _message = 'المتاح من هذه الباقة: $sellable فقط');
         return;
       }
       await cart.addBundleToCart(
-        bundleId: b.id,
+        bundleId: b.id ?? '',
         sellerId: b.sellerId,
         sellerName: b.sellerName,
         bundleName: b.bundleName,
@@ -58,7 +58,7 @@ class _BundleDetailsScreenState extends State<BundleDetailsScreen> {
         bundleOriginalTotal: b.originalTotal,
         imageUrl: b.coverImageUrl ??
             (b.items.isNotEmpty ? b.items.first.imageUrl ?? '' : ''),
-        itemsSnapshot: b.items.map((e) => e.toJson()).toList(),
+        itemsSnapshot: b.items.map((e) => e.toMap()).toList(),
         deliveryZones: b.deliveryZones,
         quantityToAdd: _qty,
         userRole: 'buyer',
