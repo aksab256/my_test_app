@@ -37,6 +37,9 @@ class _BuyerCategoryScreenState extends State<BuyerCategoryScreen> {
   // نفس منطق التنقل الموجود في الـ Home لتوحيد الأداء
   void _onItemTapped(int index) {
     switch (index) {
+      case 2:
+        Navigator.pushNamed(context, '/credit');
+        break;
       case 0: 
         Navigator.pushReplacementNamed(context, '/traders'); 
         break;
@@ -44,11 +47,11 @@ class _BuyerCategoryScreenState extends State<BuyerCategoryScreen> {
         // العودة للرئيسية
         Navigator.of(context).pushNamedAndRemoveUntil('/buyerHome', (route) => false);
         break;
-      case 2:
+      case 3:
         Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
         break;
-      case 3: 
-        Navigator.pushReplacementNamed(context, '/wallet'); 
+      case 4:
+        Navigator.pushReplacementNamed(context, '/wallet');
         break;
     }
   }

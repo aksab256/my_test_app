@@ -43,17 +43,20 @@ class _BuyerProductListScreenState extends State<BuyerProductListScreen> {
   // 🎯 دالة التنقل الموحدة لضمان عمل الشريط السفلي
   void _onItemTapped(int index) {
     switch (index) {
+      case 2:
+        Navigator.pushNamed(context, '/credit');
+        break;
       case 0: 
         Navigator.pushReplacementNamed(context, '/traders'); 
         break;
       case 1: 
         Navigator.of(context).pushNamedAndRemoveUntil('/buyerHome', (route) => false);
         break;
-      case 2:
+      case 3:
         Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
         break;
-      case 3: 
-        Navigator.pushReplacementNamed(context, '/wallet'); 
+      case 4:
+        Navigator.pushReplacementNamed(context, '/wallet');
         break;
     }
   }

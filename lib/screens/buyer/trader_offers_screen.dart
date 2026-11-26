@@ -52,17 +52,20 @@ class _TraderOffersScreenState extends State<TraderOffersScreen> {
     }
 
     switch (index) {
+      case 2:
+        Navigator.pushNamed(context, '/credit');
+        break;
       case 0: 
         Navigator.pushReplacementNamed(context, '/traders'); 
         break;
       case 1: 
         Navigator.of(context).pushNamedAndRemoveUntil('/buyerHome', (route) => false);
         break;
-      case 2: 
-        Navigator.pushReplacementNamed(context, '/myOrders'); 
+      case 3:
+        Navigator.pushReplacementNamed(context, '/myOrders');
         break;
-      case 3: 
-        Navigator.pushReplacementNamed(context, '/wallet'); 
+      case 4:
+        Navigator.pushReplacementNamed(context, '/wallet');
         break;
     }
   }

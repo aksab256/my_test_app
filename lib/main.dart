@@ -42,6 +42,7 @@ import 'package:my_test_app/screens/buyer/cart_screen.dart';
 import 'package:my_test_app/screens/buyer/all_bundles_screen.dart';
 import 'package:my_test_app/screens/buyer/bundle_details_screen.dart';
 import 'package:my_test_app/screens/checkout/checkout_screen.dart';
+import 'package:my_test_app/screens/buyer/credit_application_screen.dart';
 import 'package:my_test_app/screens/buyer/my_orders_screen.dart';
 import 'package:my_test_app/screens/buyer/traders_screen.dart';
 import 'package:my_test_app/screens/buyer/wallet_screen.dart';
@@ -411,6 +412,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             CartScreen.routeName: (context) => const CartScreen(),
             CheckoutScreen.routeName: (context) => const CheckoutScreen(),
             MyOrdersScreen.routeName: (context) => const MyOrdersScreen(),
+            CreditApplicationScreen.routeName: (context) =>
+                const CreditApplicationScreen(),
             SearchScreen.routeName: (context) => SearchScreen(
                 userRole: Provider.of<BuyerDataProvider>(context, listen: false).userRole == 'consumer'
                     ? UserRole.consumer

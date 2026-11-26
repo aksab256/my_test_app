@@ -39,7 +39,14 @@ class BuyerMobileNavWidget extends StatelessWidget {
           selectedIcon: Icon(Icons.home_rounded, color: Color(0xFF4CAF50)),
           label: 'الرئيسية',
         ),
-        // Index 2: طلباتي (مع إشعار التغيير)
+        // Index 2: الأجل
+        const NavigationDestination(
+          icon: Icon(Icons.request_quote_outlined, color: Colors.grey),
+          selectedIcon:
+              Icon(Icons.request_quote_rounded, color: Color(0xFF4CAF50)),
+          label: 'الأجل',
+        ),
+        // Index 3: طلباتي (مع إشعار التغيير)
         NavigationDestination(
           icon: Badge(
             isLabelVisible: ordersChanged,
@@ -48,7 +55,7 @@ class BuyerMobileNavWidget extends StatelessWidget {
           selectedIcon: const Icon(Icons.assignment_rounded, color: Color(0xFF4CAF50)),
           label: 'طلباتي',
         ),
-        // Index 3: المحفظة
+        // Index 4: المحفظة
         const NavigationDestination(
           icon: Icon(Icons.account_balance_wallet_outlined, color: Colors.grey),
           selectedIcon: Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF4CAF50)),

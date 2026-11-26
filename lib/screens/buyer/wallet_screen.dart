@@ -83,17 +83,18 @@ class _WalletScreenState extends State<WalletScreen> {
               ),
             ),
             bottomNavigationBar: BuyerMobileNavWidget(
-              selectedIndex: 3,
+              selectedIndex: 4,
               // ✅ إضافة القيم التي قد تسبب Null check operator error
               cartCount: 0, 
               ordersChanged: false,
               onItemSelected: (index) {
-                if (index == 3) return;
+                if (index == 4) return;
                 if (index == 0) Navigator.pushReplacementNamed(context, '/traders');
                 if (index == 1) Navigator.pushReplacementNamed(context, '/buyerHome');
+                if (index == 2) Navigator.pushNamed(context, '/credit');
                 
                 // ✅ تعديل أيقونة الطلبات لتفتح مباشرة لضمان عمل زر الرجوع
-                if (index == 2) {
+                if (index == 3) {
                   Navigator.push(
                     context, 
                     MaterialPageRoute(builder: (context) => const MyOrdersScreen())

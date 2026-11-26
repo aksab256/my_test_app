@@ -208,15 +208,18 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   void _onItemTapped(int index) {
     if (index == _selectedIndex) return;
     switch (index) {
+      case 2:
+        Navigator.pushNamed(context, '/credit');
+        break;
       case 0:
         Navigator.pushNamed(context, '/traders');
         break;
       case 1:
         break; // نحن هنا بالفعل
-      case 2:
+      case 3:
         Navigator.push(context, MaterialPageRoute(builder: (context) => const MyOrdersScreen()));
         break;
-      case 3:
+      case 4:
         Navigator.pushNamed(context, '/wallet');
         break;
     }

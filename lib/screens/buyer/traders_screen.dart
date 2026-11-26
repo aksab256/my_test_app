@@ -93,18 +93,21 @@ class _TradersScreenState extends State<TradersScreen> {
     if (index == _selectedIndex) return; 
 
     switch (index) {
+      case 2:
+        Navigator.pushNamed(context, '/credit');
+        break;
       case 0:
         break;
       case 1:
         Navigator.of(context).pop(); 
         break;
-      case 2:
+      case 3:
         Navigator.push(
-          context, 
+          context,
           MaterialPageRoute(builder: (context) => const MyOrdersScreen())
         );
         break;
-      case 3:
+      case 4:
         Navigator.pushReplacementNamed(context, '/wallet');
         break;
     }

@@ -20,16 +20,19 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
   // 🎯 نفس منطق التنقل الموحد اللي موجود في صفحة الأقسام
   void _onItemTapped(int index) {
     switch (index) {
+      case 2:
+        Navigator.pushNamed(context, '/credit');
+        break;
       case 0:
         Navigator.pushReplacementNamed(context, '/traders');
         break;
       case 1:
         Navigator.of(context).pushNamedAndRemoveUntil('/buyerHome', (route) => false);
         break;
-      case 2:
+      case 3:
         // نحن بالفعل في صفحة الطلبات، لا نفعل شيء أو نعيد البناء
         break;
-      case 3:
+      case 4:
         Navigator.pushReplacementNamed(context, '/wallet');
         break;
     }
@@ -56,7 +59,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         child: SafeArea(
           top: false,
           child: BuyerMobileNavWidget(
-            selectedIndex: 2, // 🎯 تحديد أيقونة "طلباتي" كنشطة
+            selectedIndex: 3, // 🎯 تحديد أيقونة "طلباتي" كنشطة
             onItemSelected: _onItemTapped,
             cartCount: 0,
             ordersChanged: false,
