@@ -10,6 +10,10 @@ import 'package:my_test_app/screens/buyer/trader_offers_screen.dart';
 import 'package:my_test_app/data_sources/bundle_data_source.dart';
 import 'package:my_test_app/models/bundle_model.dart';
 import 'package:my_test_app/widgets/bundle_home_hero.dart';
+import 'package:my_test_app/widgets/recently_added_carousel.dart';
+import 'package:my_test_app/utils/price_display.dart';
+import 'package:my_test_app/utils/seller_geo.dart';
+import 'package:my_test_app/utils/offer_geo_filter.dart';
 
 final FirebaseFirestore _db = FirebaseFirestore.instance;
 
@@ -24,6 +28,7 @@ class _HomeContentState extends State<HomeContent> {
   List<Map<String, dynamic>> _categories = [];
   List<Map<String, dynamic>> _banners = [];
   List<SellerBundleModel> _bundles = [];
+  List<Map<String, dynamic>> _recent = [];
 
   bool _isLoading = true;
   List<EnrichedGift> _earnGifts = [];
@@ -87,7 +92,7 @@ class _HomeContentState extends State<HomeContent> {
   // --- جلب البيانات (تظل كما هي لضمان استقرار الباك إند) ---
   Future<void> _loadAllData() async {
     try {
-      await Future.wait([_loadCategories(), _loadRetailerBanners(), _loadBundles()]);
+      await Future.wait([_loadCategories(), _loadRetailerBanners(), _loadBundles(), _loadRecent()]);
       if (mounted) {
         setState(() => _isLoading = false);
         _startBannerAutoSlide();
@@ -109,6 +114,43 @@ class _HomeContentState extends State<HomeContent> {
     if (mounted) {
       setState(() => _banners = q.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList());
     }
+  }
+
+  // «أضيف حديثًا»: أحدث العروض النشطة + مسعرة + مطابقة لمنطقة التوصيل.
+  // الترتيب يتم محليًا (بدون orderBy مركب) لتفادي الحاجة لفهرس Firestore.
+  Future<void> _loadRecent() async {
+    try {
+      final buyer = Provider.of<BuyerDataProvider>(context, listen: false);
+      final q = await _db
+          .collection('productOffers')
+          .where('status', isEqualTo: 'active')
+          .limit(30)
+          .get();
+      var docs = q.docs.map((d) {
+        final m = Map<String, dynamic>.from(d.data());
+        m['offerId'] = d.id;
+        return m;
+      }).where(hasPricedOfferDoc).toList();
+      docs = await SellerGeo.filterOfferDocsByCoords(
+        docs,
+        buyer.effectiveLat,
+        buyer.effectiveLng,
+        OfferListContext.productOffers,
+      );
+      docs.sort((a, b) => _createdAtOf(b).compareTo(_createdAtOf(a)));
+      if (mounted) setState(() => _recent = docs.take(8).toList());
+    } catch (_) {
+      if (mounted) setState(() => _recent = []);
+    }
+  }
+
+  DateTime _createdAtOf(Map<String, dynamic> m) {
+    final c = m['createdAt'];
+    if (c is Timestamp) return c.toDate();
+    if (c is String) {
+      return DateTime.tryParse(c) ?? DateTime.fromMillisecondsSinceEpoch(0);
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
   }
 
   // باقات المشتري: نشطة + متاحة + مطابقة لمنطقة التوصيل (نفس نظام المناطق).
@@ -208,8 +250,24 @@ class _HomeContentState extends State<HomeContent> {
             itemBuilder: (context, index) => _buildCategoryCard(_categories[index]),
           ),
 
-          // 3.5 قسم «اكسب هدايا» — يظهر فقط عند وجود عروض مؤهلة.
+          // 3.5 قسم «اكسب هدايا» — أولًا عند وجود عروض مؤهلة.
           _buildEarnGiftsSection(),
+
+          // 3.6 «أضيف حديثًا» — تحت الهدايا مباشرة.
+          if (_recent.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            RecentlyAddedCarousel(
+              items: _recent,
+              onOpen: (m) => Navigator.of(context).pushNamed(
+                '/productDetails',
+                arguments: {
+                  'productId': (m['productId'] ?? '').toString(),
+                  'offerId': (m['offerId'] ?? '').toString(),
+                },
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           const SizedBox(height: 30),
         ],
       ),

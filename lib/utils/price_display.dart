@@ -67,6 +67,30 @@ bool hasPricedOfferDoc(Map<String, dynamic> data) {
   );
 }
 
+/// First positive chargeable amount on a raw productOffers document.
+/// Mirrors [hasPricedOfferDoc]: the first priced unit wins, otherwise the
+/// document root price. Returns 0.0 when nothing is priced.
+double firstPricedAmount(Map<String, dynamic> data) {
+  final dynamic units = data['units'];
+  if (units is List && units.isNotEmpty) {
+    for (final unit in units) {
+      if (unit is Map) {
+        final dynamic base = unit['price'];
+        final dynamic offer = unit['offerPrice'] ?? data['offerPrice'];
+        if (hasUsablePrice(basePrice: base, offerPrice: offer)) {
+          return payablePrice(basePrice: base, offerPrice: offer);
+        }
+      }
+    }
+    return 0.0;
+  }
+  final amount = payablePrice(
+    basePrice: data['price'],
+    offerPrice: data['offerPrice'],
+  );
+  return amount < 0 ? 0.0 : amount;
+}
+
 /// Cart strike-through condition: a stamped original exists and is higher
 /// than the charged price (set by CartProvider.loadCartAndRecalculate).
 bool hasCartDiscount({
